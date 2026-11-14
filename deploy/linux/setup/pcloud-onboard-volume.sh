@@ -64,3 +64,17 @@ stat -c '  %A %U:%G %n' "$CONFIG"
 
 echo "== 4. Comprobación final (como pcloud, con la configuración instalada)"
 pcloud-volume-status || die "el volumen no quedó READY"
+
+# El servicio lee la configuración al arrancar: si ya estaba en marcha (instalado antes que el disco),
+# seguiría con el volumen «sin configurar» hasta reiniciarse.
+if systemctl is-active --quiet pcloud.service; then
+  echo "== 5. Reinicio de pcloud.service para cargar el volumen"
+  systemctl restart pcloud.service
+  for _ in $(seq 1 30); do
+    if curl -fsS --max-time 3 http://127.0.0.1:3000/api/v1/system/health 2>/dev/null | grep -q '"volumeState":"READY"'; then
+      echo "  API: volumen READY"; exit 0
+    fi
+    sleep 1
+  done
+  die "pcloud.service no informa del volumen READY tras reiniciarse (journalctl -u pcloud)"
+fi
