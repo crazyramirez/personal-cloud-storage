@@ -719,9 +719,10 @@ async function onFolderDrop(event: DragEvent, targetPath: string): Promise<void>
 
 // ── Menús contextuales ──────────────────────────────────────────────────────────────────────
 
-function itemMenu(entry: FsEntry): MenuItem[] {
+/** `alone`: menú solo de ese elemento, aunque haya otros seleccionados (pulsación larga en uno sin seleccionar). */
+function itemMenu(entry: FsEntry, alone = false): MenuItem[] {
   const w = !canWrite.value;
-  const list = selected.value;
+  const list = alone ? [entry] : selected.value;
   const clip = clipboard.value;
   if (list.length > 1) {
     return [
@@ -818,8 +819,10 @@ const longPress = useLongPress((point) => {
     openMenuFor(point, backgroundMenu(), folderName.value);
     return;
   }
-  if (!selection.value.has(entry.name)) toggle(entry.name);
-  openMenuFor(point, itemMenu(entry), selection.value.size > 1 ? t('explorer.itemsSelected', { n: selection.value.size }) : entry.name);
+  // Mantener pulsado solo abre el menú: no selecciona el elemento (si ya había una selección
+  // que lo incluye, el menú es el de toda la selección).
+  const inSelection = selection.value.has(entry.name) && selection.value.size > 1;
+  openMenuFor(point, inSelection ? itemMenu(entry) : itemMenu(entry, true), inSelection ? t('explorer.itemsSelected', { n: selection.value.size }) : entry.name);
 });
 
 function setSort(key: typeof sortKey.value): void {

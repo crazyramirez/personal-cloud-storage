@@ -37,6 +37,7 @@ watch(menu, async (state) => {
 });
 
 function choose(index: number): void {
+  if (menuTouchGuard()) return; // el dedo que abrió el menú aún no se ha levantado
   const item = menu.value?.items[index];
   if (item === undefined || item.disabled === true) return;
   closeMenu();
@@ -122,7 +123,7 @@ onBeforeUnmount(() => {
         :title="item.disabled ? item.hint : undefined"
         tabindex="-1"
         @click="choose(index)"
-        @pointerenter="active = item.disabled ? -1 : index"
+        @pointerenter="active = item.disabled || menuTouchGuard() ? -1 : index"
       >
         <span class="ico"><AppIcon v-if="item.checked" name="check" :size="16" /><AppIcon v-else-if="item.icon" :name="item.icon" :size="17" /></span>
         <span class="label">{{ item.label }}</span>

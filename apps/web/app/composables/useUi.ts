@@ -198,6 +198,15 @@ export function useFileClipboard() {
 // ── Pulsación larga (móvil): abre el menú contextual ───────────────────────────────────────
 
 /**
+ * El menú abierto por una pulsación larga aparece bajo el dedo: hasta que ese dedo se levanta
+ * (y un instante después, por el «click» sintético), las opciones no reaccionan. Así soltar el
+ * dedo nunca elige la opción que quedó debajo.
+ */
+let holdingFinger = false;
+let fingerReleasedAt = 0;
+export const menuTouchGuard = (): boolean => holdingFinger || Date.now() - fingerReleasedAt < 450;
+
+/**
  * Devuelve manejadores táctiles que llaman a `onLong` tras ~500 ms sin mover el dedo.
  * iOS Safari no emite «contextmenu»: esto lo sustituye.
  */
@@ -228,6 +237,7 @@ export function useLongPress(onLong: (point: { x: number; y: number }) => void) 
       window.addEventListener('contextmenu', swallowNative, true);
       timer = setTimeout(() => {
         fired = true;
+        holdingFinger = true;
         if (start !== null) onLong(start);
         navigator.vibrate?.(12);
       }, 500);
@@ -235,6 +245,10 @@ export function useLongPress(onLong: (point: { x: number; y: number }) => void) 
     onTouchcancel(): void {
       clear();
       release();
+      if (fired) {
+        holdingFinger = false;
+        fingerReleasedAt = Date.now();
+      }
     },
     /** Un arrastre (iPad) cancela la pulsación larga. */
     cancel(): void {
@@ -248,6 +262,10 @@ export function useLongPress(onLong: (point: { x: number; y: number }) => void) 
     onTouchend(event: TouchEvent): void {
       clear();
       release();
+      if (fired) {
+        holdingFinger = false;
+        fingerReleasedAt = Date.now();
+      }
       // Tras una pulsación larga, el «click» sintético no debe abrir el elemento.
       if (fired && event.cancelable) event.preventDefault();
     },
