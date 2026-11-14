@@ -2,12 +2,13 @@
 # (ADR-0018). Lo lanza pcloud-share-agent.path; procesa las peticiones pendientes y termina.
 # Instalado por pcloud-install-share.sh. No editar a mano.
 #
-# Solo publica o retira con Tailscale Funnel el socket de la puerta de invitados en :8443 (ver el
-# script). Habla con tailscaled por su socket local: no necesita red.
+# Solo publica o retira con Tailscale Funnel (en el nodo dedicado <host>-compartir, ADR-0019) el
+# socket de la puerta de invitados (ver el script). Habla con tailscaled por su socket local: no
+# necesita red.
 
 [Unit]
 Description=Personal Cloud Storage: agente de la puerta de invitados (Tailscale Funnel)
-After=tailscaled.service
+After=tailscaled.service pcloud-share-tailscaled.service
 # Sin límite de arranques: crear y retirar varios enlaces seguidos son varias peticiones.
 # No puede entrar en bucle: el agente siempre vacía el buzón y termina con éxito.
 StartLimitIntervalSec=0

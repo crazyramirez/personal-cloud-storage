@@ -133,7 +133,7 @@ const OG_IMAGE = readFileSync(path.join(import.meta.dirname, 'og-image.jpg'));
 const PREVIEW_BOTS = /facebookexternalhit|WhatsApp|TelegramBot|Twitterbot|Slackbot|Discordbot|LinkedInBot|SkypeUriPreview|Signal|iMessage|Applebot|Google-PageRenderer/i;
 const isPreviewBot = (request: FastifyRequest): boolean => PREVIEW_BOTS.test(String(request.headers['user-agent'] ?? ''));
 
-/** Origen público (https://<host>.<tailnet>.ts.net:8443) para las URL absolutas de og:image. */
+/** Origen público (https://<host>-compartir.<tailnet>.ts.net) para las URL absolutas de og:image. */
 function originOf(request: FastifyRequest): string | null {
   const host = String(request.headers['x-forwarded-host'] ?? request.headers.host ?? '').split(',')[0]?.trim() ?? '';
   if (!/^[a-z0-9.-]{1,253}(:\d{1,5})?$/i.test(host)) return null;

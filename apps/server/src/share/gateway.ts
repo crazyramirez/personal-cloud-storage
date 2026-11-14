@@ -6,7 +6,8 @@
  *
  * pcloud.service no tiene privilegios: no puede ejecutar `tailscale funnel`. Deja una petición
  * de una palabra («on» u «off») en el buzón del agente root (deploy/linux/share/
- * pcloud-share-agent.sh), que solo sabe publicar el socket de la puerta de invitados en :8443.
+ * pcloud-share-agent.sh), que solo sabe publicar el socket de la puerta de invitados con Funnel en
+ * el nodo Tailscale dedicado <host>-compartir (ADR-0019).
  */
 
 import { randomBytes } from 'node:crypto';
@@ -20,7 +21,7 @@ import type { GatewayState, GatewayView } from '@pcloud/contracts';
  * siquiera desde la propia Pi. Solo tailscaled (root) conecta, cuando Funnel está publicado.
  */
 export const GUEST_SOCKET = '/var/lib/pcloud/share-agent/guest.sock';
-export const FUNNEL_PORT = 8443;
+export const FUNNEL_PORT = 443;
 
 export interface AgentReply {
   readonly ok: boolean;
@@ -34,8 +35,8 @@ export interface GatewayAgent {
   request(action: 'on' | 'off'): Promise<AgentReply>;
 }
 
-const PUBLIC_URL = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.ts\.net:8443$/;
-const ENABLE_URL = /^https:\/\/login\.tailscale\.com\/f\/[a-z]+\?node=[A-Za-z0-9]+$/;
+const PUBLIC_URL = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.ts\.net$/;
+const ENABLE_URL = /^https:\/\/login\.tailscale\.com\/(f\/[a-z]+\?node=|a\/)[A-Za-z0-9]+$/;
 
 export class FileGatewayAgent implements GatewayAgent {
   private readonly inbox: string;
@@ -83,6 +84,8 @@ export class FileGatewayAgent implements GatewayAgent {
 function stateFor(reply: AgentReply, wanted: boolean): GatewayState {
   if (reply.ok) return wanted ? 'on' : 'off';
   switch (reply.code) {
+    case 'NEEDS_LOGIN':
+      return 'needs_login';
     case 'FUNNEL_NOT_ALLOWED':
       return 'needs_funnel';
     case 'HTTPS_DISABLED':
@@ -171,7 +174,7 @@ export class ShareGateway {
     this.#view = {
       state,
       url: reply.ok && wanted ? (reply.url ?? null) : null,
-      enableUrl: state === 'needs_funnel' ? (reply.enableUrl ?? null) : null,
+      enableUrl: state === 'needs_funnel' || state === 'needs_login' ? (reply.enableUrl ?? null) : null,
       checkedAt: this.#clock().toISOString(),
     };
     if (reply.ok) {

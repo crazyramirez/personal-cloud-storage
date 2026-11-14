@@ -54,13 +54,14 @@ export type ShareView = Static<typeof ShareView>;
  *  - off: no hay enlaces activos, nada publicado en Internet;
  *  - starting: publicándose;
  *  - on: publicada en `url`;
+ *  - needs_login: hay que conectar una vez el nodo de los enlaces a la cuenta de Tailscale (`enableUrl`);
  *  - needs_funnel: hay que permitir Funnel una vez en la cuenta de Tailscale (`enableUrl`);
  *  - needs_https: hay que activar «HTTPS Certificates» en la consola de Tailscale;
  *  - no_tailscale: Tailscale no está instalado o no ha iniciado sesión;
  *  - unavailable: el agente no está instalado (pcloud-install-share.sh);
  *  - error: falló por otro motivo (se reintenta solo).
  */
-export const GATEWAY_STATES = ['off', 'starting', 'on', 'needs_funnel', 'needs_https', 'no_tailscale', 'unavailable', 'error'] as const;
+export const GATEWAY_STATES = ['off', 'starting', 'on', 'needs_login', 'needs_funnel', 'needs_https', 'no_tailscale', 'unavailable', 'error'] as const;
 export type GatewayState = (typeof GATEWAY_STATES)[number];
 
 export interface GatewayView {

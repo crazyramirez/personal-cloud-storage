@@ -7,6 +7,8 @@ export function gatewayText(view: GatewayView): string {
       return t('shares.gwOn');
     case 'starting':
       return t('shares.gwStarting');
+    case 'needs_login':
+      return t('shares.gwNeedsLogin');
     case 'needs_funnel':
       return view.enableUrl === null ? t('shares.gwNeedsFunnelNoLink') : t('shares.gwNeedsFunnel');
     case 'needs_https':

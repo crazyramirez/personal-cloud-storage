@@ -177,7 +177,7 @@ const summary = computed(() => {
         <div v-else class="notice" :class="gateway.state === 'error' ? 'notice-danger' : 'notice-info'" role="status">
           <p>{{ gatewayText(gateway) }}</p>
           <div class="gw-actions">
-            <a v-if="gateway.state === 'needs_funnel' && gateway.enableUrl" class="btn btn-primary" :href="gateway.enableUrl" target="_blank" rel="noopener noreferrer"><AppIcon name="external" />{{ t('shares.gwAllowFunnel') }}</a>
+            <a v-if="(gateway.state === 'needs_funnel' || gateway.state === 'needs_login') && gateway.enableUrl" class="btn btn-primary" :href="gateway.enableUrl" target="_blank" rel="noopener noreferrer"><AppIcon name="external" />{{ gateway.state === 'needs_login' ? t('shares.gwConnect') : t('shares.gwAllowFunnel') }}</a>
             <button type="button" class="btn" :disabled="checking" @click="check"><span v-if="checking" class="spin" aria-hidden="true" /><AppIcon v-else name="refresh" />{{ checking ? t('shares.gwChecking') : t('shares.gwCheck') }}</button>
           </div>
         </div>

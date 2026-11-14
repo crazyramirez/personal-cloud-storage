@@ -95,7 +95,7 @@ function downloadsText(share: ShareView): string {
         <strong>{{ t('shares.internet') }}</strong>
         <span>{{ gatewayText(gateway) }}</span>
         <div v-if="gatewayTone === 'warn' || gatewayTone === 'danger'" class="gw-actions">
-          <a v-if="gateway.state === 'needs_funnel' && gateway.enableUrl" class="btn btn-primary" :href="gateway.enableUrl" target="_blank" rel="noopener noreferrer"><AppIcon name="external" />{{ t('shares.gwAllowFunnel') }}</a>
+          <a v-if="(gateway.state === 'needs_funnel' || gateway.state === 'needs_login') && gateway.enableUrl" class="btn btn-primary" :href="gateway.enableUrl" target="_blank" rel="noopener noreferrer"><AppIcon name="external" />{{ gateway.state === 'needs_login' ? t('shares.gwConnect') : t('shares.gwAllowFunnel') }}</a>
           <button type="button" class="btn" :disabled="checking" @click="check"><AppIcon name="refresh" />{{ checking ? t('shares.gwChecking') : t('shares.gwCheck') }}</button>
         </div>
       </div>

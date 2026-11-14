@@ -1,0 +1,34 @@
+# /etc/systemd/system/pcloud-share-tailscaled.service — nodo Tailscale DEDICADO a los enlaces para
+# compartir (ADR-0019). Instalado por pcloud-install-share.sh. No editar a mano.
+#
+# Por qué un segundo nodo: activar Funnel publica en el DNS público el nombre del nodo. Si Funnel
+# estuviera en el nodo de la app (<host>.<tailnet>.ts.net), los dispositivos que resuelven por DNS
+# público (iPhone con «Limitar seguimiento de IP» o Relay privado) irían a los servidores de Funnel
+# y no podrían abrir la app. Con este nodo aparte (<host>-compartir), solo ESTE nombre es público.
+#
+# Modo userspace: sin interfaz de red ni rutas; no da acceso a nada de la Pi. Lo único que sirve es
+# lo que publica Funnel (el socket de la puerta de invitados), y solo mientras haya enlaces activos.
+
+[Unit]
+Description=Personal Cloud Storage: nodo Tailscale de los enlaces para compartir
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/sbin/tailscaled --tun=userspace-networking --statedir=/var/lib/pcloud-share-ts --socket=/run/pcloud-share-ts/tailscaled.sock --port=0
+StateDirectory=pcloud-share-ts
+StateDirectoryMode=0700
+RuntimeDirectory=pcloud-share-ts
+RuntimeDirectoryMode=0755
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -24,7 +24,7 @@ class FakeAgent implements GatewayAgent {
 
   async request(action: 'on' | 'off'): Promise<AgentReply> {
     this.calls.push(action);
-    const reply = this.next ?? { ok: true, code: action === 'on' ? 'ON' : 'OFF', url: action === 'on' ? 'https://pi.tail0.ts.net:8443' : undefined };
+    const reply = this.next ?? { ok: true, code: action === 'on' ? 'ON' : 'OFF', url: action === 'on' ? 'https://pi-compartir.tail0.ts.net' : undefined };
     this.next = null;
     return reply;
   }
@@ -89,7 +89,7 @@ describe('enlaces para compartir (ADR-0018)', () => {
     assert.equal(h.db.prepare('SELECT COUNT(*) AS n FROM shares WHERE token_hash = ?').get(hashToken(created.token))?.['n'], 1);
     assert.deepEqual(agent.calls, ['on'], 'con el primer enlace se publica la puerta');
     assert.equal(gateway.view.state, 'on');
-    assert.equal(gateway.view.url, 'https://pi.tail0.ts.net:8443');
+    assert.equal(gateway.view.url, 'https://pi-compartir.tail0.ts.net');
 
     const pageResponse = await visit(`/s/${created.token}`);
     assert.equal(pageResponse.statusCode, 200);
@@ -204,10 +204,10 @@ describe('enlaces para compartir (ADR-0018)', () => {
   });
 
   it('vista previa (WhatsApp, Telegram…): og:image absoluta, sin el nombre si hay contraseña, sin contar como acceso', async () => {
-    const host = { host: 'pi.tail0.ts.net:8443', 'x-forwarded-proto': 'https' };
+    const host = { host: 'pi-compartir.tail0.ts.net', 'x-forwarded-proto': 'https' };
     const open = await share({ path: '/Películas/peli.mkv', expiresInDays: 7 });
     const bot = await visit(`/s/${open.token}`, { ...host, 'user-agent': 'WhatsApp/2.24.1 A' });
-    assert.match(bot.body, /<meta property="og:image" content="https:\/\/pi\.tail0\.ts\.net:8443\/og-image\.jpg">/);
+    assert.match(bot.body, /<meta property="og:image" content="https:\/\/pi-compartir\.tail0\.ts\.net\/og-image\.jpg">/);
     assert.match(bot.body, /<meta property="og:title" content="peli\.mkv · Personal Cloud Storage">/);
     assert.match(bot.body, /<meta name="twitter:card" content="summary_large_image">/);
     assert.equal(store.get(open.share.id)?.lastAccessAt, null, 'el bot de vista previa no cuenta como acceso');
@@ -257,6 +257,10 @@ describe('enlaces para compartir (ADR-0018)', () => {
     await share({ path: '/Películas', expiresInDays: 1 });
     assert.equal(gateway.view.state, 'needs_funnel');
     assert.equal(gateway.view.enableUrl, 'https://login.tailscale.com/f/funnel?node=abc123');
+    agent.next = { ok: false, code: 'NEEDS_LOGIN', enableUrl: 'https://login.tailscale.com/a/9f8e7d6c' };
+    await gateway.reconcile(true);
+    assert.equal(gateway.view.state, 'needs_login', 'nodo de enlaces sin conectar: enlace para iniciar sesión');
+    assert.equal(gateway.view.enableUrl, 'https://login.tailscale.com/a/9f8e7d6c');
     await gateway.reconcile(true);
     assert.equal(gateway.view.state, 'on', 'al permitirlo y volver a comprobar, se publica');
   });

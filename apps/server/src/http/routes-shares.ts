@@ -15,7 +15,7 @@ import type { RouteContext } from './context.ts';
 
 const API = '/api/v1';
 const RECHECK_MS = 15_000;
-const NEEDS_ACTION = new Set(['needs_funnel', 'needs_https', 'no_tailscale', 'error']);
+const NEEDS_ACTION = new Set(['needs_login', 'needs_funnel', 'needs_https', 'no_tailscale', 'error']);
 
 export function registerShareRoutes(app: FastifyInstance, ctx: RouteContext, store: ShareStore, gateway: ShareGateway): void {
   const { db, guardian, clock } = ctx;

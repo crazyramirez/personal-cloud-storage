@@ -1,6 +1,6 @@
 # ADR-0018: Enlaces para compartir con invitados (puerta de invitados por Tailscale Funnel)
 
-Estado: Aceptado (2026-11-14). Sustituye en parte a [ADR-0016](0016-acceso-remoto-tailscale.md): la regla «nunca `tailscale funnel`» admite UNA excepción, la puerta de invitados descrita aquí.
+Estado: Aceptado (2026-11-14). Sustituido en parte por [ADR-0019](0019-nodo-tailscale-dedicado-enlaces.md) (Funnel en un nodo dedicado). Sustituye en parte a [ADR-0016](0016-acceso-remoto-tailscale.md): la regla «nunca `tailscale funnel`» admite UNA excepción, la puerta de invitados descrita aquí.
 
 ## Contexto
 

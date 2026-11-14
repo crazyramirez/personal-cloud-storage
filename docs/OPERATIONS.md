@@ -209,14 +209,23 @@ Diseño: [ADR-0017](adr/0017-copia-de-seguridad-disco-externo.md). Lo prepara el
 
 ## 8 ter. Enlaces para compartir con invitados
 
-Ver [ADR-0018](adr/0018-enlaces-para-invitados.md). En Archivos, el propietario abre el menú de un archivo o carpeta, elige «Compartir enlace…» y envía el enlace.
+Ver [ADR-0018](adr/0018-enlaces-para-invitados.md) y [ADR-0019](adr/0019-nodo-tailscale-dedicado-enlaces.md). En Archivos, el propietario abre el menú de un archivo o carpeta, elige «Compartir enlace…» y envía el enlace.
 
-- **Requisito (una vez):** Tailscale instalado y con sesión iniciada en la Pi (§4 ter), «HTTPS Certificates» activado y Funnel permitido para el equipo. La primera vez que se crea un enlace, la app muestra el enlace de Tailscale para permitirlo. A mano: en la consola de Tailscale, Access controls → `nodeAttrs` con `"attr": ["funnel"]` para el equipo.
+- **Nodo dedicado:** Funnel va en un segundo `tailscaled` (`pcloud-share-tailscaled.service`, modo userspace, nombre `<host>-compartir`), nunca en el de la app. Los enlaces son `https://<host>-compartir.<tailnet>.ts.net/s/…`.
+- **Requisitos (una vez):**
+  - Tailscale instalado en la Pi (§4 ter) y «HTTPS Certificates» activado.
+  - La primera vez que se crea un enlace, la app muestra dos pasos: «Conectar en Tailscale» (alta del nodo `<host>-compartir`) y, si hace falta, «Permitir en Tailscale» (Funnel).
+  - En la consola de Tailscale, desactiva la caducidad de la clave de `<host>-compartir`.
 - **Instalación:** `sudo bash /opt/pcloud/current/deploy/linux/setup/pcloud-install-share.sh --execute` (lo hace `install.sh`). Después, `sudo systemctl restart pcloud.service` para que abra el socket.
-- **Comprobar:** `tailscale funnel status`. Sin enlaces activos debe salir vacío. Con enlaces, `https://<host>.<tailnet>.ts.net:8443` → `unix:/var/lib/pcloud/share-agent/guest.sock`.
-- **Apagar todo ya:** retirar los enlaces en Ajustes → Enlaces compartidos, o `sudo tailscale funnel --https=8443 off`. Se vuelve a encender si queda algún enlace activo. Para quitar la función: `pcloud-install-share.sh --remove --execute`.
-- **Registro del agente:** `journalctl -u pcloud-share-agent --no-pager -n 30`.
-- **Vista previa en los chats:** las páginas llevan Open Graph (`og:image` = `/og-image.jpg`, 1200×630, generada con GPT Image a partir del icono). `robots.txt` deja entrar solo a los bots de vista previa (WhatsApp, Telegram…), no a los buscadores. Con contraseña, la vista previa no muestra el nombre.
+- **Comprobar:** `tailscale --socket=/run/pcloud-share-ts/tailscaled.sock funnel status`. Sin enlaces activos debe salir vacío. `tailscale funnel status` (nodo principal) debe salir SIEMPRE vacío.
+- **Apagar todo ya:**
+  - Retira los enlaces en Ajustes → Enlaces compartidos, o ejecuta `sudo tailscale --socket=/run/pcloud-share-ts/tailscaled.sock funnel --https=443 off`; se vuelve a encender si queda algún enlace activo.
+  - Para quitar la función: `pcloud-install-share.sh --remove --execute`.
+- **Registros:** `journalctl -u pcloud-share-agent -u pcloud-share-tailscaled --no-pager -n 40`.
+- **Vista previa en los chats:**
+  - Las páginas llevan Open Graph: `og:image` es `/og-image.jpg`, de 1200×630.
+  - `robots.txt` deja entrar solo a los bots de vista previa (WhatsApp, Telegram…), no a los buscadores.
+  - Si el enlace tiene contraseña, la vista previa no muestra el nombre.
 
 ## 9. Antes de confiar datos únicos
 
