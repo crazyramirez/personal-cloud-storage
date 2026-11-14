@@ -43,6 +43,8 @@ const UPLOAD_OFFSET_HEADER = 'upload-offset';
 const SPEED_WINDOW_MS = 5000;
 
 const transfers = ref<Transfer[]>([]);
+/** Panel de subidas de la cabecera (desplegable en ordenador, pantalla completa en el móvil). */
+const panelOpen = ref(false);
 /** Aumenta cada vez que termina una subida: las vistas lo observan para refrescar listados. */
 const completedTick = ref(0);
 const lastCompletedDest = ref('');
@@ -50,6 +52,10 @@ let nextId = 1;
 const controllers = new Map<number, AbortController>();
 const samples = new Map<number, Array<[number, number]>>();
 const retryTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
+function drop(id: number): void {
+  transfers.value = transfers.value.filter((item) => item.id !== id);
+}
 
 function find(id: number): Transfer | undefined {
   return transfers.value.find((item) => item.id === id);
@@ -122,9 +128,11 @@ async function run(transfer: Transfer): Promise<void> {
 
     const done = await api<UploadCompleteResponse>(`/uploads/${transfer.uploadId}/complete`, { method: 'POST', signal, timeoutMs: 300_000 });
     transfer.state = 'done';
-    // Red de seguridad: aunque el listado no llegue a refrescarse, deja de mostrarse en 8 s.
+    // Sale del panel al instante. En la carpeta de destino sigue como «Guardado» hasta que el
+    // listado muestra el archivo real o pasan 8 s; entonces se olvida del todo.
     setTimeout(() => {
       transfer.settled = true;
+      drop(transfer.id);
     }, 8000);
     transfer.speed = 0;
     transfer.finalName = done.name === transfer.name ? null : done.name;
@@ -179,6 +187,25 @@ function pump(): void {
 export function useTransfers() {
   const active = computed(() => transfers.value.filter((item) => item.state === 'uploading' || item.state === 'queued' || item.state === 'waiting'));
   const busy = computed(() => active.value.length > 0);
+  /** Lo que se muestra en el panel: todo lo que no ha terminado (también en pausa o con error). */
+  const pending = computed(() => transfers.value.filter((item) => item.state !== 'done' && item.state !== 'cancelled'));
+  const totals = computed(() => {
+    let size = 0;
+    let uploaded = 0;
+    let speed = 0;
+    let uploading = 0;
+    let failed = 0;
+    for (const item of pending.value) {
+      size += item.size;
+      uploaded += item.uploaded;
+      if (item.state === 'uploading') {
+        speed += item.speed;
+        uploading += 1;
+      }
+      if (item.state === 'error') failed += 1;
+    }
+    return { size, uploaded, speed, uploading, failed, percent: size === 0 ? 0 : Math.floor((uploaded / size) * 100) };
+  });
 
   function enqueue(files: readonly File[], dest: string): void {
     for (const file of files) {
@@ -244,6 +271,18 @@ export function useTransfers() {
       };
       remove(0);
     }
+    drop(id);
+  }
+
+  /** Eliminar una subida desde la interfaz: siempre con confirmación (se descarta lo subido). */
+  async function confirmCancel(transfer: Transfer): Promise<void> {
+    const ok = await confirmDialog({
+      title: t('transfers.cancelTitle'),
+      message: t('transfers.cancelMessage', { name: transfer.name }),
+      confirm: t('transfers.cancelConfirm'),
+      danger: true,
+    });
+    if (ok) cancel(transfer.id);
   }
 
   /** Reintenta ya todo lo que estaba esperando al disco o a la red. */
@@ -265,14 +304,9 @@ export function useTransfers() {
     for (const transfer of transfers.value) if (transfer.state === 'paused') resume(transfer.id);
   }
 
-  /** Quita de la lista una transferencia terminada o cancelada. */
-  function remove(id: number): void {
-    transfers.value = transfers.value.filter((item) => item.id !== id || (item.state !== 'done' && item.state !== 'cancelled'));
+  function openPanel(): void {
+    panelOpen.value = true;
   }
 
-  function clearFinished(): void {
-    transfers.value = transfers.value.filter((item) => item.state !== 'done' && item.state !== 'cancelled');
-  }
-
-  return { transfers, active, busy, completedTick, lastCompletedDest, enqueue, pause, resume, cancel, remove, resumeWaiting, pauseAll, resumeAll, clearFinished };
+  return { transfers, active, busy, pending, totals, panelOpen, openPanel, completedTick, lastCompletedDest, enqueue, pause, resume, cancel, confirmCancel, resumeWaiting, pauseAll, resumeAll };
 }

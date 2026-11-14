@@ -2,7 +2,7 @@
 const session = useSession();
 const storage = useStorage();
 const { theme, toggle } = useTheme();
-const { active } = useTransfers();
+const { pending, totals, panelOpen } = useTransfers();
 const route = useRoute();
 /** Acceso fuera de casa por Tailscale (nombre *.ts.net o IP 100.64/10). */
 const remote = import.meta.client && /\.ts\.net$|^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(window.location.hostname);
@@ -13,7 +13,6 @@ onBeforeUnmount(() => storage.stop());
 const NAV = computed<Array<{ to: string; label: string; icon: IconName; mobile: boolean }>>(() => [
   { to: '/panel', label: t('nav.dashboard'), icon: 'gauge', mobile: true },
   { to: '/archivos', label: t('nav.files'), icon: 'folder', mobile: true },
-  { to: '/transferencias', label: t('nav.transfers'), icon: 'transfers', mobile: true },
   { to: '/papelera', label: t('nav.trash'), icon: 'trash', mobile: true },
   { to: '/actividad', label: t('nav.activity'), icon: 'clock', mobile: false },
   { to: '/ajustes', label: t('nav.settings'), icon: 'sliders', mobile: true },
@@ -45,7 +44,6 @@ async function signOut(): Promise<void> {
         <li v-for="item in NAV" :key="item.to">
           <NuxtLink :to="item.to" class="link" :class="{ current: isActive(item.to) }" :aria-current="isActive(item.to) ? 'page' : undefined">
             <AppIcon :name="item.icon" />{{ item.label }}
-            <span v-if="item.to === '/transferencias' && active.length > 0" class="count">{{ active.length }}</span>
           </NuxtLink>
         </li>
       </ul>
@@ -57,6 +55,20 @@ async function signOut(): Promise<void> {
       <header class="top">
         <StatusPill />
         <div class="tools">
+          <button
+            type="button"
+            class="btn btn-icon uploads"
+            :class="{ open: panelOpen }"
+            :aria-label="pending.length > 0 ? t('transfers.openPanelBusy', { n: pending.length }) : t('transfers.openPanel')"
+            :title="t('transfers.openPanel')"
+            :aria-expanded="panelOpen"
+            aria-haspopup="dialog"
+            @click="panelOpen = !panelOpen"
+          >
+            <ProgressRing v-if="totals.uploading > 0" class="ring" :value="totals.percent / 100" :size="38" :stroke="2.5" />
+            <AppIcon name="upload" />
+            <span v-if="pending.length > 0" class="badge" :class="{ danger: totals.failed > 0 }">{{ pending.length }}</span>
+          </button>
           <button type="button" class="btn btn-icon" :aria-label="theme === 'dark' ? t('nav.lightTheme') : t('nav.darkTheme')" @click="toggle">
             <AppIcon :name="theme === 'dark' ? 'sun' : 'moon'" />
           </button>
@@ -71,10 +83,11 @@ async function signOut(): Promise<void> {
 
     <nav :aria-label="t('nav.tabNav')" class="tabbar">
       <NuxtLink v-for="item in MOBILE_NAV" :key="item.to" :to="item.to" class="tab" :class="{ current: isActive(item.to) }" :aria-current="isActive(item.to) ? 'page' : undefined">
-        <span class="tab-ico"><AppIcon :name="item.icon" :size="22" /><span v-if="item.to === '/transferencias' && active.length > 0" class="dot">{{ active.length }}</span></span>
-        <span>{{ item.to === '/transferencias' ? t('nav.transfersShort') : item.label }}</span>
+        <AppIcon :name="item.icon" :size="22" />
+        <span>{{ item.label }}</span>
       </NuxtLink>
     </nav>
+    <TransfersPanel />
     <UiHost />
   </div>
 </template>
@@ -163,17 +176,6 @@ a.link:hover {
   color: var(--muted);
 }
 
-.count {
-  margin-left: auto;
-  min-width: 22px;
-  padding: 0 7px;
-  border-radius: 999px;
-  background: var(--accent-btn);
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 600;
-  text-align: center;
-}
 
 .main {
   flex: 999 1 560px;
@@ -198,6 +200,44 @@ a.link:hover {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+.uploads {
+  position: relative;
+}
+
+.uploads.open {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.uploads .ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--accent-btn);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+.badge.danger {
+  background: #b42318;
 }
 
 .who {
@@ -292,24 +332,5 @@ a.link:hover {
     font-weight: 700;
   }
 
-  .tab-ico {
-    position: relative;
-    display: inline-flex;
-  }
-
-  .dot {
-    position: absolute;
-    top: -6px;
-    right: -10px;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    border-radius: 9px;
-    background: var(--accent-btn);
-    color: #ffffff;
-    font-size: 11px;
-    line-height: 18px;
-    text-align: center;
-  }
 }
 </style>

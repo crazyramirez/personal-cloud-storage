@@ -1,19 +1,21 @@
 <script setup lang="ts">
+/** Una subida pendiente en el panel de subidas (las terminadas ya no se muestran). */
 const props = defineProps<{ transfer: Transfer }>();
-const { pause, resume, cancel, remove } = useTransfers();
+const { pause, resume, confirmCancel, panelOpen } = useTransfers();
+
+function openDestination(): void {
+  panelOpen.value = false;
+  void navigateTo(explorerLink(props.transfer.dest.split('/').filter(Boolean)));
+}
 
 function menu(): MenuItem[] {
   const item = props.transfer;
   const active = item.state === 'uploading' || item.state === 'queued' || item.state === 'waiting';
-  const finished = item.state === 'done' || item.state === 'cancelled';
-  const folder = item.dest.split('/').filter(Boolean);
   return [
     { label: t('transfers.pause'), icon: 'pause', disabled: !active, run: () => pause(item.id) },
     { label: item.state === 'error' ? t('common.retry') : t('transfers.resume'), icon: 'play', disabled: item.state !== 'paused' && item.state !== 'error' && item.state !== 'waiting', run: () => resume(item.id) },
-    { label: t('transfers.openDestination'), icon: 'folder', separator: true, run: () => void navigateTo(explorerLink(folder)) },
-    finished
-      ? { label: t('transfers.removeFromList'), icon: 'close', separator: true, run: () => remove(item.id) }
-      : { label: t('transfers.cancelUpload'), icon: 'close', danger: true, separator: true, run: () => cancel(item.id) },
+    { label: t('transfers.openDestination'), icon: 'folder', separator: true, run: openDestination },
+    { label: t('transfers.cancelUpload'), icon: 'close', danger: true, separator: true, run: () => void confirmCancel(item) },
   ];
 }
 
@@ -27,20 +29,12 @@ const chip = computed(() => {
     case 'queued': return { label: t('transfers.stateQueued'), tone: 'muted' };
     case 'paused': return { label: t('transfers.statePaused'), tone: 'muted' };
     case 'waiting': return { label: t('transfers.stateWaiting'), tone: 'warn' };
-    case 'error': return { label: t('transfers.stateError'), tone: 'danger' };
-    case 'done': return { label: t('transfers.stateDone'), tone: 'ok' };
-    default: return { label: t('transfers.stateCancelled'), tone: 'muted' };
+    default: return { label: t('transfers.stateError'), tone: 'danger' };
   }
 });
 
 const meta = computed(() => {
   const item = props.transfer;
-  if (item.state === 'done') {
-    return item.finalName === null
-      ? t('transfers.doneConfirmed', { size: formatBytes(item.size) })
-      : t('transfers.doneRenamed', { size: formatBytes(item.size), name: item.finalName });
-  }
-  if (item.state === 'cancelled') return t('transfers.cancelledNothingSaved');
   if (item.message !== '') return item.message;
   const progress = t('transfers.progress', { done: formatBytes(item.uploaded), total: formatBytes(item.size) });
   if (item.state !== 'uploading' || item.speed <= 0) return progress;
@@ -51,7 +45,6 @@ const showBar = computed(() => ['uploading', 'queued', 'paused', 'waiting'].incl
 const canPause = computed(() => ['uploading', 'queued', 'waiting'].includes(props.transfer.state));
 const canResume = computed(() => props.transfer.state === 'paused');
 const canRetry = computed(() => props.transfer.state === 'error');
-const canCancel = computed(() => !['done', 'cancelled'].includes(props.transfer.state));
 </script>
 
 <template>
@@ -73,10 +66,10 @@ const canCancel = computed(() => !['done', 'cancelled'].includes(props.transfer.
       <span class="meta" :class="{ muted: transfer.state !== 'error' && transfer.state !== 'waiting' }">{{ meta }}</span>
     </div>
     <div class="actions">
-      <button v-if="canPause" type="button" class="btn btn-icon" :aria-label="t('transfers.pauseNamed', { name: transfer.name })" @click="pause(transfer.id)"><AppIcon name="pause" :stroke="1.9" /></button>
-      <button v-if="canResume" type="button" class="btn btn-icon" :aria-label="t('transfers.resumeNamed', { name: transfer.name })" @click="resume(transfer.id)"><AppIcon name="play" :stroke="1.9" /></button>
+      <button v-if="canPause" type="button" class="btn btn-icon" :aria-label="t('transfers.pauseNamed', { name: transfer.name })" :title="t('transfers.pause')" @click="pause(transfer.id)"><AppIcon name="pause" :stroke="1.9" /></button>
+      <button v-if="canResume" type="button" class="btn btn-icon" :aria-label="t('transfers.resumeNamed', { name: transfer.name })" :title="t('transfers.resume')" @click="resume(transfer.id)"><AppIcon name="play" :stroke="1.9" /></button>
       <button v-if="canRetry" type="button" class="btn" @click="resume(transfer.id)"><AppIcon name="refresh" :stroke="1.9" />{{ t('common.retry') }}</button>
-      <button v-if="canCancel" type="button" class="btn btn-icon btn-ghost muted" :aria-label="t('transfers.cancelNamed', { name: transfer.name })" @click="cancel(transfer.id)"><AppIcon name="close" :stroke="1.9" /></button>
+      <button type="button" class="btn btn-icon btn-ghost muted" :aria-label="t('transfers.cancelNamed', { name: transfer.name })" :title="t('transfers.cancelUpload')" @click="confirmCancel(transfer)"><AppIcon name="trash" :stroke="1.9" /></button>
     </div>
   </li>
 </template>
@@ -86,8 +79,8 @@ const canCancel = computed(() => !['done', 'cancelled'].includes(props.transfer.
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px 16px;
-  padding: 14px 16px;
+  gap: 10px 12px;
+  padding: 12px;
   border-radius: 14px;
   border: 1px solid var(--border);
   background: var(--surface);
@@ -97,9 +90,10 @@ const canCancel = computed(() => !['done', 'cancelled'].includes(props.transfer.
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 10px;
+  flex: none;
   background: var(--surface-2);
   color: var(--accent);
 }
@@ -121,7 +115,7 @@ const canCancel = computed(() => !['done', 'cancelled'].includes(props.transfer.
 }
 
 .body {
-  flex: 1 1 320px;
+  flex: 1 1 180px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -154,6 +148,7 @@ const canCancel = computed(() => !['done', 'cancelled'].includes(props.transfer.
 
 .actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
+  margin-left: auto;
 }
 </style>

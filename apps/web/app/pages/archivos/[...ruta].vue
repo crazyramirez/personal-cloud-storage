@@ -3,7 +3,7 @@ import type { BatchResponse, FsEntry, FsListResponse } from '@pcloud/contracts';
 
 const route = useRoute();
 const storage = useStorage();
-const { transfers, enqueue, completedTick, lastCompletedDest, pause, resume, cancel } = useTransfers();
+const { transfers, enqueue, completedTick, lastCompletedDest, pause, resume, confirmCancel, openPanel } = useTransfers();
 const { clipboard } = useFileClipboard();
 const session = useSession();
 const isOwner = computed(() => session.user.value?.role === 'owner');
@@ -627,7 +627,7 @@ async function uploadTree(items: Array<{ file: File; rel: string }>): Promise<vo
   for (const [dest, group] of groups) enqueue(group, dest);
   if (ordered.length > 0) void load({ keepSelection: true });
   toast(t('explorer.uploading', { n: items.length, name: (items[0] as { file: File }).file.name }), {
-    action: { label: t('explorer.viewProgress'), run: () => void navigateTo('/transferencias') },
+    action: { label: t('explorer.viewProgress'), run: openPanel },
   });
 }
 
@@ -970,8 +970,8 @@ function ghostMenu(item: Transfer): MenuItem[] {
   return [
     { label: t('explorer.pause'), icon: 'pause', disabled: !active, run: () => pause(item.id) },
     { label: item.state === 'error' ? t('common.retry') : t('explorer.resume'), icon: 'play', disabled: item.state !== 'paused' && item.state !== 'error' && item.state !== 'waiting', run: () => resume(item.id) },
-    { label: t('explorer.viewAllTransfers'), icon: 'transfers', separator: true, run: () => void navigateTo('/transferencias') },
-    { label: t('explorer.cancelUpload'), icon: 'close', danger: true, separator: true, disabled: item.state === 'done', run: () => cancel(item.id) },
+    { label: t('explorer.viewAllTransfers'), icon: 'upload', separator: true, run: openPanel },
+    { label: t('explorer.cancelUpload'), icon: 'close', danger: true, separator: true, disabled: item.state === 'done', run: () => void confirmCancel(item) },
   ];
 }
 

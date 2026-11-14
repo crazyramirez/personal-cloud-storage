@@ -23,10 +23,10 @@ const es = {
   checked: 'Comprobado',
 
   // Transferencias
-  transfers: 'Transferencias',
+  transfers: 'Subidas',
   activeCount: (p) => (Number(p.n) === 0 ? 'Sin subidas en curso' : Number(p.n) === 1 ? '1 en curso' : `${p.n} en curso`),
   finishedCount: (p) => (Number(p.n) === 1 ? '1 completada en esta sesión' : `${p.n} completadas en esta sesión`),
-  viewTransfers: 'Ver transferencias',
+  viewTransfers: 'Ver subidas',
 
   // Acceso y seguridad
   access: 'Acceso y seguridad',
@@ -65,10 +65,10 @@ export default {
     reserveHint: '{size}: uploads are blocked below this',
     checked: 'Checked',
 
-    transfers: 'Transfers',
+    transfers: 'Uploads',
     activeCount: (p) => (Number(p.n) === 0 ? 'No uploads in progress' : Number(p.n) === 1 ? '1 in progress' : `${p.n} in progress`),
     finishedCount: (p) => (Number(p.n) === 1 ? '1 completed this session' : `${p.n} completed this session`),
-    viewTransfers: 'View transfers',
+    viewTransfers: 'View uploads',
 
     access: 'Access and security',
     scope: 'Access',

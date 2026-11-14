@@ -1,6 +1,6 @@
 {
   "id": "/",
-  "name": "Personal Cloud",
+  "name": "Personal Cloud Storage",
   "short_name": "PCS",
   "description": "Tu nube personal en tu propio disco.",
   "lang": "es",
@@ -21,7 +21,6 @@
   ],
   "shortcuts": [
     { "name": "Archivos", "url": "/archivos", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Subidas", "url": "/transferencias", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Papelera", "url": "/papelera", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

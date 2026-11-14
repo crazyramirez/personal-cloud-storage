@@ -110,8 +110,8 @@ const es = {
   ghostSaved: 'Guardado en el disco',
   pause: 'Pausar',
   resume: 'Reanudar',
-  viewAllTransfers: 'Ver todas las transferencias',
-  cancelUpload: 'Cancelar subida',
+  viewAllTransfers: 'Ver todas las subidas',
+  cancelUpload: 'Eliminar subida',
   ghostActions: 'Acciones de la subida {name}',
 
   // Barra y listado
@@ -278,8 +278,8 @@ export default {
     ghostSaved: 'Saved to disk',
     pause: 'Pause',
     resume: 'Resume',
-    viewAllTransfers: 'View all transfers',
-    cancelUpload: 'Cancel upload',
+    viewAllTransfers: 'View all uploads',
+    cancelUpload: 'Delete upload',
     ghostActions: 'Upload actions for {name}',
 
     breadcrumb: 'Path',

@@ -2,7 +2,7 @@
 useHead({ title: () => t('panel.pageTitle') });
 
 const { status, state, readable, unreachable } = useStorage();
-const { active, transfers } = useTransfers();
+const { active, completedTick, openPanel } = useTransfers();
 
 const label = computed(() => VOLUME_LABELS[state.value]);
 const space = computed(() => status.value?.space ?? null);
@@ -12,7 +12,7 @@ const fsLabel = computed(() => {
   const type = status.value?.mount?.fsType;
   return type === 'exfat' ? 'exFAT' : type === 'ntfs3' || type === 'fuseblk' ? 'NTFS' : (type ?? '—');
 });
-const finished = computed(() => transfers.value.filter((item) => item.state === 'done').length);
+const finished = completedTick;
 
 /** Se comprueba de verdad: no se afirma «cifrada» si la página se cargó por HTTP. */
 const encrypted = import.meta.client && window.location.protocol === 'https:';
@@ -121,7 +121,7 @@ onBeforeUnmount(() => {
         </div>
         <p class="big">{{ t('panel.activeCount', { n: active.length }) }}</p>
         <p class="muted">{{ t('panel.finishedCount', { n: finished }) }}</p>
-        <NuxtLink to="/transferencias" class="more">{{ t('panel.viewTransfers') }}<AppIcon name="chevron" :size="16" :stroke="2" /></NuxtLink>
+        <button type="button" class="more" @click="openPanel">{{ t('panel.viewTransfers') }}<AppIcon name="chevron" :size="16" :stroke="2" /></button>
       </section>
 
       <section aria-labelledby="t-acceso" class="card block">
@@ -311,6 +311,11 @@ h2 {
 
 .more {
   align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 6px;
