@@ -40,6 +40,11 @@ async function run(): Promise<void> {
 /** Escala: un HDD USB 3 de 2,5" ronda 100-130 MB/s secuencial; 150 = barra llena. */
 const barPercent = (value: number, max: number): number => Math.max(3, Math.min(100, Math.round((value / max) * 100)));
 const verdict = (mbps: number): string => t(mbps >= 80 ? 'settings.verdictGreat' : mbps >= 40 ? 'settings.verdictOk' : mbps >= 15 ? 'settings.verdictSlow' : 'settings.verdictVerySlow');
+const tileRows = computed(() => [
+  { key: 'w', label: t('settings.write'), value: speed.value ? `${formatNumber(speed.value.writeMBps, 3)} MB/s` : '—' },
+  { key: 'r', label: t('settings.read'), value: speed.value ? `${formatNumber(speed.value.readMBps, 3)} MB/s` : '—' },
+  { key: 'i', label: t('system.randomShort'), value: speed.value ? `${formatNumber(speed.value.randomReadIops, 3)} IOPS` : '—' },
+]);
 const rows = computed(() => {
   const s = speed.value;
   if (s === null) return [];
@@ -52,33 +57,77 @@ const rows = computed(() => {
 </script>
 
 <template>
-  <component :is="tile ? 'article' : 'section'" class="card" :class="tile ? 'tile' : 'sec'" aria-labelledby="s-speed">
-    <header>
-      <span v-if="tile" class="ico"><AppIcon name="drive" :size="18" /></span>
-      <AppIcon v-else name="gauge" />
-      <component :is="tile ? 'h3' : 'h2'" id="s-speed">{{ t('settings.diskSpeed') }}</component>
+  <!-- Panel → Equipo: celda compacta con las mismas 3 filas siempre (alto constante). -->
+  <article v-if="tile" class="res-cell" aria-labelledby="r-diskspeed">
+    <header class="res-cell-head">
+      <span class="res-ico"><AppIcon name="drive" :size="15" /></span>
+      <h3 id="r-diskspeed">{{ t('settings.diskSpeed') }}</h3>
     </header>
-    <p v-if="!tile" class="muted">{{ t('settings.diskSpeedIntro') }}</p>
-    <p v-else-if="!speed" class="muted small">{{ t('system.diskTestIntro') }}</p>
+    <div class="res-cell-body">
+      <div class="res-rows">
+        <div v-for="row in tileRows" :key="row.key" class="res-row"><span>{{ row.label }}</span><strong>{{ busy ? '…' : row.value }}</strong></div>
+        <div class="bar small-bar" aria-hidden="true"><span :style="{ width: `${speed && !busy ? barPercent(speed.readMBps, 150) : busy ? 8 : 0}%` }" /></div>
+      </div>
+    </div>
+    <div class="res-cell-foot">
+      <p v-if="error" role="alert" class="res-note err">{{ error }}</p>
+      <p v-else class="res-note">{{ busy ? t('settings.measuring') : speed ? `${verdict(speed.readMBps)} · ${formatRelative(speed.testedAt)}` : t('system.diskTestIntro') }}</p>
+      <button type="button" class="btn cell-btn" :disabled="busy" @click="run">
+        <span v-if="busy" class="spin" aria-hidden="true" /><AppIcon v-else name="gauge" />{{ busy ? t('settings.measuring') : speed ? t('settings.measureAgain') : t('settings.measure') }}
+      </button>
+    </div>
+  </article>
 
+  <section v-else class="card sec" aria-labelledby="s-speed">
+    <header>
+      <AppIcon name="gauge" />
+      <h2 id="s-speed">{{ t('settings.diskSpeed') }}</h2>
+    </header>
+    <p class="muted">{{ t('settings.diskSpeedIntro') }}</p>
     <div v-if="speed" class="speed">
       <div v-for="row in rows" :key="row.key" class="meter">
         <div class="meter-head"><span>{{ row.label }}</span><strong>{{ row.value }}</strong></div>
         <div class="bar"><span :style="{ width: `${row.pct}%` }" /></div>
-        <span v-if="!tile || row.key !== 'i'" class="muted small">{{ row.hint }}</span>
+        <span class="muted small">{{ row.hint }}</span>
       </div>
-      <p class="muted small">{{ tile ? formatRelative(speed.testedAt) : t('settings.measuredAt', { date: formatDate(speed.testedAt), seconds: formatNumber(speed.durationMs / 1000) }) }}</p>
+      <p class="muted small">{{ t('settings.measuredAt', { date: formatDate(speed.testedAt), seconds: formatNumber(speed.durationMs / 1000) }) }}</p>
     </div>
     <p v-if="error" role="alert" class="notice notice-danger">{{ error }}</p>
     <div>
-      <button type="button" class="btn" :class="tile ? '' : 'btn-primary'" :disabled="busy" @click="run">
+      <button type="button" class="btn btn-primary" :disabled="busy" @click="run">
         <span v-if="busy" class="spin" aria-hidden="true" /><AppIcon v-else name="gauge" />{{ busy ? t('settings.measuring') : speed ? t('settings.measureAgain') : t('settings.measure') }}
       </button>
     </div>
-  </component>
+  </section>
 </template>
 
 <style scoped>
+.small-bar {
+  height: 4px;
+  margin-top: 4px;
+  border-radius: 2px;
+  background: var(--accent-soft);
+  overflow: hidden;
+}
+
+.small-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-btn);
+  transition: width 0.4s ease;
+}
+
+.cell-btn {
+  align-self: flex-start;
+  min-height: 36px;
+  font-size: 13px;
+}
+
+.err {
+  color: var(--danger);
+}
+
 .sec {
   display: flex;
   flex-direction: column;
@@ -97,36 +146,9 @@ const rows = computed(() => {
   font-weight: 650;
 }
 
-.tile {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-  padding: 14px;
-}
 
-.tile header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 
-.tile h3 {
-  font-size: 14px;
-  font-weight: 650;
-}
 
-.ico {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  flex: none;
-}
 
 .small {
   font-size: 12px;
@@ -138,9 +160,6 @@ const rows = computed(() => {
   gap: 14px;
 }
 
-.tile .speed {
-  gap: 8px;
-}
 
 .meter {
   display: flex;
@@ -148,9 +167,6 @@ const rows = computed(() => {
   gap: 6px;
 }
 
-.tile .meter {
-  gap: 3px;
-}
 
 .meter-head {
   display: flex;
@@ -164,14 +180,7 @@ const rows = computed(() => {
   font-variant-numeric: tabular-nums;
 }
 
-.tile .meter-head span {
-  font-size: 12px;
-  color: var(--muted);
-}
 
-.tile .meter-head strong {
-  font-size: 14px;
-}
 
 .meter .bar {
   height: 10px;
@@ -180,10 +189,6 @@ const rows = computed(() => {
   overflow: hidden;
 }
 
-.tile .meter .bar {
-  height: 6px;
-  border-radius: 3px;
-}
 
 .meter .bar span {
   display: block;

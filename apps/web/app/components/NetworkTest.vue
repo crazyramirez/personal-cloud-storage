@@ -130,41 +130,36 @@ const pct = (value: number): number => Math.max(3, Math.min(100, Math.round((val
 function verdict(value: number): string {
   return t(value >= 300 ? 'system.netGreat' : value >= 80 ? 'system.netGood' : value >= 20 ? 'system.netFair' : 'system.netSlow');
 }
-const latencyVerdict = (ms: number): string => t(ms <= 15 ? 'system.latencyGreat' : ms <= 60 ? 'system.latencyGood' : 'system.latencySlow');
 const phaseLabel = computed(() => (phase.value === 'idle' ? '' : t(`system.netPhase_${phase.value}`)));
 </script>
 
 <template>
-  <article class="card tile" aria-labelledby="r-nettest">
-    <header>
-      <span class="ico"><AppIcon name="gauge" :size="18" /></span>
+  <article class="res-cell" aria-labelledby="r-nettest">
+    <header class="res-cell-head">
+      <span class="res-ico"><AppIcon name="gauge" :size="15" /></span>
       <h3 id="r-nettest">{{ t('system.netTest') }}</h3>
     </header>
-    <p v-if="!result && !busy" class="muted small">{{ t('system.netTestIntro') }}</p>
-
-    <div v-if="busy" class="running" aria-live="polite">
-      <span class="muted small">{{ phaseLabel }}</span>
-      <strong>{{ phase === 'latency' ? '…' : fmt(live) }}</strong>
-      <div class="bar" aria-hidden="true"><span class="sweep" :style="{ width: phase === 'latency' ? '20%' : `${pct(live)}%` }" /></div>
+    <!-- Siempre las mismas 3 filas (con «—» antes de medir): la celda no cambia de alto. -->
+    <div class="res-cell-body">
+      <div class="res-rows" aria-live="polite">
+        <div class="res-row" :class="{ active: phase === 'download' }">
+          <span><AppIcon name="download" :size="12" />{{ t('system.netDown') }}</span>
+          <strong>{{ phase === 'download' ? fmt(live) : result && !busy ? fmt(result.downMbps) : '—' }}</strong>
+        </div>
+        <div class="res-row" :class="{ active: phase === 'upload' }">
+          <span><AppIcon name="upload" :size="12" />{{ t('system.netUp') }}</span>
+          <strong>{{ phase === 'upload' ? fmt(live) : result && !busy ? fmt(result.upMbps) : '—' }}</strong>
+        </div>
+        <div class="res-row" :class="{ active: phase === 'latency' }">
+          <span><AppIcon name="clock" :size="12" />{{ t('system.netLatency') }}</span>
+          <strong>{{ phase === 'latency' ? '…' : result && !busy ? `${formatNumber(result.latencyMs, result.latencyMs < 10 ? 1 : 0)} ms` : '—' }}</strong>
+        </div>
+        <div class="bar" aria-hidden="true"><span :class="{ idle: !busy }" :style="{ width: `${busy ? (phase === 'latency' ? 8 : pct(live)) : result ? pct(result.downMbps) : 0}%` }" /></div>
+      </div>
     </div>
-    <div v-else-if="result" class="rows">
-      <div class="row">
-        <div class="row-head"><span><AppIcon name="download" :size="13" />{{ t('system.netDown') }}</span><strong>{{ fmt(result.downMbps) }}</strong></div>
-        <div class="bar" aria-hidden="true"><span :style="{ width: `${pct(result.downMbps)}%` }" /></div>
-        <span class="muted small">{{ verdict(result.downMbps) }}</span>
-      </div>
-      <div class="row">
-        <div class="row-head"><span><AppIcon name="upload" :size="13" />{{ t('system.netUp') }}</span><strong>{{ fmt(result.upMbps) }}</strong></div>
-        <div class="bar" aria-hidden="true"><span :style="{ width: `${pct(result.upMbps)}%` }" /></div>
-      </div>
-      <div class="row-head">
-        <span><AppIcon name="clock" :size="13" />{{ t('system.netLatency') }}</span>
-        <strong>{{ formatNumber(result.latencyMs, result.latencyMs < 10 ? 1 : 0) }} ms <span class="muted small">· {{ latencyVerdict(result.latencyMs) }}</span></strong>
-      </div>
-      <p class="muted small">{{ t('system.netThisDevice') }} · {{ formatRelative(result.at) }}</p>
-    </div>
-    <p v-if="error" role="alert" class="notice notice-danger">{{ error }}</p>
-    <div>
+    <div class="res-cell-foot">
+      <p v-if="error" role="alert" class="res-note err">{{ error }}</p>
+      <p v-else class="res-note">{{ busy ? phaseLabel : result ? `${verdict(result.downMbps)} · ${formatRelative(result.at)}` : t('system.netTestIntro') }}</p>
       <button v-if="busy" type="button" class="btn" @click="stop"><AppIcon name="close" />{{ t('system.netStop') }}</button>
       <button v-else type="button" class="btn" @click="run"><AppIcon name="gauge" />{{ result ? t('system.netAgain') : t('system.netRun') }}</button>
     </div>
@@ -172,89 +167,14 @@ const phaseLabel = computed(() => (phase.value === 'idle' ? '' : t(`system.netPh
 </template>
 
 <style scoped>
-.tile {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-  padding: 14px;
-}
-
-.tile header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.tile h3 {
-  font-size: 14px;
-  font-weight: 650;
-}
-
-.ico {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  background: var(--accent-soft);
+.res-row.active > span:first-child {
   color: var(--accent);
-  flex: none;
-}
-
-.small {
-  font-size: 12px;
-}
-
-.running {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.running strong {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-}
-
-.rows {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.row {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.row-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.row-head > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.row-head strong {
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
 }
 
 .bar {
-  height: 6px;
-  border-radius: 3px;
+  height: 4px;
+  margin-top: 4px;
+  border-radius: 2px;
   background: var(--accent-soft);
   overflow: hidden;
 }
@@ -265,5 +185,15 @@ const phaseLabel = computed(() => (phase.value === 'idle' ? '' : t(`system.netPh
   border-radius: inherit;
   background: var(--accent-btn);
   transition: width 0.4s ease;
+}
+
+.btn {
+  align-self: flex-start;
+  min-height: 36px;
+  font-size: 13px;
+}
+
+.err {
+  color: var(--danger);
 }
 </style>

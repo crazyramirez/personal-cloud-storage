@@ -530,3 +530,127 @@ a,
     animation: none !important;
   }
 }
+
+/* ── Panel → Equipo: rejilla de celdas alineadas (SystemResources, NetworkTest, DiskSpeedTest) ──
+ * Una tarjeta = una rejilla de columnas iguales; las celdas se separan con una línea fina (el
+ * hueco de 1 px deja ver el color del borde) y todas comparten estructura: cabecera, cuerpo de
+ * altura fija y pie. Así todo queda alineado en las dos direcciones, en cualquier ancho. */
+.res-card {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  padding: 0;
+  overflow: hidden;
+  background: var(--border);
+}
+
+@media (max-width: 1180px) {
+  .res-card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .res-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.res-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px 18px;
+  background: var(--surface);
+}
+
+.res-cell-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+
+.res-cell-head h3 {
+  font-size: 13.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.res-cell-head .chip {
+  margin-left: auto;
+  padding: 1px 8px;
+  font-size: 11px;
+}
+
+.res-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Cuerpo de altura fija: medidor (72 px) + hasta 3 filas de datos. */
+.res-cell-body {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 76px;
+}
+
+.res-rows {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.res-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.res-row > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.res-row > strong,
+.res-row > span:last-child {
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.res-cell-foot {
+  margin-top: auto;
+  min-height: 30px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.res-note {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}

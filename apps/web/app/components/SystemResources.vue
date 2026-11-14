@@ -1,11 +1,14 @@
 <script setup lang="ts">
 /**
- * Panel → Equipo: CPU, memoria, temperatura, red, disco del sistema, alimentación y datos del
- * dispositivo, en directo (cada 5 s con la pestaña visible) y con los últimos 15 minutos.
+ * Panel → Equipo: dos tarjetas con la MISMA rejilla de 4 columnas iguales, para que todo quede
+ * alineado en vertical y en horizontal (estilos .res-* en main.css):
+ *  1. En directo: procesador · memoria · temperatura y alimentación · red.
+ *  2. Sistema y pruebas: disco del sistema · dispositivo · velocidad de la red · del disco.
+ * Cada celda: cabecera, cuerpo de altura fija (medidor de 72 px + hasta 3 filas de datos) y pie
+ * (mini-gráfica de 15 min o nota). Se actualiza cada 5 s con la pestaña visible.
  *
  * Forma de cada dato: un valor frente a su límite → medidor circular (el relleno lleva la gravedad
- * y va acompañado de icono + texto, nunca solo color); la evolución → mini-gráfica de una sola
- * serie; varias proporciones parecidas (núcleos, intercambio) → barras finas alineadas.
+ * y va con icono + texto, nunca solo color); la evolución → mini-gráfica de una sola serie.
  */
 import type { ResourcesResponse } from '@pcloud/contracts';
 
@@ -59,7 +62,7 @@ const memory = computed(() => {
   if (m === undefined || m.totalBytes === 0) return null;
   const ratio = m.usedBytes / m.totalBytes;
   const tone = level(ratio * 100, 85, 95);
-  return { ...m, ratio, tone, state: stateOf(tone), swapRatio: m.swapTotalBytes === 0 ? 0 : m.swapUsedBytes / m.swapTotalBytes };
+  return { ...m, ratio, tone, state: stateOf(tone) };
 });
 
 const temperature = computed(() => {
@@ -73,11 +76,11 @@ const temperature = computed(() => {
 const power = computed(() => {
   const p = data.value?.power;
   if (p === null || p === undefined) return null;
-  if (p.undervoltageNow) return { tone: 'danger', icon: 'bolt' as IconName, title: t('system.powerNow'), hint: t('system.powerNowHint') };
-  if (p.undervoltageSinceBoot) return { tone: 'warn', icon: 'bolt' as IconName, title: t('system.powerPast'), hint: t('system.powerPastHint') };
-  if (p.throttledNow || p.heatLimitNow) return { tone: 'warn', icon: 'alert' as IconName, title: t('system.throttledNow'), hint: '' };
-  if (p.throttledSinceBoot) return { tone: 'warn', icon: 'alert' as IconName, title: t('system.throttledPast'), hint: '' };
-  return { tone: 'ok', icon: 'bolt' as IconName, title: t('system.powerOk'), hint: t('system.powerOkHint') };
+  if (p.undervoltageNow) return { tone: 'danger', title: t('system.powerNow'), hint: t('system.powerNowHint') };
+  if (p.undervoltageSinceBoot) return { tone: 'warn', title: t('system.powerPast'), hint: t('system.powerPastHint') };
+  if (p.throttledNow || p.heatLimitNow) return { tone: 'warn', title: t('system.throttledNow'), hint: '' };
+  if (p.throttledSinceBoot) return { tone: 'warn', title: t('system.throttledPast'), hint: '' };
+  return { tone: 'ok', title: t('system.powerOk'), hint: t('system.powerOkHint') };
 });
 
 const systemDisk = computed(() => {
@@ -92,8 +95,13 @@ const systemDisk = computed(() => {
 const history = computed(() => data.value?.history ?? null);
 const tempHistory = computed(() => history.value?.temp ?? []);
 const hasTempHistory = computed(() => tempHistory.value.some((value) => value !== null));
-const netPeak = computed(() => Math.max(64 * 1024, ...(history.value?.rx ?? []), ...(history.value?.tx ?? [])));
 const speed = (bytes: number): string => (bytes < 1 ? t('system.idle') : formatSpeed(bytes));
+/** Tráfico total (recibe + envía) para la mini-gráfica de la red: una sola serie. */
+const traffic = computed(() => {
+  const h = history.value;
+  return h === null ? [] : h.rx.map((rx, index) => rx + (h.tx[index] ?? 0));
+});
+const trafficPeak = computed(() => Math.max(64 * 1024, ...traffic.value));
 
 function duration(seconds: number): string {
   const d = Math.floor(seconds / 86400);
@@ -108,181 +116,165 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
 
 <template>
   <section class="resources" aria-labelledby="t-equipo">
-    <div class="res-head">
+    <div class="head">
       <h2 id="t-equipo">{{ t('system.title') }}</h2>
       <span class="live" :class="{ on: data !== null }"><span class="pulse" aria-hidden="true" />{{ t('system.live') }}</span>
       <span class="muted small">{{ t('system.subtitle') }} · {{ t('system.last15') }}</span>
     </div>
 
-    <div v-if="data" class="grid">
-      <!-- CPU -->
-      <article class="card tile" aria-labelledby="r-cpu">
-        <header>
-          <span class="ico"><AppIcon name="cpu" :size="18" /></span>
-          <h3 id="r-cpu">{{ t('system.cpu') }}</h3>
-          <span class="chip" :class="cpu.state.chip"><AppIcon :name="cpu.state.icon" :size="13" :stroke="2.2" />{{ cpu.state.label }}</span>
-        </header>
-        <div class="main">
-          <RadialMeter :value="cpu.value / 100" :display="percent(cpu.value)" :label="`${t('system.cpuUsage')}: ${percent(cpu.value)}`" :tone="cpu.tone" :size="84" :stroke="8" />
-          <dl class="facts">
-            <div><dt>{{ t('system.frequency') }}</dt><dd>{{ mhz(data.cpu.mhz) }}<span v-if="data.cpu.maxMhz" class="muted"> / {{ mhz(data.cpu.maxMhz) }}</span></dd></div>
-            <div><dt :title="t('system.loadHint')">{{ t('system.load') }}</dt><dd>{{ data.cpu.load.map((value) => formatNumber(value, 2)).join(' · ') }}</dd></div>
-          </dl>
-        </div>
-        <div v-if="data.cpu.cores.length > 1" class="cores-block">
-          <span class="muted small cores-label">{{ data.cpu.cores.length }} {{ t('system.cores').toLowerCase() }}</span>
-          <!-- Una columna por núcleo, misma escala 0-100 %: sirve igual para 4 que para 24. -->
-          <ul class="cores" :aria-label="t('system.cores')">
-            <li
-              v-for="(value, index) in data.cpu.cores"
-              :key="index"
-              class="core"
-              tabindex="0"
-              :title="`${t('system.core', { n: index + 1 })}: ${Math.round(value)} %`"
-              :aria-label="`${t('system.core', { n: index + 1 })}: ${Math.round(value)} %`"
-            >
-              <span :class="`b-${level(value, 85, 95)}`" :style="{ height: `${Math.max(value, 3)}%` }" />
-            </li>
-          </ul>
-        </div>
-        <div v-if="history" class="trend">
-          <Sparkline :values="history.cpu" :at="history.at" :min="0" :max="100" :format="percent" :label="t('system.cpuChart')" :tone="cpu.tone" :height="30" />
-        </div>
-      </article>
-
-      <!-- Memoria -->
-      <article v-if="memory" class="card tile" aria-labelledby="r-mem">
-        <header>
-          <span class="ico"><AppIcon name="memory" :size="18" /></span>
-          <h3 id="r-mem">{{ t('system.memory') }}</h3>
-          <span class="chip" :class="memory.state.chip"><AppIcon :name="memory.state.icon" :size="13" :stroke="2.2" />{{ memory.state.label }}</span>
-        </header>
-        <div class="main">
-          <RadialMeter
-            :value="memory.ratio"
-            :display="percent(memory.ratio * 100)"
-            :label="`${t('system.memoryUsage')}: ${percent(memory.ratio * 100)}`"
-            :tone="memory.tone"
-            :size="84" :stroke="8"
-          />
-          <dl class="facts">
-            <div><dt>{{ t('system.memoryUsage') }}</dt><dd>{{ t('system.memoryOf', { used: formatBytes(memory.usedBytes), total: formatBytes(memory.totalBytes) }) }}</dd></div>
-            <div><dt>{{ t('system.available') }}</dt><dd>{{ formatBytes(memory.totalBytes - memory.usedBytes) }}</dd></div>
-            <div><dt>{{ t('system.appMemory') }}</dt><dd>{{ formatBytes(data.app.memoryBytes) }}</dd></div>
-            <div v-if="memory.swapTotalBytes > 0">
-              <dt>{{ t('system.swap') }}</dt>
-              <dd>{{ memory.swapUsedBytes > 0 ? `${formatBytes(memory.swapUsedBytes)} / ${formatBytes(memory.swapTotalBytes)}` : t('system.swapNone') }}</dd>
-              <span class="bar thin" aria-hidden="true"><span :style="{ width: `${Math.max(memory.swapRatio * 100, memory.swapUsedBytes > 0 ? 2 : 0)}%` }" /></span>
+    <template v-if="data">
+      <!-- Tarjeta 1: en directo -->
+      <div class="card res-card">
+        <article class="res-cell" aria-labelledby="r-cpu">
+          <header class="res-cell-head">
+            <span class="res-ico"><AppIcon name="cpu" :size="15" /></span>
+            <h3 id="r-cpu">{{ t('system.cpu') }}</h3>
+            <span class="chip" :class="cpu.state.chip"><AppIcon :name="cpu.state.icon" :size="12" :stroke="2.2" />{{ cpu.state.label }}</span>
+          </header>
+          <div class="res-cell-body">
+            <RadialMeter :value="cpu.value / 100" :display="percent(cpu.value)" :label="`${t('system.cpuUsage')}: ${percent(cpu.value)}`" :tone="cpu.tone" :size="72" :stroke="7" />
+            <div class="res-rows">
+              <div class="res-row"><span>{{ t('system.frequency') }}</span><strong>{{ mhz(data.cpu.mhz) }}</strong></div>
+              <div class="res-row"><span :title="t('system.loadHint')">{{ t('system.load') }}</span><strong>{{ data.cpu.load.map((value) => formatNumber(value, 2)).join(' · ') }}</strong></div>
+              <div v-if="data.cpu.cores.length > 1" class="res-row">
+                <span>{{ t('system.coresCount', { n: data.cpu.cores.length }) }}</span>
+                <ul class="cores" :aria-label="t('system.cores')">
+                  <li
+                    v-for="(value, index) in data.cpu.cores"
+                    :key="index"
+                    class="core"
+                    tabindex="0"
+                    :title="`${t('system.core', { n: index + 1 })}: ${Math.round(value)} %`"
+                    :aria-label="`${t('system.core', { n: index + 1 })}: ${Math.round(value)} %`"
+                  >
+                    <span :class="`b-${level(value, 85, 95)}`" :style="{ height: `${Math.max(value, 8)}%` }" />
+                  </li>
+                </ul>
+              </div>
             </div>
-          </dl>
-        </div>
-        <div v-if="history" class="trend">
-          <Sparkline :values="history.mem" :at="history.at" :min="0" :max="100" :format="percent" :label="t('system.memoryChart')" :tone="memory.tone" :height="30" />
-        </div>
-      </article>
+          </div>
+          <div class="res-cell-foot">
+            <Sparkline v-if="history" :values="history.cpu" :at="history.at" :min="0" :max="100" :format="percent" :label="t('system.cpuChart')" :tone="cpu.tone" :height="30" />
+          </div>
+        </article>
 
-      <!-- Temperatura y alimentación -->
-      <article class="card tile" aria-labelledby="r-temp">
-        <header>
-          <span class="ico"><AppIcon name="thermometer" :size="18" /></span>
-          <h3 id="r-temp">{{ t('system.temperature') }}</h3>
-          <span v-if="temperature" class="chip" :class="temperature.chip"><AppIcon :name="temperature.icon" :size="13" :stroke="2.2" />{{ temperature.label.split(':')[0] }}</span>
-        </header>
-        <div v-if="temperature" class="main">
-          <RadialMeter
-            :value="temperature.value / TEMP_LIMIT"
-            :display="celsius(temperature.value)"
-            :label="`${t('system.temperature')}: ${celsius(temperature.value)}`"
-            :tone="temperature.tone"
-            :size="84" :stroke="8"
-          />
-          <div class="side">
-            <span class="small muted">{{ t('system.temperatureOf', { limit: celsius(TEMP_LIMIT) }) }}</span>
-            <p v-if="temperature.tone !== 'accent'" class="small">{{ temperature.label }}</p>
-            <div v-if="power" class="power" :class="`p-${power.tone}`">
-              <span class="p-ico"><AppIcon :name="power.icon" :size="16" :stroke="2" /></span>
-              <span class="p-text">
-                <span class="muted small">{{ t('system.power') }}</span>
-                <strong>{{ power.title }}</strong>
-              </span>
+        <article class="res-cell" aria-labelledby="r-mem">
+          <header class="res-cell-head">
+            <span class="res-ico"><AppIcon name="memory" :size="15" /></span>
+            <h3 id="r-mem">{{ t('system.memory') }}</h3>
+            <span v-if="memory" class="chip" :class="memory.state.chip"><AppIcon :name="memory.state.icon" :size="12" :stroke="2.2" />{{ memory.state.label }}</span>
+          </header>
+          <div v-if="memory" class="res-cell-body">
+            <RadialMeter :value="memory.ratio" :display="percent(memory.ratio * 100)" :label="`${t('system.memoryUsage')}: ${percent(memory.ratio * 100)}`" :tone="memory.tone" :size="72" :stroke="7" />
+            <div class="res-rows">
+              <div class="res-row"><span>{{ t('system.inUse') }}</span><strong>{{ formatBytes(memory.usedBytes) }}</strong></div>
+              <div class="res-row"><span>{{ t('system.available') }}</span><strong>{{ formatBytes(memory.totalBytes - memory.usedBytes) }}</strong></div>
+              <div class="res-row"><span>{{ t('system.swap') }}</span><strong>{{ memory.swapUsedBytes === 0 ? t('system.swapNone') : formatBytes(memory.swapUsedBytes) }}</strong></div>
             </div>
-            <p v-if="power?.hint && power.tone !== 'ok'" class="small muted">{{ power.hint }}</p>
           </div>
-        </div>
-        <p v-else class="muted small">{{ t('system.tempNone') }}</p>
-        <div v-if="history && hasTempHistory" class="trend">
-          <Sparkline :values="tempHistory" :at="history.at" :min="25" :max="TEMP_LIMIT" :format="celsius" :label="t('system.temperatureChart')" :tone="temperature?.tone ?? 'accent'" :height="30" />
-        </div>
-      </article>
+          <div class="res-cell-foot">
+            <Sparkline v-if="history && memory" :values="history.mem" :at="history.at" :min="0" :max="100" :format="percent" :label="t('system.memoryChart')" :tone="memory.tone" :height="30" />
+          </div>
+        </article>
 
-      <!-- Red -->
-      <article class="card tile" aria-labelledby="r-net">
-        <header>
-          <span class="ico"><AppIcon name="network" :size="18" /></span>
-          <h3 id="r-net">{{ t('system.network') }}</h3>
-        </header>
-        <div class="net">
-          <div class="net-row">
-            <div class="net-figure">
-              <span class="muted small"><AppIcon name="download" :size="14" />{{ t('system.download') }}</span>
-              <strong>{{ speed(data.network.rxBytesPerSecond) }}</strong>
+        <article class="res-cell" aria-labelledby="r-temp">
+          <header class="res-cell-head">
+            <span class="res-ico"><AppIcon name="thermometer" :size="15" /></span>
+            <h3 id="r-temp">{{ t('system.temperature') }}</h3>
+            <span v-if="temperature" class="chip" :class="temperature.chip"><AppIcon :name="temperature.icon" :size="12" :stroke="2.2" />{{ temperature.label.split(':')[0] }}</span>
+          </header>
+          <div class="res-cell-body">
+            <RadialMeter
+              :value="temperature ? temperature.value / TEMP_LIMIT : null"
+              :display="temperature ? celsius(temperature.value) : '—'"
+              :label="temperature ? `${t('system.temperature')}: ${celsius(temperature.value)}` : t('system.tempNone')"
+              :tone="temperature?.tone ?? 'accent'"
+              :size="72"
+              :stroke="7"
+            />
+            <div class="res-rows">
+              <div class="res-row"><span>{{ t('system.limit') }}</span><strong>{{ temperature ? celsius(TEMP_LIMIT) : '—' }}</strong></div>
+              <div class="res-row">
+                <span><AppIcon name="bolt" :size="12" :stroke="2" />{{ t('system.power') }}</span>
+                <strong :class="power ? `t-${power.tone}` : ''" :title="power?.hint">{{ power?.title ?? t('system.unavailable') }}</strong>
+              </div>
+              <p v-if="power && power.tone !== 'ok' && power.hint" class="res-note">{{ power.hint }}</p>
+              <p v-else-if="!temperature" class="res-note">{{ t('system.tempNone') }}</p>
             </div>
-            <Sparkline v-if="history" :values="history.rx" :at="history.at" :min="0" :max="netPeak" :format="(v) => speed(v)" :label="t('system.downloadChart')" :height="28" />
           </div>
-          <div class="net-row">
-            <div class="net-figure">
-              <span class="muted small"><AppIcon name="upload" :size="14" />{{ t('system.upload') }}</span>
-              <strong>{{ speed(data.network.txBytesPerSecond) }}</strong>
+          <div class="res-cell-foot">
+            <Sparkline v-if="history && hasTempHistory" :values="tempHistory" :at="history.at" :min="25" :max="TEMP_LIMIT" :format="celsius" :label="t('system.temperatureChart')" :tone="temperature?.tone ?? 'accent'" :height="30" />
+          </div>
+        </article>
+
+        <article class="res-cell" aria-labelledby="r-net">
+          <header class="res-cell-head">
+            <span class="res-ico"><AppIcon name="network" :size="15" /></span>
+            <h3 id="r-net">{{ t('system.network') }}</h3>
+          </header>
+          <div class="res-cell-body">
+            <div class="net-figures">
+              <div><span class="muted"><AppIcon name="download" :size="13" />{{ t('system.download') }}</span><strong>{{ speed(data.network.rxBytesPerSecond) }}</strong></div>
+              <div><span class="muted"><AppIcon name="upload" :size="13" />{{ t('system.upload') }}</span><strong>{{ speed(data.network.txBytesPerSecond) }}</strong></div>
             </div>
-            <Sparkline v-if="history" :values="history.tx" :at="history.at" :min="0" :max="netPeak" :format="(v) => speed(v)" :label="t('system.uploadChart')" :height="28" />
           </div>
-        </div>
-      </article>
-
-      <!-- Pruebas de velocidad -->
-      <NetworkTest />
-      <DiskSpeedTest v-if="isOwner" variant="tile" />
-
-      <!-- Disco del sistema -->
-      <article v-if="systemDisk" class="card tile" aria-labelledby="r-sd">
-        <header>
-          <span class="ico"><AppIcon name="sdcard" :size="18" /></span>
-          <h3 id="r-sd" :title="t('system.systemDiskHint')">{{ t('system.systemDisk') }}</h3>
-          <span class="chip" :class="systemDisk.state.chip"><AppIcon :name="systemDisk.state.icon" :size="13" :stroke="2.2" />{{ systemDisk.state.label }}</span>
-        </header>
-        <div class="main">
-          <RadialMeter
-            :value="systemDisk.ratio"
-            :display="percent(systemDisk.ratio * 100)"
-            :label="`${t('system.systemDisk')}: ${t('system.usedOf', { used: formatBytes(systemDisk.used), total: formatBytes(systemDisk.totalBytes) })}`"
-            :tone="systemDisk.tone"
-            :size="84" :stroke="8"
-          />
-          <div class="side">
-            <strong>{{ t('system.free', { size: formatBytes(systemDisk.freeBytes) }) }}</strong>
-            <span class="small muted">{{ t('system.usedOf', { used: formatBytes(systemDisk.used), total: formatBytes(systemDisk.totalBytes) }) }}</span>
+          <div class="res-cell-foot">
+            <Sparkline v-if="history" :values="traffic" :at="history.at" :min="0" :max="trafficPeak" :format="(v) => speed(v)" :label="t('system.trafficChart')" :height="30" />
           </div>
-        </div>
-      </article>
+        </article>
+      </div>
 
-      <!-- Dispositivo -->
-      <article class="card tile" aria-labelledby="r-dev">
-        <header>
-          <span class="ico"><AppIcon name="monitor" :size="18" /></span>
-          <h3 id="r-dev">{{ t('system.device') }}</h3>
-        </header>
-        <dl class="kv-list">
-          <div><dt>{{ t('system.model') }}</dt><dd>{{ data.host.model ?? '—' }}</dd></div>
-          <div><dt>{{ t('system.name') }}</dt><dd class="mono">{{ data.host.name }}</dd></div>
-          <div><dt>{{ t('system.os') }}</dt><dd>{{ data.host.os ?? '—' }}</dd></div>
-          <div><dt>{{ t('system.kernel') }}</dt><dd class="mono">{{ data.host.kernel }}</dd></div>
-          <div><dt>{{ t('system.uptime') }}</dt><dd>{{ duration(data.uptimeSeconds) }}</dd></div>
-          <div><dt>{{ t('system.appUptime') }}</dt><dd>{{ duration(data.app.uptimeSeconds) }}</dd></div>
-        </dl>
-      </article>
-    </div>
-    <div v-else class="grid" aria-hidden="true">
-      <div v-for="n in 3" :key="n" class="card tile skeleton" />
+      <!-- Tarjeta 2: sistema y pruebas -->
+      <div class="card res-card">
+        <article class="res-cell" aria-labelledby="r-sd">
+          <header class="res-cell-head">
+            <span class="res-ico"><AppIcon name="sdcard" :size="15" /></span>
+            <h3 id="r-sd">{{ t('system.systemDisk') }}</h3>
+            <span v-if="systemDisk" class="chip" :class="systemDisk.state.chip"><AppIcon :name="systemDisk.state.icon" :size="12" :stroke="2.2" />{{ systemDisk.state.label }}</span>
+          </header>
+          <div v-if="systemDisk" class="res-cell-body">
+            <RadialMeter
+              :value="systemDisk.ratio"
+              :display="percent(systemDisk.ratio * 100)"
+              :label="`${t('system.systemDisk')}: ${t('system.usedOf', { used: formatBytes(systemDisk.used), total: formatBytes(systemDisk.totalBytes) })}`"
+              :tone="systemDisk.tone"
+              :size="72"
+              :stroke="7"
+            />
+            <div class="res-rows">
+              <div class="res-row"><span>{{ t('system.freeLabel') }}</span><strong>{{ formatBytes(systemDisk.freeBytes) }}</strong></div>
+              <div class="res-row"><span>{{ t('system.inUse') }}</span><strong>{{ formatBytes(systemDisk.used) }}</strong></div>
+              <div class="res-row"><span>{{ t('system.total') }}</span><strong>{{ formatBytes(systemDisk.totalBytes) }}</strong></div>
+            </div>
+          </div>
+          <div class="res-cell-foot">
+            <p class="res-note">{{ t('system.systemDiskHint') }}</p>
+          </div>
+        </article>
+
+        <article class="res-cell" aria-labelledby="r-dev">
+          <header class="res-cell-head">
+            <span class="res-ico"><AppIcon name="monitor" :size="15" /></span>
+            <h3 id="r-dev">{{ t('system.device') }}</h3>
+          </header>
+          <div class="res-rows">
+            <div class="res-row"><span>{{ t('system.model') }}</span><strong>{{ data.host.model ?? '—' }}</strong></div>
+            <div class="res-row"><span>{{ t('system.name') }}</span><strong class="mono">{{ data.host.name }}</strong></div>
+            <div class="res-row"><span>{{ t('system.os') }}</span><strong>{{ data.host.os ?? '—' }}</strong></div>
+            <div class="res-row"><span>{{ t('system.kernel') }}</span><strong class="mono">{{ data.host.kernel }}</strong></div>
+            <div class="res-row"><span>{{ t('system.uptime') }}</span><strong>{{ duration(data.uptimeSeconds) }}</strong></div>
+            <div class="res-row"><span>{{ t('system.appUptime') }}</span><strong>{{ duration(data.app.uptimeSeconds) }}</strong></div>
+            <div class="res-row"><span>{{ t('system.appMemory') }}</span><strong>{{ formatBytes(data.app.memoryBytes) }}</strong></div>
+          </div>
+        </article>
+
+        <NetworkTest />
+        <DiskSpeedTest v-if="isOwner" variant="tile" />
+        <div v-else class="res-cell" aria-hidden="true" />
+      </div>
+    </template>
+    <div v-else class="card res-card" aria-hidden="true">
+      <div v-for="n in 4" :key="n" class="res-cell skeleton" />
     </div>
   </section>
 </template>
@@ -294,14 +286,14 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
   gap: 12px;
 }
 
-.res-head {
+.head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 12px;
 }
 
-.res-head h2 {
+.head h2 {
   font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -343,131 +335,32 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
   font-size: 12px;
 }
 
-/* Mosaico en columnas: tarjetas de alturas distintas sin huecos entre filas. */
-.grid {
-  columns: 250px;
-  column-gap: 12px;
-}
-
-.grid > :deep(*) {
-  break-inside: avoid;
-  margin-bottom: 12px;
-}
-
-.tile {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-  padding: 14px;
-}
-
-.tile header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.tile h3 {
-  font-size: 14px;
-  font-weight: 650;
-}
-
-.tile header .chip {
-  padding: 1px 8px;
-  font-size: 11px;
-}
-
-.tile header .chip {
-  margin-left: auto;
-}
-
-.ico {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  flex: none;
-}
-
-.main {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.facts,
-.side {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.facts > div {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.facts > div {
-  gap: 0;
-}
-
-.facts dt {
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.facts dd {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.bar.thin {
-  height: 4px;
-  margin-top: 4px;
-}
-
-.cores-block {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-}
-
-.cores-label {
-  flex: none;
-  white-space: nowrap;
-}
-
+/* Núcleos: una columna por núcleo dentro de su fila de datos. */
 .cores {
   flex: 1;
   display: flex;
   align-items: flex-end;
+  justify-content: flex-end;
   gap: 2px;
-  height: 20px;
+  height: 14px;
+  min-width: 0;
+  max-width: 96px;
 }
 
 .core {
   flex: 1 1 0;
-  max-width: 24px;
+  max-width: 10px;
   height: 100%;
   display: flex;
   align-items: flex-end;
-  border-radius: 4px 4px 0 0;
+  border-radius: 2px;
   background: var(--accent-soft);
-  outline-offset: 2px;
 }
 
 .core > span {
   display: block;
   width: 100%;
-  border-radius: 4px 4px 0 0;
+  border-radius: 2px;
   background: var(--accent-btn);
   transition: height 0.4s ease;
 }
@@ -480,127 +373,48 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
   background: var(--danger);
 }
 
-.core:hover > span {
-  filter: brightness(1.15);
-}
-
-.trend {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.power {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 10px;
-  background: var(--surface-2);
-}
-
-.p-ico {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  flex: none;
-}
-
-.p-ok .p-ico {
-  background: var(--ok-soft);
+.t-ok {
   color: var(--ok);
 }
 
-.p-warn .p-ico {
-  background: var(--warn-soft);
+.t-warn {
   color: var(--warn);
 }
 
-.p-danger .p-ico {
-  background: var(--danger-soft);
+.t-danger {
   color: var(--danger);
 }
 
-.p-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.p-text strong {
-  font-size: 12px;
-}
-
-.p-text .small {
-  font-size: 11px;
-}
-
-.net {
+.net-figures {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.net-row {
-  display: grid;
-  grid-template-columns: 96px 1fr;
-  align-items: end;
-  gap: 12px;
-}
-
-.net-figure {
+.net-figures > div {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-.net-figure span {
+.net-figures span {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-}
-
-.net-figure strong {
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-}
-
-.kv-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.kv-list > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 4px 0;
-  border-top: 1px solid var(--border);
   font-size: 12px;
 }
 
-.kv-list > div:first-child {
-  border-top: 0;
-  padding-top: 0;
-}
-
-.kv-list dt {
-  color: var(--muted);
-}
-
-.kv-list dd {
-  text-align: right;
-  font-weight: 500;
-  overflow-wrap: anywhere;
+.net-figures strong {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 
 .skeleton {
-  height: 170px;
+  height: 168px;
   background: linear-gradient(90deg, var(--surface) 0%, var(--surface-2) 50%, var(--surface) 100%);
   background-size: 200% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
@@ -609,16 +423,6 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
 @keyframes shimmer {
   to {
     background-position: -200% 0;
-  }
-}
-
-@media (max-width: 420px) {
-  .main {
-    gap: 12px;
-  }
-
-  .net-row {
-    grid-template-columns: 96px 1fr;
   }
 }
 
