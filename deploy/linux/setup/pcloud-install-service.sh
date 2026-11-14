@@ -39,13 +39,14 @@ NODE=/usr/local/bin/node
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
+# shellcheck disable=SC2120  # admite argumentos extra de health.ts aunque hoy no se usen
 health() {
   runuser -u pcloud -- "$NODE" "$CURRENT/apps/server/src/cli/health.ts" --config "$CONFIG" "$@"
 }
 
 wait_healthy() {
-  local i
-  for i in $(seq 1 30); do
+  local _
+  for _ in $(seq 1 30); do
     if health >/dev/null 2>&1; then return 0; fi
     sleep 1
   done

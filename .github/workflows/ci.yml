@@ -1,0 +1,109 @@
+name: CI
+
+# build:        comprobaciones (tipos, tests, scripts) y paquete de release con la web compilada.
+# install-test: instala el paquete con install.sh en Ubuntu x86-64 y ARM64, con un disco exFAT de
+#               prueba (imagen en loop), comprueba que la nube responde y que reinstalar es idempotente.
+# release:      solo con una etiqueta v*: publica el paquete en GitHub Releases (lo usa install.sh).
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Dependencias
+        run: npx --yes pnpm@12.18.0 install --frozen-lockfile
+      - name: Comprobaciones
+        run: npx pnpm@12.18.0 check
+      - name: Paquete de release
+        run: |
+          bash deploy/dev/pack-release.sh dist
+          cd dist && for f in pcloud-*.tar.gz; do sha256sum "$f" > "$f.sha256"; done && ls -la
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: dist/
+          if-no-files-found: error
+
+  install-test:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: dist
+      - name: Disco exFAT de prueba
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends exfatprogs
+          sudo modprobe exfat || { sudo apt-get install -y "linux-modules-extra-$(uname -r)" && sudo modprobe exfat; }
+          truncate -s 1G "$RUNNER_TEMP/disk.img"
+          LOOP="$(sudo losetup -f --show "$RUNNER_TEMP/disk.img")"
+          sudo mkfs.exfat -L PCLOUDTEST "$LOOP"
+          sudo udevadm settle
+          lsblk -f
+      - name: Instalar (sin preguntas)
+        run: sudo bash install.sh --yes --no-viewers --no-tailscale --release dist/pcloud-*.tar.gz
+      - name: Verificar
+        run: |
+          set -x
+          pcloud-volume-status
+          systemctl is-active pcloud caddy
+          HOST="$(hostname -s | tr '[:upper:]' '[:lower:]')"
+          curl -fsS --cacert /etc/caddy/pcloud-public/pcloud-ca.crt --resolve "$HOST.local:443:127.0.0.1" \
+            "https://$HOST.local/api/v1/system/health"
+          curl -fsS --cacert /etc/caddy/pcloud-public/pcloud-ca.crt --resolve "$HOST.local:443:127.0.0.1" \
+            "https://$HOST.local/" -o /dev/null
+          test -d /srv/pcloud/data && test -d /srv/pcloud/.pcloud
+          # Sin disco nadie puede escribir en el punto de montaje.
+          sudo systemctl stop srv-pcloud.mount
+          if sudo touch /srv/pcloud/prueba; then echo "ERROR: se pudo escribir sin disco"; exit 1; fi
+          sudo systemctl start srv-pcloud.mount
+          pcloud-volume-status
+      - name: Reinstalar (idempotente)
+        run: sudo bash install.sh --yes --no-viewers --no-tailscale --release dist/pcloud-*.tar.gz
+      - name: Registro
+        if: always()
+        run: |
+          sudo tail -n 150 /var/log/pcloud-install.log || true
+          sudo journalctl -u pcloud -u caddy -n 60 --no-pager || true
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, install-test]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: dist
+      - name: Publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes

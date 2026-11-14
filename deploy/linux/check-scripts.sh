@@ -25,7 +25,7 @@ while IFS= read -r -d '' script; do
     status=1
   fi
   if command -v shellcheck >/dev/null; then shellcheck -S warning "$script" || status=1; fi
-done < <(find . -name '*.sh' -print0)
+done < <(find . -name '*.sh' -print0; [ -f ../install.sh ] && printf '%s\0' ../install.sh)
 
 # Los scripts de laboratorio (tests/) formatean imágenes de prueba a propósito: solo sintaxis y LF.
 while IFS= read -r -d '' script; do

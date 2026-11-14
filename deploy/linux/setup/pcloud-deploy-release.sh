@@ -57,7 +57,7 @@ activate() {
 # Reinicia el servicio (si está instalado y en uso) y espera a que la API responda con la release
 # indicada. Devuelve 1 si no responde. Sin servicio instalado no hace nada.
 restart_and_check() {
-  local expected="$1" i
+  local expected="$1" _
   if [ ! -e "$UNIT" ]; then
     echo "Servicio $SERVICE no instalado: nada que reiniciar (pcloud-install-service.sh)"
     return 0
@@ -75,7 +75,7 @@ restart_and_check() {
     echo "AVISO: la unidad instalada difiere de la de esta release: ejecuta pcloud-install-service.sh --execute"
   fi
   systemctl restart "$SERVICE" || return 1
-  for i in $(seq 1 30); do
+  for _ in $(seq 1 30); do
     if runuser -u pcloud -- "$NODE" "$CURRENT/apps/server/src/cli/health.ts"         --config /etc/pcloud/config.yaml --expect-release "$expected" >/dev/null 2>&1; then
       echo "Servicio en marcha con la release $expected"
       return 0

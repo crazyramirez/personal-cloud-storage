@@ -43,6 +43,14 @@ Plataformas soportadas: ver [Requisitos en el README](../README.md#requisitos). 
 
 ## 3. Instalación desde cero (orden)
 
+**Lo normal es usar el instalador en un paso**, que ejecuta todo lo de abajo en orden, elige el disco contigo y muestra la dirección y el código de configuración:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/crazyramirez/personal-cloud-storage/main/install.sh | sudo bash
+```
+
+Opciones y detalles: [README → Instalación](../README.md#instalación). Lo que sigue es el mismo proceso a mano, útil para entenderlo, depurarlo o adaptarlo.
+
 Requisitos previos: Linux de 64 bits basado en Debian (Debian, Ubuntu, Raspberry Pi OS), systemd, `avahi-daemon` para `<host>.local` y el HDD **ya formateado** en exFAT o NTFS (estos scripts nunca formatean).
 
 Copia `deploy/` al servidor y ejecuta, en este orden (todos son dry-run sin `--execute` e idempotentes):

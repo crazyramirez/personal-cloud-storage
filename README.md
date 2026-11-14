@@ -29,14 +29,73 @@ Nube personal autocontenida: un servidor Linux pequeño (una **Raspberry Pi**, u
 
 Hardware de referencia (donde se han hecho las pruebas físicas de desconexión): Raspberry Pi 4B 8 GB, Raspberry Pi OS Lite 64-bit, HDD USB de 2,5" de 5 TB en exFAT. En la Raspberry Pi usa una **fuente oficial** (no una power bank) y, para discos de 2,5" exigentes o de 3,5", un hub o caja con alimentación propia.
 
-## Instalación rápida
+## Instalación
 
-Guía completa y runbooks: [docs/OPERATIONS.md](docs/OPERATIONS.md).
+### 1. Prepara el equipo y el disco
 
-1. En el servidor: copia `deploy/` y ejecuta los scripts de [OPERATIONS §3](docs/OPERATIONS.md#3-instalación-desde-cero-orden) (todos son dry-run sin `--execute` e idempotentes).
-2. En tu ordenador: `bash deploy/dev/pack-release.sh` y copia el paquete al servidor.
-3. En el servidor: `sudo bash deploy/linux/setup/pcloud-deploy-release.sh install /tmp/pcloud-*.tar.gz`.
-4. Abre `https://<nombre-del-servidor>.local/` y crea la cuenta de propietario con el código de un solo uso del registro.
+- **Equipo:** una Raspberry Pi 4/5 con **Raspberry Pi OS Lite de 64 bits** (grábalo con [Raspberry Pi Imager](https://www.raspberrypi.com/software/) y activa SSH), o cualquier PC con Debian o Ubuntu de 64 bits.
+- **Disco:** formatéalo en **exFAT** desde Windows o macOS (o usa uno NTFS que ya tengas) y conéctalo. En la Raspberry Pi, al puerto USB 3 (azul).
+
+### 2. Ejecuta un solo comando
+
+Entra en el equipo (por SSH o con teclado y pantalla) y ejecuta:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/crazyramirez/personal-cloud-storage/main/install.sh | sudo bash
+```
+
+El instalador lo hace todo y solo te pregunta tres cosas:
+
+1. **Qué disco usar** (lista los discos exFAT/NTFS conectados).
+2. Si quieres **visores** de vídeo y documentos de Office (recomendado).
+3. Si quieres **acceso desde fuera de casa** con Tailscale (opcional, privado, sin abrir puertos).
+
+Tarda unos 10-20 minutos en una Raspberry Pi (la mayor parte, descargando). Al terminar muestra la dirección y un **código de un solo uso**:
+
+```text
+✓ Personal Cloud Storage está instalado.
+
+  Abre en tu navegador:  https://mi-nube.local   (o https://192.168.1.50)
+  Código para crear tu cuenta:  ABCDE-FGHIJ-KLMNO-PQRST   (válido 24 h, un solo uso)
+```
+
+### 3. Abre la web y crea tu cuenta
+
+Abre esa dirección desde el móvil o el ordenador (en la misma red), pega el código y elige usuario y contraseña. Listo.
+
+> El navegador avisará del certificado la primera vez: es la CA propia de tu nube. Para quitar el aviso, instálala desde `https://<equipo>.local/pcloud-ca.crt` ([cómo](docs/OPERATIONS.md#4-bis-acceso-a-la-web-y-primera-configuración)).
+
+### Qué hace el instalador (y qué no)
+
+- Descarga la última [release](https://github.com/crazyramirez/personal-cloud-storage/releases) y comprueba su SHA-256.
+- Instala Node.js, Caddy (HTTPS) y el servicio `pcloud`, ejecuta las pruebas en tu propio equipo y solo entonces activa la aplicación.
+- Monta el disco en `/srv/pcloud` y protege esa carpeta: si el disco se desconecta, nada se escribe en la tarjeta SD.
+- **Nunca formatea, particiona ni borra nada del disco.** Solo crea las carpetas `data` (tu nube) y `.pcloud` (uso interno); lo que ya hubiera queda intacto.
+- No abre puertos a Internet.
+
+### Actualizar, añadir el disco más tarde o reparar
+
+Vuelve a ejecutar **el mismo comando**. Es idempotente: no repite lo que ya está hecho, instala la versión nueva si la hay (con vuelta atrás automática si falla) y, si no había disco, te deja elegirlo.
+
+### Opciones
+
+Para instalar sin preguntas o automatizarlo, pasa opciones tras `bash -s --`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/crazyramirez/personal-cloud-storage/main/install.sh | sudo bash -s -- --yes --viewers --disk 1A2B-3C4D
+```
+
+| Opción | Efecto |
+|---|---|
+| `--yes` | Sin preguntas: visores sí, Tailscale no, disco solo si hay uno compatible |
+| `--disk UUID` / `--no-disk` | Usar ese disco (`lsblk -f` muestra el UUID) / no configurar disco ahora |
+| `--viewers` / `--no-viewers` | Instalar o no ffmpeg + LibreOffice |
+| `--tailscale` / `--no-tailscale` | Activar o no el acceso remoto privado |
+| `--version v0.1.0` | Instalar una versión concreta |
+| `--from-source` | Compilar desde un clon del repositorio (`git clone … && sudo bash install.sh --from-source`) |
+| `--upgrade-system` | Aplicar también las actualizaciones pendientes del sistema |
+
+Instalación paso a paso, runbooks (desconexiones, cambio de disco) y detalles: [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 > ⚠️ Esto **no es una copia de seguridad**. Si el disco falla, se pierden los datos. Ten otra copia de lo que te importe.
 

@@ -51,7 +51,7 @@ done
 
 mapfile -t FILES < <(
   git ls-files --cached --others --exclude-standard -- \
-    apps packages deploy tests package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json tsconfig.base.json .node-version \
+    apps packages deploy tests install.sh package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json tsconfig.base.json .node-version \
     | sort -u
 )
 [ "${#FILES[@]}" -gt 0 ] || { echo "Nada que empaquetar" >&2; exit 1; }

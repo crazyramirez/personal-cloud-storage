@@ -55,9 +55,9 @@ for unit in smartmontools.service smartd.service; do
   fi
 done
 echo "smartd: $(systemctl is-enabled smartmontools.service 2>/dev/null || echo n/a) / $(systemctl is-active smartmontools.service 2>/dev/null || echo n/a)"
-for unit in iperf3.service; do
-  systemctl cat "$unit" >/dev/null 2>&1 && echo "$unit: $(systemctl is-enabled "$unit" 2>/dev/null || true)"
-done
+if systemctl cat iperf3.service >/dev/null 2>&1; then
+  echo "iperf3.service: $(systemctl is-enabled iperf3.service 2>/dev/null || true)"
+fi
 
 RUNNING="$(uname -r)"
 NEWEST="$(ls -1 /lib/modules | sort -V | tail -n1)"
