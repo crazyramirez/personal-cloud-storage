@@ -72,7 +72,25 @@ if [ "$NEED_WRITE" -eq 1 ]; then
   cp -p /etc/fstab "$CANDIDATE"
   [ -z "$(tail -c1 "$CANDIDATE")" ] || echo >> "$CANDIDATE"
   printf '# Personal Cloud Storage: HDD de datos (pcloud-fstab-entry.sh, %s)\n%s\n' "$(date -u +%Y-%m-%d)" "$LINE" >> "$CANDIDATE"
-  findmnt --verify --tab-file "$CANDIDATE" || die "findmnt --verify rechaza el fstab candidato; /etc/fstab no se ha tocado"
+  # La línea nueva debe validarse sin errores por sí sola, y el fstab completo no puede tener MÁS
+  # errores que el actual (imágenes cloud traen a veces entradas propias que findmnt marca como
+  # error, p. ej. un disco efímero en /mnt; no son asunto de este script).
+  ONLY="$(mktemp /etc/.fstab.pcloud-line.XXXXXX)"
+  trap 'rm -f "$CANDIDATE" "$ONLY"' EXIT
+  printf '%s\n' "$LINE" > "$ONLY"
+  findmnt --verify --tab-file "$ONLY" || die "findmnt --verify rechaza la línea nueva; /etc/fstab no se ha tocado"
+  rm -f "$ONLY"
+  # Número de errores según el resumen de findmnt («Success, no errors…» o «N parse errors, N errors, N warnings»).
+  verify_errors() {
+    local out
+    out="$(findmnt --verify --tab-file "$1" 2>&1 || true)"
+    if grep -q 'Success, no errors' <<<"$out"; then echo 0; return; fi
+    sed -n 's/.*parse errors*, \([0-9][0-9]*\) errors*,.*/\1/p' <<<"$out" | tail -n1
+  }
+  BEFORE="$(verify_errors /etc/fstab)"; AFTER="$(verify_errors "$CANDIDATE")"
+  [[ "$BEFORE" =~ ^[0-9]+$ && "$AFTER" =~ ^[0-9]+$ ]] || die "no se pudo interpretar findmnt --verify; /etc/fstab no se ha tocado"
+  [ "$AFTER" -le "$BEFORE" ] || { findmnt --verify --tab-file "$CANDIDATE" || true; die "el fstab candidato tiene más errores que el actual; /etc/fstab no se ha tocado"; }
+  [ "$BEFORE" -eq 0 ] || echo "Aviso: /etc/fstab ya tenía $BEFORE error(es) de findmnt --verify ajenos a Personal Cloud (no se tocan)."
   BACKUP="/etc/fstab.pcloud-$(date -u +%Y%m%dT%H%M%S)"
   cp -p /etc/fstab "$BACKUP"
   mv -f "$CANDIDATE" /etc/fstab
@@ -82,7 +100,7 @@ if [ "$NEED_WRITE" -eq 1 ]; then
   systemctl daemon-reload
 fi
 
-findmnt --verify >/dev/null && echo "findmnt --verify: OK"
+if findmnt --verify >/dev/null 2>&1; then echo "findmnt --verify: OK"; else echo "findmnt --verify: hay avisos o errores ajenos a la línea de Personal Cloud"; fi
 UNIT="$(systemd-escape -p --suffix=mount "$MP")"
 echo "Unidad: $UNIT ($(systemctl show -p ActiveState --value "$UNIT"))"
 
