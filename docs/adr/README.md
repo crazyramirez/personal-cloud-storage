@@ -18,6 +18,7 @@ Formato: Contexto → Decisión → Consecuencias → Alternativas. Un ADR acept
 | [0012](0012-contratos-typebox.md) | Contratos de la API con TypeBox | Aceptado |
 | [0013](0013-disco-que-no-responde.md) | Detección de un disco que deja de responder | Aceptado |
 | [0016](0016-acceso-remoto-tailscale.md) | Acceso desde Internet por Tailscale (VPN privada, sin abrir puertos) | Aceptado |
+| [0017](0017-copia-de-seguridad-disco-externo.md) | Copia de seguridad en un disco USB externo (espejo con archivo, agente root mínimo) | Aceptado |
 
 ## Pendientes
 

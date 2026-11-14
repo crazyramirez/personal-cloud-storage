@@ -1,0 +1,12 @@
+# /etc/systemd/system/pcloud-backup-agent.path — despierta al agente de copia de seguridad cuando
+# pcloud.service deja una petición (ADR-0017). Instalado por pcloud-install-backup.sh.
+
+[Unit]
+Description=Personal Cloud Storage: peticiones de montaje del disco de copia
+
+[Path]
+DirectoryNotEmpty=/var/lib/pcloud/backup-agent/inbox
+Unit=pcloud-backup-agent.service
+
+[Install]
+WantedBy=paths.target

@@ -55,6 +55,7 @@ async function signOut(): Promise<void> {
       <header class="top">
         <StatusPill />
         <div class="tools">
+          <BackupIndicator />
           <button
             type="button"
             class="btn btn-icon uploads"

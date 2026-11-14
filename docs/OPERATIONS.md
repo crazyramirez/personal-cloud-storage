@@ -196,6 +196,17 @@ Raspberry Pi 4B 8 GB, HDD USB de 2,5" SMR de 5 TB en exFAT.
 | Memoria en reposo | Node ~111 MB RSS, Caddy ~42 MB |
 | Disco sin respuesta bajo carga (CPU al máximo + fsync) con alimentación insuficiente | ❌ → corregido en el software: el guardián lo detecta (IO_STALLED) y bloquea las operaciones ([ADR-0013](adr/0013-disco-que-no-responde.md)). La causa era la alimentación: usa una fuente adecuada. |
 
+## 8 bis. Copia de seguridad en disco externo
+
+Diseño: [ADR-0017](adr/0017-copia-de-seguridad-disco-externo.md). Lo prepara el instalador (`pcloud-install-backup.sh --execute`): buzón `/var/lib/pcloud/backup-agent/inbox`, punto de montaje protegido `/srv/pcloud-backup` y `pcloud-backup-agent.{path,service}`.
+
+- **Uso:** conectar un disco USB en exFAT o NTFS → la web ofrece asignarlo (escribe `.pcloud-backup/backup-id`; no borra nada) → «Sincronizar ahora». Con «Sincronizar automáticamente», conectar basta. Al terminar se desmonta solo.
+- **En el disco de copia:** `Personal Cloud Storage/` (espejo de la nube), `.pcloud-backup/archivo/<fecha>/` (lo borrado o sustituido, caduca a los 90 días por defecto) y `.pcloud-backup/informes/<fecha>.json`.
+- **Restaurar:** conectar el disco a cualquier PC y copiar desde `Personal Cloud Storage/` (o desde el archivo, por fecha).
+- **Estado:** `systemctl status pcloud-backup-agent.path`, `journalctl -u pcloud-backup-agent -n 30`, `findmnt /srv/pcloud-backup`.
+- **Desmontar a mano** (si la web no puede): `sudo umount /srv/pcloud-backup`. Comprobar la protección: `bash /opt/pcloud/current/deploy/linux/setup/pcloud-mountpoint-guard.sh check --mountpoint /srv/pcloud-backup`.
+- **Alimentación:** en la Raspberry Pi, el disco de copia con fuente propia o en un hub alimentado.
+
 ## 9. Antes de confiar datos únicos
 
 1. **Copia de seguridad:** el sistema no hace copias por sí solo. Ten un segundo disco u otra copia de tus datos.

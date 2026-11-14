@@ -8,6 +8,9 @@
  *
  * Simulación del disco:  GET /__dev/disconnect · /__dev/reconnect · /__dev/readonly
  * Subidas lentas (para ver el progreso): GET /__dev/slow (alterna)
+ * Copia de seguridad (discos simulados, sin montar nada real):
+ *   /__dev/backup-connect · /__dev/backup-other · /__dev/backup-fat · /__dev/backup-unplug
+ *   (el disco de copia simulado es una carpeta temporal; /__dev/slow también ralentiza la copia)
  */
 
 import { createReadStream } from 'node:fs';
@@ -16,6 +19,9 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { issueSetupToken } from '../../src/auth/sessions.ts';
+import type { AgentResult, MountAgent } from '../../src/backup/agent.ts';
+import type { DiskLister, ExternalDisk } from '../../src/backup/disks.ts';
+import { BackupService } from '../../src/backup/service.ts';
 import { buildApp } from '../../src/http/app.ts';
 import { createHarness } from './harness.ts';
 
@@ -53,7 +59,38 @@ const pdfBody = [
 await writeFile(path.join(harness.dataRoot, 'Documentos', 'ejemplo.pdf'), pdfBody);
 await writeFile(path.join(harness.dataRoot, 'Documentos', 'informe.docx'), 'no es un docx real');
 await writeFile(path.join(harness.dataRoot, 'programa.exe'), 'MZ');
-const app = await buildApp({ config: harness.config, db: harness.db, guardian: harness.gate, uploads: harness.uploads({ chunkSize: 1024 * 1024, maxChunkSize: 16 * 1024 * 1024, checkpointBytes: 8 * 1024 * 1024 }), logger: false });
+// Copia de seguridad simulada: discos «conectables» y un agente que no monta nada.
+const backupDir = path.join(harness.root, '..', `${path.basename(harness.root)}-copia`);
+await mkdir(backupDir, { recursive: true });
+let simulated: ExternalDisk[] = [];
+let mounted = false;
+const simDisk = (uuid: string, label: string, fsType = 'exfat'): ExternalDisk => ({
+  uuid, device: '/dev/sdb1', fsType, compatible: fsType !== 'vfat', sizeBytes: 2_000_398_934_016, label, model: 'Disco USB simulado', mountpoint: null,
+});
+const devDisks: DiskLister = { fingerprint: async () => simulated.map((disk) => disk.uuid).join(','), list: async () => simulated };
+const devAgent: MountAgent = {
+  ready: async () => true,
+  request: async (action): Promise<AgentResult> => {
+    mounted = action === 'mount';
+    return { ok: true, code: action === 'mount' ? 'MOUNTED' : 'UNMOUNTED' };
+  },
+};
+const backup = new BackupService({
+  db: harness.db,
+  agent: devAgent,
+  disks: devDisks,
+  mountpoint: backupDir,
+  sourceRoot: harness.dataRoot,
+  sourceReady: () => harness.gate.state === 'READY' || harness.gate.state === 'READ_ONLY',
+  verifyMount: async () => mounted && simulated.length > 0,
+  flush: async () => {
+    if (slowMs > 0) await new Promise((resolve) => setTimeout(resolve, slowMs));
+  },
+  log: { info: () => undefined, warn: (o, m) => console.warn(m, o), error: (o, m) => console.error(m, o) },
+});
+await backup.start(1000);
+
+const app = await buildApp({ config: harness.config, db: harness.db, guardian: harness.gate, uploads: harness.uploads({ chunkSize: 1024 * 1024, maxChunkSize: 16 * 1024 * 1024, checkpointBytes: 8 * 1024 * 1024 }), logger: false, backup });
 await app.ready();
 
 async function sendFile(response: http.ServerResponse, file: string, status = 200): Promise<boolean> {
@@ -87,6 +124,10 @@ const server = http.createServer((request, response) => {
     else if (action === 'reconnect') harness.gate.reconnect();
     else if (action === 'readonly') harness.gate.state = 'READ_ONLY';
     else if (action === 'slow') slowMs = slowMs === 0 ? 1500 : 0;
+    else if (action === 'backup-connect') simulated = [simDisk('ABCD-1234', 'COPIA')];
+    else if (action === 'backup-other') simulated = [simDisk('FFFF-0000', 'OTRO')];
+    else if (action === 'backup-fat') simulated = [simDisk('1111-2222', 'PENDRIVE', 'vfat')];
+    else if (action === 'backup-unplug') simulated = [];
     response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' }).end(`volumen: ${harness.gate.state} (generación ${harness.gate.generation})\n`);
     return;
   }

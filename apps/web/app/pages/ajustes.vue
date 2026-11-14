@@ -356,6 +356,8 @@ async function installApp(): Promise<void> {
       </template>
     </section>
 
+    <BackupSettings v-if="isOwner" />
+
     <section v-if="isOwner" class="card sec" aria-labelledby="s-speed">
       <header><AppIcon name="gauge" /><h2 id="s-speed">{{ t('settings.diskSpeed') }}</h2></header>
       <p class="muted">{{ t('settings.diskSpeedIntro') }}</p>

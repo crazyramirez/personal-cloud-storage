@@ -64,7 +64,9 @@ import { volumeSpace } from '../storage/space.ts';
 import { StorageUnavailableError, toPublicStatus } from '../storage/storage-guardian.ts';
 import type { UploadManager } from '../storage/uploads.ts';
 import { contentDisposition, type GuardianLike, type RouteContext } from './context.ts';
+import type { BackupService } from '../backup/service.ts';
 import { registerAccountRoutes } from './routes-account.ts';
+import { registerBackupRoutes } from './routes-backup.ts';
 import { registerFileRoutes } from './routes-files.ts';
 import { registerMediaRoutes } from './routes-media.ts';
 
@@ -93,6 +95,8 @@ export interface AppDeps {
   readonly logger?: boolean;
   /** Nombre de la release desplegada (release.json); se publica en /system/health. */
   readonly release?: string | null;
+  /** Copia de seguridad en disco externo (opcional: sin ella no hay rutas /backup). */
+  readonly backup?: BackupService;
 }
 
 const API = '/api/v1';
@@ -496,6 +500,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerFileRoutes(app, ctx);
   registerMediaRoutes(app, ctx);
   registerAccountRoutes(app, ctx);
+  if (deps.backup !== undefined) registerBackupRoutes(app, ctx, deps.backup);
 
   return app;
 }

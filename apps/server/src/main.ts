@@ -14,6 +14,9 @@ import { issueSetupToken, ownerExists, purgeExpiredSessions } from './auth/sessi
 import { createGuardian, reportCliError } from './cli/common.ts';
 import { loadConfig } from './config/config.ts';
 import { openDatabase } from './db/database.ts';
+import { FileMountAgent } from './backup/agent.ts';
+import { LinuxDiskLister } from './backup/disks.ts';
+import { BackupService, type BackupLogger } from './backup/service.ts';
 import { buildApp } from './http/app.ts';
 import { MediaService } from './media/service.ts';
 import { FsOperations } from './storage/operations.ts';
@@ -67,7 +70,19 @@ async function main(): Promise<void> {
     minFreeBytes: config.storage.minFreeBytes,
   });
   const release = await releaseName();
-  const app = await buildApp({ config, db, guardian, uploads, operations, media, release });
+  const BACKUP_MOUNTPOINT = '/srv/pcloud-backup';
+  let backupLog: BackupLogger = console as unknown as BackupLogger;
+  const backup = new BackupService({
+    db,
+    agent: new FileMountAgent(),
+    disks: new LinuxDiskLister(() => config.storage.expectedFsUuid, BACKUP_MOUNTPOINT),
+    mountpoint: BACKUP_MOUNTPOINT,
+    sourceRoot: path.resolve(config.storage.mountpoint, config.storage.rootRelative),
+    sourceReady: () => guardian.current.state === 'READY' || guardian.current.state === 'READ_ONLY',
+    log: { info: (o, m) => backupLog.info(o, m), warn: (o, m) => backupLog.warn(o, m), error: (o, m) => backupLog.error(o, m) },
+  });
+  const app = await buildApp({ config, db, guardian, uploads, operations, media, release, backup });
+  backupLog = app.log;
   app.log.info({ ffmpeg: tools.ffmpeg !== null, office: tools.soffice !== null, hwEncoder: tools.hwEncoder }, 'visores');
 
   // Reconciliar el diario de subidas cada vez que el volumen pasa a READY (spec §3.4.9): primero
@@ -80,6 +95,7 @@ async function main(): Promise<void> {
     }
   });
   guardian.start(config.storage.healthCheckIntervalSeconds * 1000);
+  backup.start().catch((error: unknown) => app.log.error({ err: error }, 'no se pudo iniciar la copia de seguridad'));
 
   const housekeeping = setInterval(() => {
     purgeExpiredSessions(db, new Date());
@@ -108,6 +124,7 @@ async function main(): Promise<void> {
       .catch((error: unknown) => app.log.error({ err: error }, 'error al cerrar'))
       .finally(() => {
         clearInterval(housekeeping);
+        backup.stop();
         guardian.stop();
         db.close();
         process.exit(0);

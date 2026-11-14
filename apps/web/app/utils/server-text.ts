@@ -26,6 +26,15 @@ export const EXACT: Record<string, string> = {
   'La contraseña actual no es correcta': 'The current password is incorrect',
   'La contraseña no es correcta': 'The password is incorrect',
   'Solo el propietario puede hacer esto': 'Only the owner can do this',
+  // Copia de seguridad (ADR-0017)
+  'Hay una copia en curso': 'A backup is in progress',
+  'Ese disco no está conectado': 'That disk isn’t connected',
+  'El disco tiene que estar en exFAT o NTFS': 'The disk must be formatted as exFAT or NTFS',
+  'La sincronización espera confirmación': 'The sync is waiting for confirmation',
+  'Ya hay una copia en curso': 'A backup is already in progress',
+  'No hay ningún disco de copia asignado': 'No backup disk has been assigned',
+  'Hay una copia en curso: cancélala antes': 'A backup is in progress: cancel it first',
+  'No se pudo expulsar el disco; vuelve a intentarlo': 'The disk couldn’t be ejected; try again',
   'WebAuthn: el dispositivo no verificó la identidad (biometría o PIN)':
     'WebAuthn: the device didn’t verify your identity (biometrics or PIN)',
   'WebAuthn: el reto pertenece a otra sesión': 'WebAuthn: the challenge belongs to another session',

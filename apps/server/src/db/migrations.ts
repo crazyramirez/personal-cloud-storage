@@ -100,4 +100,41 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX passkeys_user ON passkeys(user_id);
     `,
   },
+  {
+    version: 3,
+    name: 'copia de seguridad en disco externo',
+    sql: `
+      -- Disco asignado como copia (como mucho uno). marker = contenido de .pcloud-backup/backup-id.
+      CREATE TABLE backup_disk (
+        id          INTEGER PRIMARY KEY CHECK (id = 1),
+        fs_uuid     TEXT NOT NULL,
+        marker      TEXT NOT NULL,
+        label       TEXT,
+        model       TEXT,
+        size_bytes  INTEGER NOT NULL,
+        assigned_at TEXT NOT NULL
+      );
+
+      CREATE TABLE backup_settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+
+      CREATE TABLE backup_runs (
+        id              INTEGER PRIMARY KEY,
+        disk_uuid       TEXT NOT NULL,
+        started_at      TEXT NOT NULL,
+        finished_at     TEXT,
+        result          TEXT NOT NULL CHECK (result IN ('running', 'ok', 'ok_with_errors', 'cancelled', 'failed')),
+        error           TEXT,
+        new_files       INTEGER NOT NULL DEFAULT 0,
+        changed_files   INTEGER NOT NULL DEFAULT 0,
+        removed_files   INTEGER NOT NULL DEFAULT 0,
+        unchanged_files INTEGER NOT NULL DEFAULT 0,
+        bytes_to_copy   INTEGER NOT NULL DEFAULT 0,
+        bytes_copied    INTEGER NOT NULL DEFAULT 0,
+        failed_files    INTEGER NOT NULL DEFAULT 0
+      );
+    `,
+  },
 ];

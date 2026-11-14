@@ -16,6 +16,7 @@ Nube personal autocontenida: un servidor Linux pequeño (una **Raspberry Pi**, u
 - HTTPS en la LAN con CA propia (Caddy). Acceso remoto solo por VPN (Tailscale), **nunca** abierto a Internet.
 - `StorageGuardian`: bloquea las escrituras en cuanto el disco desaparece, se cuelga o cambia, y nunca escribe en el mountpoint vacío.
 - Los ficheros siguen siendo ficheros normales en el disco: lo conectas a Windows o macOS y los lees tal cual.
+- **Copia de seguridad en un disco USB externo**: lo conectas, la nube lo reconoce y sincroniza solo lo nuevo y lo modificado. Lo borrado no se borra de la copia: se aparta con fecha. Al terminar se expulsa solo ([ADR-0017](docs/adr/0017-copia-de-seguridad-disco-externo.md)).
 
 ## Requisitos
 
@@ -111,7 +112,7 @@ curl -fsSL https://raw.githubusercontent.com/crazyramirez/personal-cloud-storage
 
 Instalación paso a paso, runbooks (desconexiones, cambio de disco) y detalles: [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
-> ⚠️ Esto **no es una copia de seguridad**. Si el disco falla, se pierden los datos. Ten otra copia de lo que te importe.
+> ⚠️ El disco de la nube **no es una copia de seguridad**: si falla, se pierden los datos. Usa la copia en disco externo (Ajustes → Copia de seguridad) o ten otra copia de lo que te importe.
 
 ## Documentación
 
