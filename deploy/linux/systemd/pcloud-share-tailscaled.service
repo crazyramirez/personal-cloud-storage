@@ -19,7 +19,8 @@ ExecStart=/usr/sbin/tailscaled --tun=userspace-networking --statedir=/var/lib/pc
 StateDirectory=pcloud-share-ts
 StateDirectoryMode=0700
 RuntimeDirectory=pcloud-share-ts
-RuntimeDirectoryMode=0755
+# Solo root (el agente) habla con este tailscaled.
+RuntimeDirectoryMode=0700
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=yes
