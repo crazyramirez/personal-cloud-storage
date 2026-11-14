@@ -1,0 +1,519 @@
+/*
+ * Sistema visual de Personal Cloud (propuesta v1 aprobada el 14 nov 2026).
+ * Tokens idénticos a los del lienzo de diseño. Todos los pares texto/fondo cumplen 4,5:1.
+ * El tema lo fija `data-theme` en <html>; antes de que arranque la app se respeta el del sistema.
+ */
+
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --border: #e3e6eb;
+  --border-strong: #8e97a5;
+  --text: #14171c;
+  --muted: #5b6472;
+  --accent: #2457d6;
+  --accent-btn: #2457d6;
+  --accent-btn-hover: #1b44ab;
+  --accent-soft: #e8eefc;
+  --ok: #136c33;
+  --ok-soft: #e6f4ea;
+  --warn: #8a5100;
+  --warn-soft: #fdf3e1;
+  --warn-border: #ebc98f;
+  --danger: #b42318;
+  --danger-soft: #fdecea;
+  --danger-border: #f3b8b1;
+  --track: #e3e6eb;
+  --folder: #b7790f;
+  --shadow: 0 12px 32px rgb(20 23 28 / 14%);
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg: #0f1217;
+  --surface: #161a21;
+  --surface-2: #1e232c;
+  --border: #2a303b;
+  --border-strong: #4a5262;
+  --text: #e8ebf0;
+  --muted: #9aa3b2;
+  --accent: #7ba2ff;
+  --accent-btn: #2f5fe0;
+  --accent-btn-hover: #3d6bea;
+  --accent-soft: #1c2a4a;
+  --ok: #5bd08a;
+  --ok-soft: #13301f;
+  --warn: #f5b34a;
+  --warn-soft: #33270f;
+  --warn-border: #6b5220;
+  --danger: #ff8a80;
+  --danger-soft: #3a1714;
+  --danger-border: #6b2a24;
+  --track: #2a303b;
+  --folder: #e3a94a;
+  --shadow: 0 12px 32px rgb(0 0 0 / 50%);
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #0f1217;
+    --surface: #161a21;
+    --surface-2: #1e232c;
+    --border: #2a303b;
+    --border-strong: #4a5262;
+    --text: #e8ebf0;
+    --muted: #9aa3b2;
+    --accent: #7ba2ff;
+    --accent-btn: #2f5fe0;
+    --accent-btn-hover: #3d6bea;
+    --accent-soft: #1c2a4a;
+    --ok: #5bd08a;
+    --ok-soft: #13301f;
+    --warn: #f5b34a;
+    --warn-soft: #33270f;
+    --warn-border: #6b5220;
+    --danger: #ff8a80;
+    --danger-soft: #3a1714;
+    --danger-border: #6b2a24;
+    --track: #2a303b;
+    --folder: #e3a94a;
+    --shadow: 0 12px 32px rgb(0 0 0 / 50%);
+    color-scheme: dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-text-size-adjust: 100%;
+}
+
+h1,
+h2,
+h3,
+p,
+dl,
+dd,
+ol,
+ul {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+a {
+  color: var(--accent);
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Colores de los iconos de archivo (diseño aprobado): carpetas en ámbar, multimedia en acento. */
+.ico-folder {
+  color: var(--folder);
+}
+
+.ico-media {
+  color: var(--accent);
+}
+
+.ico-doc {
+  color: var(--muted);
+}
+
+.mono {
+  font-family: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', monospace;
+  font-size: 12px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ── Botones ─────────────────────────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.btn-primary {
+  border-color: transparent;
+  background: var(--accent-btn);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-btn-hover);
+}
+
+.btn-danger {
+  border-color: var(--danger-border);
+  background: transparent;
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* Confirmación de una acción irreversible: rojo sólido (blanco sobre #b42318: 6,5:1). */
+.btn-danger-solid {
+  border-color: #b42318;
+  background: #b42318;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.btn-danger-solid:hover {
+  background: #912018;
+  border-color: #912018;
+}
+
+.btn-icon {
+  width: 44px;
+  padding: 0;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+/* ── Superficies ─────────────────────────────────────────────────────────────────────────── */
+
+.card {
+  padding: 20px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chip-ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.chip-warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.chip-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.chip-accent {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.chip-muted {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent-btn);
+  transition: width 0.3s ease;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-weight: 600;
+}
+
+.input {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  width: 100%;
+}
+
+.notice {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+.notice-info {
+  background: var(--accent-soft);
+}
+
+.notice-warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.notice-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 14px;
+  font-size: 13px;
+}
+
+.kv dt {
+  color: var(--muted);
+}
+
+.kv dd {
+  overflow-wrap: anywhere;
+}
+
+dialog {
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  width: min(440px, calc(100vw - 32px));
+}
+
+dialog::backdrop {
+  background: rgb(15 18 23 / 55%);
+}
+
+dialog.wide {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.dlg .body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dlg h2 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.dlg .help {
+  font-size: 12px;
+}
+
+.dlg .actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ── Sensación de aplicación ──────────────────────────────────────────────────────────────
+ * Sin selección de texto accidental al tocar o arrastrar; se puede seleccionar donde aporta
+ * (campos, visor de texto, rutas y detalles marcados con .selectable). */
+html {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+input,
+textarea,
+select,
+[contenteditable],
+.selectable,
+.selectable * {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+img,
+svg {
+  -webkit-user-drag: none;
+}
+
+button,
+a,
+[role='menuitem'],
+[role='option'] {
+  cursor: pointer;
+}
+
+/* Barra de estado del iPhone (app instalada, «black-translucent»): el contenido se dibuja
+ * debajo; esta franja fija garantiza contraste para la hora y la batería (texto blanco). */
+.statusbar {
+  position: fixed;
+  z-index: 2000;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top);
+  background: var(--accent-btn);
+  pointer-events: none;
+}
+
+:root[data-theme='dark'] .statusbar {
+  background: var(--bg);
+}
+
+/* Alto real de la pantalla en móvil (sin la barra del navegador). */
+.vh-fill {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* iOS amplía la página al enfocar un campo con letra < 16 px: en pantallas táctiles, 16 px. */
+@media (pointer: coarse), (max-width: 820px) {
+  input,
+  select,
+  textarea,
+  .input {
+    font-size: 16px;
+  }
+}
+
+/* Móvil: los diálogos se abren como hoja inferior, al estilo nativo de iOS y Android. */
+@media (max-width: 640px) {
+  dialog,
+  dialog.wide {
+    width: 100%;
+    max-width: 100%;
+    margin: auto 0 0;
+    border-radius: 22px 22px 0 0;
+    border-bottom: 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    animation: sheet-up 0.22s cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+
+  dialog::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 5px;
+    margin: 8px auto 0;
+    border-radius: 3px;
+    background: var(--border-strong);
+    opacity: 0.6;
+  }
+
+  .dlg .actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .dlg .actions .btn {
+    min-height: 48px;
+    justify-content: center;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

@@ -1,0 +1,53 @@
+import type { Message, MessageTable } from '~/utils/i18n';
+
+/** Mensajes de error de la API por código. En español se prefiere el mensaje concreto del servidor. */
+const es = {
+  VALIDATION_FAILED: 'La petición no es válida',
+  INVALID_PATH: 'La ruta no es válida',
+  INVALID_NAME: 'El nombre no es válido',
+  UNAUTHENTICATED: 'Tu sesión ha caducado: vuelve a entrar',
+  FORBIDDEN: 'No tienes permiso para hacer esto',
+  NOT_FOUND: 'No existe (puede que se haya movido o eliminado)',
+  CONFLICT: 'Entra en conflicto con algo que ya existe',
+  OFFSET_MISMATCH: 'La subida se ha desincronizado; se reanudará',
+  PRECONDITION_FAILED: 'El elemento ha cambiado mientras tanto',
+  PAYLOAD_TOO_LARGE: 'Es demasiado grande',
+  UNSUPPORTED_MEDIA: 'No se puede mostrar este tipo de archivo',
+  RANGE_NOT_SATISFIABLE: 'Fragmento solicitado no válido',
+  CHECKSUM_MISMATCH: 'El archivo llegó dañado; se repetirá la subida',
+  LOCKED: 'Está en uso por otra operación',
+  RATE_LIMITED: 'Demasiados intentos: espera un momento',
+  INTERNAL: 'Error interno del servidor',
+  STORAGE_UNAVAILABLE: 'El disco no está disponible',
+  INSUFFICIENT_STORAGE: 'El disco está lleno',
+  NETWORK: 'No se puede contactar con el servidor',
+  TIMEOUT: 'El servidor no responde. Vuelve a intentarlo en unos segundos.',
+  httpStatus: 'Error {status}',
+} satisfies MessageTable;
+
+export default {
+  es,
+  en: {
+    VALIDATION_FAILED: 'The request is not valid',
+    INVALID_PATH: 'The path is not valid',
+    INVALID_NAME: 'The name is not valid',
+    UNAUTHENTICATED: 'Your session has expired: sign in again',
+    FORBIDDEN: 'You are not allowed to do this',
+    NOT_FOUND: 'It does not exist (it may have been moved or deleted)',
+    CONFLICT: 'This conflicts with something that already exists',
+    OFFSET_MISMATCH: 'The upload got out of sync; it will resume',
+    PRECONDITION_FAILED: 'The item changed in the meantime',
+    PAYLOAD_TOO_LARGE: 'It is too large',
+    UNSUPPORTED_MEDIA: 'This file type cannot be displayed',
+    RANGE_NOT_SATISFIABLE: 'Invalid range requested',
+    CHECKSUM_MISMATCH: 'The file arrived damaged; the upload will be retried',
+    LOCKED: 'It is in use by another operation',
+    RATE_LIMITED: 'Too many attempts: wait a moment',
+    INTERNAL: 'Internal server error',
+    STORAGE_UNAVAILABLE: 'The disk is not available',
+    INSUFFICIENT_STORAGE: 'The disk is full',
+    NETWORK: 'Cannot reach the server',
+    TIMEOUT: 'The server is not responding. Try again in a few seconds.',
+    httpStatus: 'Error {status}',
+  } satisfies Record<keyof typeof es, Message>,
+};

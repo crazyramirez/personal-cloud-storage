@@ -1,0 +1,77 @@
+# /etc/systemd/system/pcloud.service — Personal Cloud Storage (servidor API)
+# Instalado por deploy/linux/setup/pcloud-install-service.sh. No editar a mano: los cambios se
+# hacen en el repositorio y se reinstalan con ese script.
+
+[Unit]
+Description=Personal Cloud Storage (servidor API)
+After=network.target
+# DELIBERADAMENTE sin RequiresMountsFor=/srv/pcloud, After=srv-pcloud.mount ni BindsTo=:
+# el servicio tiene que arrancar y seguir vivo SIN el disco (estado UNAVAILABLE, 503 en las rutas
+# de ficheros). Quien decide si se puede leer o escribir es el StorageGuardian, no systemd.
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=pcloud
+Group=pcloud
+# video: acceso al codificador H.264 por hardware de la Pi (/dev/video11) para reproducir vídeos
+# en formatos que el navegador no admite. Nada más de /dev se usa salvo /dev/disk/by-uuid.
+SupplementaryGroups=video
+WorkingDirectory=/opt/pcloud/current
+ExecStart=/usr/local/bin/node /opt/pcloud/current/apps/server/src/main.ts --config /etc/pcloud/config.yaml
+Environment=NODE_ENV=production
+# Hilos de E/S de Node: si el disco va lento, unas pocas operaciones atascadas no deben dejar sin
+# hilos al resto (inicio de sesión, base de datos, comprobaciones del guardián).
+Environment=UV_THREADPOOL_SIZE=16
+Restart=on-failure
+RestartSec=5
+# 64 = configuración inválida: reintentar no lo arregla.
+RestartPreventExitStatus=64
+TimeoutStopSec=30
+UMask=0077
+LimitNOFILE=16384
+TasksMax=256
+# Sin efecto mientras el firmware arranque con cgroup_disable=memory (ver docs/OPERATIONS.md).
+MemoryMax=2G
+
+# ── Aislamiento ──────────────────────────────────────────────────────────────────────────────
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+# "full" y no "strict": con strict habría que declarar /srv/pcloud en ReadWritePaths, lo que crea
+# un montaje bind propio encima del punto de montaje y OCULTARÍA el disco cuando se conecta
+# después de arrancar. Con full, /usr /boot /etc quedan de solo lectura y los montajes y
+# desmontajes del anfitrión se propagan al servicio (propagación "slave").
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+# PrivateDevices=no: el StorageGuardian necesita ver /dev/disk/by-uuid para saber si el disco
+# configurado está presente.
+PrivateDevices=no
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RemoveIPC=yes
+KeyringMode=private
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# MemoryDenyWriteExecute NO se activa: el compilador JIT de V8 lo necesita.
+
+# ── Red ──────────────────────────────────────────────────────────────────────────────────────
+# El servidor solo habla con el proxy local (Caddy). No puede abrir ni aceptar conexiones fuera
+# de loopback: ni telemetría ni servicios de terceros, aunque una dependencia lo intentara.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+[Install]
+WantedBy=multi-user.target

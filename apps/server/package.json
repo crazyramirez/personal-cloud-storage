@@ -1,0 +1,20 @@
+{
+  "name": "@pcloud/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "API Fastify + StorageGuardian (se ejecuta como TypeScript con type stripping nativo de Node)",
+  "engines": {
+    "node": ">=26.0.0"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\"",
+    "volume-status": "node src/cli/volume-status.ts"
+  },
+  "dependencies": {
+    "@pcloud/contracts": "workspace:*",
+    "yaml": "2.9.1",
+    "fastify": "5.12.8",
+    "@fastify/cookie": "11.1.5"
+  }
+}

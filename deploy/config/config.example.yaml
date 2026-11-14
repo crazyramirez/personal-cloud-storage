@@ -1,0 +1,43 @@
+# /etc/pcloud/config.yaml — Personal Cloud Storage
+#
+# Valores iniciales para PROBAR y AJUSTAR (spec §13), no umbrales garantizados.
+# Claves desconocidas = error de arranque (evita erratas silenciosas).
+# Permisos recomendados: root:pcloud 0640.
+
+server:
+  host: 127.0.0.1          # Fastify solo en loopback; el proxy TLS publica / y /api en la LAN
+  port: 3000
+  log_level: info          # fatal | error | warn | info | debug | trace
+
+paths:
+  state_dir: /var/lib/pcloud   # microSD: SQLite, secretos, locks. NUNCA dentro del HDD
+
+storage:
+  mountpoint: /srv/pcloud      # punto de montaje del HDD completo (protegido con chattr +i)
+  root_relative: data          # raíz administrada dentro del volumen ("." = raíz del volumen)
+  expected_fs_uuid: null       # p. ej. "1A2B-3C4D" (exFAT) o "0123456789ABCDEF" (NTFS); ver pcloud-volume-check.sh
+  volume_marker: null          # lo escribe el onboarding al vincular el volumen; no inventar
+  fs_type: exfat               # exfat | ntfs3 | ntfs-3g — debe coincidir con el montaje real (fstab)
+  min_free_percent: 2          # se reserva el MAYOR de min_free_percent y min_free_bytes
+  min_free_bytes: 10737418240  # 10 GiB
+  health_check_interval_seconds: 5
+  versioning_enabled: false    # las versiones ocupan espacio físico real (no hay snapshots en exFAT/NTFS)
+
+transfers:
+  max_concurrent_uploads: 2
+  max_concurrent_downloads: 2
+  chunk_size_mib: 8
+  staging_ttl_hours: 72
+
+indexer:
+  max_parallel_file_stats: 2
+  scan_interval_minutes: 60
+  hash_only_when_needed: true
+
+trash:
+  enabled: true
+  retention_days: 30
+
+security:
+  lan_only_default: true
+  remote_access_enabled: false

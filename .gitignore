@@ -1,0 +1,33 @@
+node_modules/
+dist/
+.output/
+.nuxt/
+coverage/
+*.log
+*.tsbuildinfo
+
+# Configuración real y secretos: nunca al repositorio
+/config.yaml
+*.local.yaml
+.env
+.env.*
+!.env.example
+
+# Ajustes locales de herramientas (permisos, dominios propios)
+.claude/settings.local.json
+*.local.md
+
+# Informes de diagnóstico del hardware real (pueden contener números de serie, MACs, IPs)
+/reports/
+inventario*.md
+volumen*.md
+
+.DS_Store
+Thumbs.db
+
+# Paquetes de release generados por deploy/dev/pack-release.sh
+/.releases/
+
+# Nuxt
+.nuxt/
+.data/

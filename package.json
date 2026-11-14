@@ -1,0 +1,23 @@
+{
+  "name": "personal-cloud",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Nube personal autocontenida para Linux (Raspberry Pi y otros, ARM64/x86-64) con HDD USB exFAT/NTFS",
+  "license": "MIT",
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=26.0.0"
+  },
+  "scripts": {
+    "test": "node --test \"apps/*/test/**/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json",
+    "check": "pnpm typecheck && pnpm typecheck:web && pnpm test && pnpm check:scripts",
+    "check:scripts": "bash deploy/linux/check-scripts.sh",
+    "typecheck:web": "pnpm --filter @pcloud/web typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2"
+  }
+}

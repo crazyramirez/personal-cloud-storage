@@ -1,0 +1,48 @@
+import type { Message, MessageTable } from '~/utils/i18n';
+
+const es = {
+  pageTitle: 'Entrar · Personal Cloud',
+  title: 'Entrar',
+  subtitle: 'Accede a tu nube personal.',
+  withPasskey: 'Entrar con llave de acceso',
+  passkeyHint: 'Face ID, Touch ID, Windows Hello o la huella de tu móvil.',
+  orPassword: 'o con contraseña',
+  username: 'Usuario',
+  password: 'Contraseña',
+  checking: 'Comprobando…',
+  submit: 'Entrar',
+  passkeyUnsupportedBefore: 'Para entrar con Face ID o Windows Hello, abre ',
+  passkeyUnsupportedAfter: ' (no la dirección IP) con el certificado instalado.',
+  loginFailed: 'No se pudo iniciar sesión',
+  thisDevice: 'Este dispositivo',
+  cancelled: 'Operación cancelada',
+  passkeyTimeout: 'Se canceló o se agotó el tiempo. Vuelve a intentarlo.',
+  passkeyExists: 'Este dispositivo ya tiene una llave de acceso registrada para tu cuenta.',
+  passkeyInsecure: 'El navegador no permite llaves de acceso aquí: abre la aplicación por su nombre .local con HTTPS y el certificado instalado.',
+  passkeyFailed: 'No se pudo completar',
+} satisfies MessageTable;
+
+export default {
+  es,
+  en: {
+    pageTitle: 'Sign in · Personal Cloud',
+    title: 'Sign in',
+    subtitle: 'Access your personal cloud.',
+    withPasskey: 'Sign in with a passkey',
+    passkeyHint: 'Face ID, Touch ID, Windows Hello or your phone’s fingerprint.',
+    orPassword: 'or use your password',
+    username: 'Username',
+    password: 'Password',
+    checking: 'Checking…',
+    submit: 'Sign in',
+    passkeyUnsupportedBefore: 'To sign in with Face ID or Windows Hello, open ',
+    passkeyUnsupportedAfter: ' (not the IP address) with the certificate installed.',
+    loginFailed: 'Couldn’t sign in',
+    thisDevice: 'This device',
+    cancelled: 'Operation cancelled',
+    passkeyTimeout: 'The request was cancelled or timed out. Please try again.',
+    passkeyExists: 'This device already has a passkey registered for your account.',
+    passkeyInsecure: 'Your browser doesn’t allow passkeys here. Open the app by its .local name over HTTPS with the certificate installed.',
+    passkeyFailed: 'Couldn’t complete the request',
+  } satisfies Record<keyof typeof es, Message>,
+};

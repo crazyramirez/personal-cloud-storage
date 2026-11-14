@@ -1,0 +1,84 @@
+# /etc/caddy/Caddyfile — Personal Cloud Storage (HTTPS en la red local)
+# Generado por pcloud-install-caddy.sh a partir de deploy/linux/caddy/Caddyfile.tmpl.
+# No editar a mano: cambia la plantilla o vuelve a ejecutar el script (p. ej. si cambia la IP).
+#
+# - Certificados de una autoridad propia (CA interna de Caddy); nada sale a Internet.
+# - Solo se atienden los nombres listados abajo: cualquier otro Host se rechaza, lo que impide
+#   ataques de DNS rebinding contra la API.
+# - La API (Fastify) escucha solo en loopback; aquí se publica bajo /api/.
+# - Sin registro de accesos: evita escrituras continuas en la microSD.
+
+{
+	# Sin API de administración: nadie en la máquina puede reconfigurar el proxy en caliente.
+	# Los cambios de configuración se aplican con «systemctl restart caddy».
+	admin off
+	local_certs
+	skip_install_trust
+	servers {
+		protocols h1 h2
+	}
+}
+
+# La aplicación (web + API), común a todos los nombres por los que se accede.
+(pcloud_app) {
+
+	# Cabeceras de la aplicación web. La API (/api) pone las suyas: sus vistas previas deben poder
+	# mostrarse dentro de la propia aplicación (frame-ancestors 'self'), el resto nunca.
+	@web not path /api/*
+	header @web {
+		X-Frame-Options DENY
+		Content-Security-Policy "frame-ancestors 'none'"
+		Referrer-Policy no-referrer
+		Cross-Origin-Opener-Policy same-origin
+		Cross-Origin-Resource-Policy same-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+	}
+	header -Server
+
+	# API: sin compresión ni caché; el servidor pone sus propias cabeceras (no-store, nosniff y
+	# «CSP: sandbox» en las descargas). Los bloques de subida pasan en streaming, sin almacenarse.
+	handle /api/* {
+		request_body {
+			max_size 64MB
+		}
+		reverse_proxy __PCLOUD_UPSTREAM__ {
+			transport http {
+				dial_timeout 3s
+			}
+		}
+	}
+
+	# Certificado raíz de la CA interna (solo la parte pública) para instalarlo en los dispositivos.
+	handle /pcloud-ca.crt {
+		root * /etc/caddy/pcloud-public
+		header Content-Type application/x-x509-ca-cert
+		header Cache-Control no-store
+		file_server
+	}
+
+	# Recursos con hash en el nombre: caché indefinida. Si falta uno, 404 (nunca la página HTML).
+	handle /_nuxt/* {
+		root * __PCLOUD_WEB_ROOT__
+		encode zstd gzip
+		header X-Content-Type-Options nosniff
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	# Aplicación web (SPA estática): cualquier ruta desconocida devuelve la página base.
+	handle {
+		root * __PCLOUD_WEB_ROOT__
+		encode zstd gzip
+		header X-Content-Type-Options nosniff
+		header Cache-Control no-cache
+		try_files {path} {path}/index.html /200.html
+		file_server
+	}
+}
+
+# Red local: certificado de la CA propia (instalada en tus dispositivos).
+__PCLOUD_SITES__ {
+	tls internal
+	import pcloud_app
+}
+__PCLOUD_TS_SITE__

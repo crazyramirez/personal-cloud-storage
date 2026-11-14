@@ -1,0 +1,8 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Cadena de suministro: ningún script de instalación de dependencias se ejecuta. esbuild funciona
+# sin el suyo (su binario llega como dependencia opcional de la plataforma).
+allowBuilds:
+  esbuild: false

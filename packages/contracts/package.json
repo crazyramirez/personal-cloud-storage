@@ -1,0 +1,13 @@
+{
+  "name": "@pcloud/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Contratos públicos de la API v1 compartidos por servidor, web y desktop",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "typebox": "1.4.7"
+  }
+}

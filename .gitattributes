@@ -1,0 +1,7 @@
+# Los scripts se ejecutan en Linux (Orange Pi): CRLF los rompe.
+* text=auto eol=lf
+*.sh text eol=lf
+*.service text eol=lf
+*.yaml text eol=lf
+*.ts text eol=lf
+*.md text eol=lf
