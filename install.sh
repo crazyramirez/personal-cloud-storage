@@ -364,10 +364,11 @@ if [ "$TAILSCALE" = ask ]; then
 fi
 if [ "$TAILSCALE" = yes ]; then
   echo "+ pcloud-install-tailscale.sh --execute" >>"$LOG"
-  bash "$SETUP/pcloud-install-tailscale.sh" --execute 2>&1 | tee -a "$LOG" | grep -E 'https://login\.tailscale\.com|^[[:space:]]*[0-9]+\.[0-9]+' | sed 's/^/  /' || true
-  info "Abre el enlace de arriba para autorizar este equipo en tu cuenta de Tailscale."
-  info "Después, en la consola de Tailscale activa MagicDNS y «HTTPS Certificates» y ejecuta:"
-  info "  sudo bash $SETUP/pcloud-install-caddy.sh --execute"
+  info "Abre el enlace que aparecerá para autorizar este equipo en tu cuenta de Tailscale"
+  info "(en su consola, activa también MagicDNS y «HTTPS Certificates»)."
+  bash "$SETUP/pcloud-install-tailscale.sh" --execute 2>&1 | tee -a "$LOG" \
+    | grep --line-buffered -E 'https://login\.tailscale\.com|^[[:space:]]*[0-9]+\.[0-9]+|Esperando|Desde Internet|sin autorizar|pcloud-install-caddy' \
+    | sed -u 's/^/  /' || true
 else
   info "Omitido. Se puede activar más tarde: sudo bash $SETUP/pcloud-install-tailscale.sh --execute"
 fi

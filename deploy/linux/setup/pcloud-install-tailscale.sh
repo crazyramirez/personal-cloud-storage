@@ -58,4 +58,26 @@ systemctl enable --now tailscaled
 
 # --timeout: devuelve el control; el enlace de autorización queda en la salida.
 tailscale up --hostname="$TS_HOSTNAME" --ssh=false --accept-dns=false --timeout=20s 2>&1 || true
+
+# Espera a que se autorice el equipo (el enlace ya se ha mostrado) para dejar HTTPS listo también
+# por Tailscale. PCLOUD_TS_WAIT=0 no espera.
+running() { tailscale status --json 2>/dev/null | grep -qE '"BackendState": *"Running"'; }
+WAIT="${PCLOUD_TS_WAIT:-300}"
+[[ "$WAIT" =~ ^[0-9]+$ ]] || WAIT=300
+if ! running && [ "$WAIT" -gt 0 ]; then
+  echo "Esperando a que autorices el equipo con el enlace de arriba (hasta $((WAIT / 60)) min)…"
+  for ((i = 0; i < WAIT; i += 5)); do running && break; sleep 5; done
+fi
 tailscale status 2>&1 | head -5 || true
+
+# Caddy solo atiende el nombre *.ts.net si Tailscale ya estaba activo al configurarlo: se regenera.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if running; then
+  if grep -qs 'pcloud-install-caddy.sh' /etc/caddy/Caddyfile && [ -f "$SCRIPT_DIR/pcloud-install-caddy.sh" ]; then
+    echo "Tailscale activo: añadiendo su nombre a HTTPS (Caddy)…"
+    bash "$SCRIPT_DIR/pcloud-install-caddy.sh" --execute 2>&1 | grep -E 'Desde Internet|HTTPS activo|ERROR|Aviso' || true
+  fi
+else
+  echo "Tailscale aún sin autorizar. Cuando lo autorices, ejecuta:"
+  echo "  sudo bash $SCRIPT_DIR/pcloud-install-caddy.sh --execute"
+fi
