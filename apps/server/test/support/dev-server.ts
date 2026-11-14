@@ -23,6 +23,7 @@ import type { AgentResult, MountAgent } from '../../src/backup/agent.ts';
 import type { DiskLister, ExternalDisk } from '../../src/backup/disks.ts';
 import { BackupService } from '../../src/backup/service.ts';
 import { buildApp } from '../../src/http/app.ts';
+import { ResourceMonitor } from '../../src/system/resources.ts';
 import { createHarness } from './harness.ts';
 
 const TYPES: Record<string, string> = {
@@ -89,8 +90,11 @@ const backup = new BackupService({
   log: { info: () => undefined, warn: (o, m) => console.warn(m, o), error: (o, m) => console.error(m, o) },
 });
 await backup.start(1000);
+// En Windows no hay /proc: el monitor usa os.* y deja la temperatura y la alimentación en null.
+const resources = new ResourceMonitor();
+resources.start();
 
-const app = await buildApp({ config: harness.config, db: harness.db, guardian: harness.gate, uploads: harness.uploads({ chunkSize: 1024 * 1024, maxChunkSize: 16 * 1024 * 1024, checkpointBytes: 8 * 1024 * 1024 }), logger: false, backup });
+const app = await buildApp({ config: harness.config, db: harness.db, guardian: harness.gate, uploads: harness.uploads({ chunkSize: 1024 * 1024, maxChunkSize: 16 * 1024 * 1024, checkpointBytes: 8 * 1024 * 1024 }), logger: false, backup, resources });
 await app.ready();
 
 async function sendFile(response: http.ServerResponse, file: string, status = 200): Promise<boolean> {

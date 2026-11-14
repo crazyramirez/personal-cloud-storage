@@ -18,6 +18,7 @@ import { FileMountAgent } from './backup/agent.ts';
 import { LinuxDiskLister } from './backup/disks.ts';
 import { BackupService, type BackupLogger } from './backup/service.ts';
 import { buildApp } from './http/app.ts';
+import { ResourceMonitor } from './system/resources.ts';
 import { MediaService } from './media/service.ts';
 import { FsOperations } from './storage/operations.ts';
 import { SerialQueue } from './storage/serial.ts';
@@ -81,7 +82,9 @@ async function main(): Promise<void> {
     sourceReady: () => guardian.current.state === 'READY' || guardian.current.state === 'READ_ONLY',
     log: { info: (o, m) => backupLog.info(o, m), warn: (o, m) => backupLog.warn(o, m), error: (o, m) => backupLog.error(o, m) },
   });
-  const app = await buildApp({ config, db, guardian, uploads, operations, media, release, backup });
+  const resources = new ResourceMonitor();
+  resources.start();
+  const app = await buildApp({ config, db, guardian, uploads, operations, media, release, backup, resources });
   backupLog = app.log;
   app.log.info({ ffmpeg: tools.ffmpeg !== null, office: tools.soffice !== null, hwEncoder: tools.hwEncoder }, 'visores');
 
@@ -125,6 +128,7 @@ async function main(): Promise<void> {
       .finally(() => {
         clearInterval(housekeeping);
         backup.stop();
+        resources.stop();
         guardian.stop();
         db.close();
         process.exit(0);

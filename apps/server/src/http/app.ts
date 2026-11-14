@@ -33,6 +33,7 @@ import {
   type ApiErrorBody,
   type ApiErrorCode,
   type HealthResponse,
+  type ResourcesResponse,
   type SessionUser,
   type SetupStatus,
   type StorageResponse,
@@ -65,6 +66,7 @@ import { StorageUnavailableError, toPublicStatus } from '../storage/storage-guar
 import type { UploadManager } from '../storage/uploads.ts';
 import { contentDisposition, type GuardianLike, type RouteContext } from './context.ts';
 import type { BackupService } from '../backup/service.ts';
+import type { ResourceMonitor } from '../system/resources.ts';
 import { registerAccountRoutes } from './routes-account.ts';
 import { registerBackupRoutes } from './routes-backup.ts';
 import { registerFileRoutes } from './routes-files.ts';
@@ -97,6 +99,8 @@ export interface AppDeps {
   readonly release?: string | null;
   /** Copia de seguridad en disco externo (opcional: sin ella no hay rutas /backup). */
   readonly backup?: BackupService;
+  /** Recursos del equipo para el panel (opcional). */
+  readonly resources?: ResourceMonitor;
 }
 
 const API = '/api/v1';
@@ -501,6 +505,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerMediaRoutes(app, ctx);
   registerAccountRoutes(app, ctx);
   if (deps.backup !== undefined) registerBackupRoutes(app, ctx, deps.backup);
+  const resources = deps.resources;
+  if (resources !== undefined) {
+    app.get(`${API}/system/resources`, async (request): Promise<ResourcesResponse> => {
+      user(request);
+      return resources.snapshot();
+    });
+  }
 
   return app;
 }

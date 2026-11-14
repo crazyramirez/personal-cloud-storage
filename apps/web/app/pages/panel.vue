@@ -13,6 +13,8 @@ const fsLabel = computed(() => {
   return type === 'exfat' ? 'exFAT' : type === 'ntfs3' || type === 'fuseblk' ? 'NTFS' : (type ?? '—');
 });
 const finished = completedTick;
+/** Gravedad del disco de datos: aviso al 90 % y peligro al 95 % (las subidas se bloquean en la reserva). */
+const diskTone = computed(() => (percent.value >= 95 ? 'danger' : percent.value >= 90 ? 'warn' : 'accent'));
 
 /** Se comprueba de verdad: no se afirma «cifrada» si la página se cargó por HTTP. */
 const encrypted = import.meta.client && window.location.protocol === 'https:';
@@ -35,6 +37,24 @@ watch(readable, (now) => {
 
 /** Aviso de copia de seguridad: discreto (icono junto al título); se despliega al pulsarlo. */
 const backupOpen = ref(false);
+const session = useSession();
+const isOwner = computed(() => session.user.value?.role === 'owner');
+const backupApi = useBackup();
+onMounted(() => {
+  if (isOwner.value) backupApi.start();
+});
+onBeforeUnmount(() => {
+  if (isOwner.value) backupApi.stop();
+});
+/** Al día = copia correcta en los últimos 14 días. */
+const backupInfo = computed(() => {
+  const status = backupApi.status.value;
+  const last = status?.lastSuccessAt ?? null;
+  const fresh = last !== null && Date.now() - new Date(last).getTime() < 14 * 86_400_000;
+  if (fresh) return { ok: true, title: t('panel.backupOkTitle'), body: t('panel.backupOkBody', { when: formatRelative(last) }) };
+  if (status?.assigned) return { ok: false, title: t('panel.backupOldTitle'), body: last === null ? t('panel.backupNeverBody') : t('panel.backupOldBody', { when: formatRelative(last) }) };
+  return { ok: false, title: t('panel.backupTitle'), body: t('panel.backupBody') };
+});
 const backupRef = ref<HTMLElement | null>(null);
 function closeBackup(event: Event): void {
   if (!backupOpen.value) return;
@@ -65,18 +85,20 @@ onBeforeUnmount(() => {
           class="backup-btn"
           :aria-expanded="backupOpen"
           aria-controls="aviso-copia"
-          :aria-label="t('panel.backupAria')"
-          :title="t('panel.backupTitle')"
+          :class="{ ok: backupInfo.ok }"
+          :aria-label="backupInfo.title"
+          :title="backupInfo.title"
           @click="backupOpen = !backupOpen"
         >
-          <AppIcon name="alert" :size="18" />
+          <AppIcon :name="backupInfo.ok ? 'shield' : 'alert'" :size="18" />
         </button>
         <Transition name="pop">
-          <section v-if="backupOpen" id="aviso-copia" role="note" :aria-label="t('panel.backupNoteAria')" class="backup">
-            <AppIcon name="shield" :size="20" class="warn" />
+          <section v-if="backupOpen" id="aviso-copia" role="note" :aria-label="t('panel.backupNoteAria')" class="backup" :class="{ ok: backupInfo.ok }">
+            <AppIcon name="shield" :size="20" :class="backupInfo.ok ? 'okc' : 'warn'" />
             <div class="backup-text">
-              <strong>{{ t('panel.backupTitle') }}</strong>
-              <span>{{ t('panel.backupBody') }}</span>
+              <strong>{{ backupInfo.title }}</strong>
+              <span>{{ backupInfo.body }}</span>
+              <NuxtLink v-if="isOwner" to="/ajustes#copia" class="backup-link">{{ t('panel.backupOpen') }}</NuxtLink>
             </div>
           </section>
         </Transition>
@@ -93,11 +115,20 @@ onBeforeUnmount(() => {
           <span class="chip" :class="`chip-${label.tone}`">{{ label.pill }}</span>
         </div>
         <template v-if="space">
-          <div>
-            <p class="big">{{ t('panel.free', { size: formatBytes(space.freeBytes) }) }}</p>
-            <p class="muted">{{ t('panel.usedOf', { used: formatBytes(used), total: formatBytes(space.totalBytes) }) }}</p>
+          <div class="disk-main">
+            <RadialMeter
+              :value="used / space.totalBytes"
+              :display="`${percent} %`"
+              :caption="t('panel.usedShort')"
+              :label="`${t('panel.disk')}: ${t('panel.usedOf', { used: formatBytes(used), total: formatBytes(space.totalBytes) })}`"
+              :tone="diskTone"
+              :size="124"
+            />
+            <div class="disk-text">
+              <p class="big">{{ t('panel.free', { size: formatBytes(space.freeBytes) }) }}</p>
+              <p class="muted">{{ t('panel.usedOf', { used: formatBytes(used), total: formatBytes(space.totalBytes) }) }}</p>
+            </div>
           </div>
-          <div class="bar thick" aria-hidden="true"><span :style="{ width: `${percent}%` }" /></div>
         </template>
         <p v-else-if="!readable" class="muted">{{ status?.issues[0]?.message ? serverText(status.issues[0].message) : t('panel.checkingDisk') }}</p>
         <dl class="kv">
@@ -143,6 +174,7 @@ onBeforeUnmount(() => {
       </section>
     </div>
 
+    <SystemResources />
     <RecentGrid v-if="!unreachable && readable" />
   </div>
 </template>
@@ -276,6 +308,38 @@ h2 {
   color: var(--warn);
 }
 
+.okc {
+  color: var(--ok);
+}
+
+.backup-btn.ok {
+  color: var(--ok);
+}
+
+.backup-btn.ok:hover,
+.backup-btn.ok[aria-expanded='true'] {
+  background: var(--ok-soft);
+  border-color: transparent;
+}
+
+.backup.ok {
+  border-color: var(--border);
+}
+
+.backup.ok::before {
+  background: var(--ok-soft);
+}
+
+.backup.ok .backup-text strong {
+  color: var(--ok);
+}
+
+.backup-link {
+  align-self: flex-start;
+  margin-top: 2px;
+  font-weight: 600;
+}
+
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -296,6 +360,19 @@ h2 {
 
 .title .chip {
   margin-left: auto;
+}
+
+.disk-main {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.disk-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .big {
