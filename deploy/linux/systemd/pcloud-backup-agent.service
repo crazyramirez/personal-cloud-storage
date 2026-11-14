@@ -9,6 +9,10 @@
 [Unit]
 Description=Personal Cloud Storage: agente de montaje del disco de copia
 After=local-fs.target
+# Sin límite de arranques: una sincronización hace varias peticiones seguidas (montar, desmontar,
+# reintentos) y el límite por defecto (5 en 10 s) dejaría el .path en fallo y el disco montado.
+# No puede entrar en bucle: el agente siempre vacía el buzón y termina con éxito.
+StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot

@@ -429,9 +429,9 @@ export async function freeBytes(root: string): Promise<{ free: number; total: nu
   return { free: info.bavail * info.bsize, total: info.blocks * info.bsize };
 }
 
-/** Margen que se deja libre siempre en el disco de copia. */
+/** Margen que se deja libre siempre en el disco de copia: 0,5 % del total, entre 64 MiB y 4 GiB. */
 export function reserveFor(total: number): number {
-  return Math.max(1024 ** 3, Math.round(total * 0.01));
+  return Math.min(4 * 1024 ** 3, Math.max(64 * 1024 ** 2, Math.round(total * 0.005)));
 }
 
 /**
