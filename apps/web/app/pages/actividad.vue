@@ -10,6 +10,7 @@ const FILTERS = computed<Array<{ value: string; label: string }>>(() => [
   { value: 'trash.', label: t('activity.filterTrash') },
   { value: 'auth.', label: t('activity.filterAuth') },
   { value: 'users.', label: t('activity.filterUsers') },
+  { value: 'share.', label: t('activity.filterShares') },
 ]);
 
 /** Texto de una acción de auditoría: «auth.passkey.login» → activity.authPasskeyLogin (si no hay, la acción tal cual). */
@@ -62,6 +63,8 @@ function icon(action: string): IconName {
   if (action.startsWith('auth.passkey')) return 'fingerprint';
   if (action.startsWith('auth') || action.startsWith('setup')) return 'lock';
   if (action.startsWith('users')) return 'users';
+  if (action === 'share.download') return 'download';
+  if (action.startsWith('share')) return 'link';
   if (action.startsWith('trash')) return 'trash';
   if (action === 'fs.upload') return 'upload';
   if (action === 'fs.download' || action === 'fs.zip') return 'download';
@@ -89,6 +92,19 @@ function prettyDetail(detail: string): string {
   }
   if ((m = detail.match(/^usuario (\d+)$/))) return t('activity.detailUser', { id: m[1]! });
   if (detail === 'contraseña incorrecta') return t('activity.detailWrongPassword');
+  if (/^enlace [a-z0-9]{12}( · |$)/.test(detail)) {
+    return detail
+      .split(' · ')
+      .map((part) => {
+        let p: RegExpMatchArray | null;
+        if ((p = part.match(/^enlace ([a-z0-9]{12})$/))) return t('activity.detailShare', { id: p[1]! });
+        if ((p = part.match(/^(\d+) d$/))) return t('activity.detailDays', { n: Number(p[1]) });
+        if (part === 'con contraseña') return t('activity.detailWithPassword');
+        if ((p = part.match(/^máx\. (\d+) descargas$/))) return t('activity.detailMaxDownloads', { n: Number(p[1]) });
+        return part;
+      })
+      .join(' · ');
+  }
   if (detail === 'llave desconocida') return t('activity.detailUnknownKey');
   return detail;
 }

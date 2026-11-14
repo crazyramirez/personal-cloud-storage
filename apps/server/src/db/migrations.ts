@@ -137,4 +137,29 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    version: 4,
+    name: 'enlaces para compartir con invitados',
+    sql: `
+      -- Enlaces de solo lectura para personas sin cuenta (ADR-0018). token_hash = SHA-256 del token;
+      -- el token en claro solo existe en el enlace. path = ruta del cliente del archivo o carpeta.
+      CREATE TABLE shares (
+        id             TEXT PRIMARY KEY,
+        token_hash     TEXT NOT NULL UNIQUE,
+        path           TEXT NOT NULL,
+        kind           TEXT NOT NULL CHECK (kind IN ('file', 'dir')),
+        name           TEXT NOT NULL,
+        created_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at     TEXT NOT NULL,
+        expires_at     TEXT NOT NULL,
+        revoked_at     TEXT,
+        password_hash  TEXT,
+        max_downloads  INTEGER CHECK (max_downloads IS NULL OR max_downloads > 0),
+        downloads      INTEGER NOT NULL DEFAULT 0,
+        bytes_sent     INTEGER NOT NULL DEFAULT 0,
+        last_access_at TEXT
+      );
+      CREATE INDEX shares_expires ON shares(expires_at);
+    `,
+  },
 ];

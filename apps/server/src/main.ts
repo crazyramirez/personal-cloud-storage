@@ -7,7 +7,7 @@
  * STORAGE_UNAVAILABLE hasta que el StorageGuardian vea el volumen READY (spec §3.4.7).
  */
 
-import { access, readFile } from 'node:fs/promises';
+import { access, readFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { issueSetupToken, ownerExists, purgeExpiredSessions } from './auth/sessions.ts';
@@ -19,6 +19,9 @@ import { LinuxDiskLister } from './backup/disks.ts';
 import { BackupService, type BackupLogger } from './backup/service.ts';
 import { buildApp } from './http/app.ts';
 import { ResourceMonitor } from './system/resources.ts';
+import { FileGatewayAgent, GUEST_SOCKET, ShareGateway, type GatewayLogger } from './share/gateway.ts';
+import { buildGuestApp } from './share/guest-app.ts';
+import { ShareStore } from './share/store.ts';
 import { MediaService } from './media/service.ts';
 import { FsOperations } from './storage/operations.ts';
 import { SerialQueue } from './storage/serial.ts';
@@ -84,8 +87,18 @@ async function main(): Promise<void> {
   });
   const resources = new ResourceMonitor();
   resources.start();
-  const app = await buildApp({ config, db, guardian, uploads, operations, media, release, backup, resources });
+  // Enlaces para invitados (ADR-0018): Funnel solo se publica mientras haya alguno activo.
+  const shareStore = new ShareStore(db);
+  let gatewayLog: GatewayLogger = console as unknown as GatewayLogger;
+  const gateway = new ShareGateway({
+    agent: new FileGatewayAgent(),
+    activeCount: () => shareStore.countActive(new Date()),
+    log: { info: (o, m) => gatewayLog.info(o, m), warn: (o, m) => gatewayLog.warn(o, m) },
+  });
+  const app = await buildApp({ config, db, guardian, uploads, operations, media, release, backup, resources, shares: { store: shareStore, gateway } });
   backupLog = app.log;
+  gatewayLog = app.log;
+  const guest = await buildGuestApp({ db, store: shareStore, guardian, logLevel: config.server.logLevel, onShareChanged: () => void gateway.reconcile() });
   app.log.info({ ffmpeg: tools.ffmpeg !== null, office: tools.soffice !== null, hwEncoder: tools.hwEncoder }, 'visores');
 
   // Reconciliar el diario de subidas cada vez que el volumen pasa a READY (spec §3.4.9): primero
@@ -99,9 +112,11 @@ async function main(): Promise<void> {
   });
   guardian.start(config.storage.healthCheckIntervalSeconds * 1000);
   backup.start().catch((error: unknown) => app.log.error({ err: error }, 'no se pudo iniciar la copia de seguridad'));
+  gateway.start();
 
   const housekeeping = setInterval(() => {
     purgeExpiredSessions(db, new Date());
+    shareStore.purge(new Date());
     if (guardian.current.state === 'READY') {
       uploads.cleanupExpired().catch((error: unknown) => app.log.warn({ err: error }, 'no se pudieron limpiar subidas caducadas'));
       operations.purgeExpired().catch((error: unknown) => app.log.warn({ err: error }, 'no se pudo vaciar la papelera caducada'));
@@ -122,12 +137,12 @@ async function main(): Promise<void> {
     app.log.info(`${signal}: cerrando`);
     const force = setTimeout(() => process.exit(1), 15_000);
     force.unref();
-    app
-      .close()
+    Promise.all([app.close(), guest.close()])
       .catch((error: unknown) => app.log.error({ err: error }, 'error al cerrar'))
       .finally(() => {
         clearInterval(housekeeping);
         backup.stop();
+        gateway.stop();
         resources.stop();
         guardian.stop();
         db.close();
@@ -138,6 +153,15 @@ async function main(): Promise<void> {
   process.on('SIGINT', () => shutdown('SIGINT'));
 
   await app.listen({ host: config.server.host, port: config.server.port });
+  // La puerta de invitados escucha SOLO en un socket Unix (pcloud 0600 en un directorio 0700): a
+  // Internet llega únicamente por Funnel, y solo mientras haya enlaces activos.
+  if (await access(path.dirname(GUEST_SOCKET)).then(() => true, () => false)) {
+    await unlink(GUEST_SOCKET).catch(() => undefined); // socket de un arranque anterior
+    await guest.listen({ path: GUEST_SOCKET });
+    app.log.info('puerta de invitados lista (socket local)');
+  } else {
+    app.log.warn('puerta de invitados sin instalar (pcloud-install-share.sh): los enlaces no serán accesibles desde Internet');
+  }
   app.log.info({ release, node: process.version, volume: guardian.current.state }, 'servidor en marcha');
 }
 

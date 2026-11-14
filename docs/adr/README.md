@@ -19,6 +19,7 @@ Formato: Contexto → Decisión → Consecuencias → Alternativas. Un ADR acept
 | [0013](0013-disco-que-no-responde.md) | Detección de un disco que deja de responder | Aceptado |
 | [0016](0016-acceso-remoto-tailscale.md) | Acceso desde Internet por Tailscale (VPN privada, sin abrir puertos) | Aceptado |
 | [0017](0017-copia-de-seguridad-disco-externo.md) | Copia de seguridad en un disco USB externo (espejo con archivo, agente root mínimo) | Aceptado |
+| [0018](0018-enlaces-para-invitados.md) | Enlaces para compartir con invitados (puerta de invitados por Tailscale Funnel, solo mientras hay enlaces) | Aceptado |
 
 ## Pendientes
 

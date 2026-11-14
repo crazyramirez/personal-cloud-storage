@@ -1,0 +1,12 @@
+# /etc/systemd/system/pcloud-share-agent.path — despierta al agente de la puerta de invitados
+# cuando pcloud.service deja una petición (ADR-0018). Instalado por pcloud-install-share.sh.
+
+[Unit]
+Description=Personal Cloud Storage: peticiones de la puerta de invitados (Tailscale Funnel)
+
+[Path]
+DirectoryNotEmpty=/var/lib/pcloud/share-agent/inbox
+Unit=pcloud-share-agent.service
+
+[Install]
+WantedBy=paths.target

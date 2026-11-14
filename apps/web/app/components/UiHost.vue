@@ -41,6 +41,7 @@ watch(() => route.fullPath, () => {
   <PromptDialog v-if="dialog?.kind === 'prompt'" :options="dialog.options" @done="settle" />
   <ConfirmDialog v-else-if="dialog?.kind === 'confirm'" :options="dialog.options" @done="settle" />
   <FolderPickerDialog v-else-if="dialog?.kind === 'folder'" :options="dialog.options" @done="settle" />
+  <ShareDialog v-else-if="dialog?.kind === 'share'" :options="dialog.options" @done="settle" />
 
   <div ref="stack" class="toasts" aria-live="polite" aria-atomic="false">
     <div v-for="item in toasts" :key="item.id" class="toast" :class="`t-${item.tone}`" role="status">

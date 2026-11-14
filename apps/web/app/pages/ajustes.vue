@@ -325,6 +325,7 @@ async function installApp(): Promise<void> {
     </section>
 
     <BackupSettings v-if="isOwner" />
+    <SharesSettings v-if="isOwner" />
 
     <DiskSpeedTest v-if="isOwner" />
 

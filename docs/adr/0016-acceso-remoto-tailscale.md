@@ -1,6 +1,6 @@
 # ADR-0016 — Acceso desde Internet por Tailscale (VPN privada)
 
-**Estado:** Aceptado · 2026-11-14 · Complementa [ADR-0011](0011-https-lan-caddy.md)
+**Estado:** Aceptado · 2026-11-14 · Complementa [ADR-0011](0011-https-lan-caddy.md) · Sustituido en parte por [ADR-0018](0018-enlaces-para-invitados.md) (única excepción a «nunca Funnel»: la puerta de invitados)
 
 ## Contexto
 

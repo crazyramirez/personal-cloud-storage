@@ -11,6 +11,8 @@
  * Copia de seguridad (discos simulados, sin montar nada real):
  *   /__dev/backup-connect · /__dev/backup-other · /__dev/backup-fat · /__dev/backup-unplug
  *   (el disco de copia simulado es una carpeta temporal; /__dev/slow también ralentiza la copia)
+ * Enlaces para compartir: la puerta de invitados se sirve en /s/… de este mismo servidor.
+ *   /__dev/funnel-deny (Funnel sin permitir en Tailscale) · /__dev/funnel-allow
  */
 
 import { createReadStream } from 'node:fs';
@@ -24,6 +26,9 @@ import type { DiskLister, ExternalDisk } from '../../src/backup/disks.ts';
 import { BackupService } from '../../src/backup/service.ts';
 import { buildApp } from '../../src/http/app.ts';
 import { ResourceMonitor } from '../../src/system/resources.ts';
+import { ShareGateway, type AgentReply, type GatewayAgent } from '../../src/share/gateway.ts';
+import { buildGuestApp } from '../../src/share/guest-app.ts';
+import { ShareStore } from '../../src/share/store.ts';
 import { createHarness } from './harness.ts';
 
 const TYPES: Record<string, string> = {
@@ -94,7 +99,23 @@ await backup.start(1000);
 const resources = new ResourceMonitor();
 resources.start();
 
-const app = await buildApp({ config: harness.config, db: harness.db, guardian: harness.gate, uploads: harness.uploads({ chunkSize: 1024 * 1024, maxChunkSize: 16 * 1024 * 1024, checkpointBytes: 8 * 1024 * 1024 }), logger: false, backup, resources });
+// Puerta de invitados simulada: «Funnel» responde al instante con la dirección de este servidor.
+let funnelAllowed = true;
+const devGatewayAgent: GatewayAgent = {
+  ready: async () => true,
+  request: async (action): Promise<AgentReply> => {
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    if (action === 'on' && !funnelAllowed) return { ok: false, code: 'FUNNEL_NOT_ALLOWED', enableUrl: 'https://login.tailscale.com/f/funnel?node=dev123' };
+    return { ok: true, code: action === 'on' ? 'ON' : 'OFF', url: action === 'on' ? `http://127.0.0.1:${port}` : undefined };
+  },
+};
+const shareStore = new ShareStore(harness.db);
+const gateway = new ShareGateway({ agent: devGatewayAgent, activeCount: () => shareStore.countActive(new Date()), log: { info: () => undefined, warn: () => undefined } });
+gateway.start(5000);
+const guest = await buildGuestApp({ db: harness.db, store: shareStore, guardian: harness.gate, logger: false, onShareChanged: () => void gateway.reconcile() });
+await guest.ready();
+
+const app = await buildApp({ config: harness.config, db: harness.db, guardian: harness.gate, uploads: harness.uploads({ chunkSize: 1024 * 1024, maxChunkSize: 16 * 1024 * 1024, checkpointBytes: 8 * 1024 * 1024 }), logger: false, backup, resources, shares: { store: shareStore, gateway } });
 await app.ready();
 
 async function sendFile(response: http.ServerResponse, file: string, status = 200): Promise<boolean> {
@@ -122,6 +143,10 @@ const server = http.createServer((request, response) => {
     app.routing(request, response);
     return;
   }
+  if (url.pathname.startsWith('/s/') || url.pathname === '/robots.txt') {
+    guest.routing(request, response);
+    return;
+  }
   if (url.pathname.startsWith('/__dev/')) {
     const action = url.pathname.slice('/__dev/'.length);
     if (action === 'disconnect') harness.gate.disconnect();
@@ -132,6 +157,8 @@ const server = http.createServer((request, response) => {
     else if (action === 'backup-other') simulated = [simDisk('FFFF-0000', 'OTRO')];
     else if (action === 'backup-fat') simulated = [simDisk('1111-2222', 'PENDRIVE', 'vfat')];
     else if (action === 'backup-unplug') simulated = [];
+    else if (action === 'funnel-deny') funnelAllowed = false;
+    else if (action === 'funnel-allow') funnelAllowed = true;
     response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' }).end(`volumen: ${harness.gate.state} (generación ${harness.gate.generation})\n`);
     return;
   }

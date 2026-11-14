@@ -75,10 +75,18 @@ export interface PickFolderOptions {
   forbidden?: readonly string[];
 }
 
+export interface ShareOptions {
+  /** Ruta del cliente del archivo o carpeta. */
+  path: string;
+  name: string;
+  kind: 'file' | 'dir';
+}
+
 type DialogState =
   | { kind: 'prompt'; options: PromptOptions; resolve: (value: string | null) => void }
   | { kind: 'confirm'; options: ConfirmOptions; resolve: (value: boolean) => void }
-  | { kind: 'folder'; options: PickFolderOptions; resolve: (value: string | null) => void };
+  | { kind: 'folder'; options: PickFolderOptions; resolve: (value: string | null) => void }
+  | { kind: 'share'; options: ShareOptions; resolve: (value: null) => void };
 
 const dialog = shallowRef<DialogState | null>(null);
 
@@ -97,6 +105,13 @@ export function confirmDialog(options: ConfirmOptions): Promise<boolean> {
 export function pickFolder(options: PickFolderOptions): Promise<string | null> {
   return new Promise((resolve) => {
     dialog.value = { kind: 'folder', options, resolve };
+  });
+}
+
+/** Diálogo para crear un enlace de invitado (solo el propietario). */
+export function shareDialog(options: ShareOptions): Promise<null> {
+  return new Promise((resolve) => {
+    dialog.value = { kind: 'share', options, resolve };
   });
 }
 

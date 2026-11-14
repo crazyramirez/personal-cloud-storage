@@ -207,6 +207,16 @@ Diseño: [ADR-0017](adr/0017-copia-de-seguridad-disco-externo.md). Lo prepara el
 - **Desmontar a mano** (si la web no puede): `sudo umount /srv/pcloud-backup`. Comprobar la protección: `bash /opt/pcloud/current/deploy/linux/setup/pcloud-mountpoint-guard.sh check --mountpoint /srv/pcloud-backup`.
 - **Alimentación:** en la Raspberry Pi, el disco de copia con fuente propia o en un hub alimentado.
 
+## 8 ter. Enlaces para compartir con invitados
+
+Ver [ADR-0018](adr/0018-enlaces-para-invitados.md). En Archivos, el propietario abre el menú de un archivo o carpeta, elige «Compartir enlace…» y envía el enlace.
+
+- **Requisito (una vez):** Tailscale instalado y con sesión iniciada en la Pi (§4 ter), «HTTPS Certificates» activado y Funnel permitido para el equipo. La primera vez que se crea un enlace, la app muestra el enlace de Tailscale para permitirlo. A mano: en la consola de Tailscale, Access controls → `nodeAttrs` con `"attr": ["funnel"]` para el equipo.
+- **Instalación:** `sudo bash /opt/pcloud/current/deploy/linux/setup/pcloud-install-share.sh --execute` (lo hace `install.sh`). Después, `sudo systemctl restart pcloud.service` para que abra el socket.
+- **Comprobar:** `tailscale funnel status`. Sin enlaces activos debe salir vacío. Con enlaces, `https://<host>.<tailnet>.ts.net:8443` → `unix:/var/lib/pcloud/share-agent/guest.sock`.
+- **Apagar todo ya:** retirar los enlaces en Ajustes → Enlaces compartidos, o `sudo tailscale funnel --https=8443 off`. Se vuelve a encender si queda algún enlace activo. Para quitar la función: `pcloud-install-share.sh --remove --execute`.
+- **Registro del agente:** `journalctl -u pcloud-share-agent --no-pager -n 30`.
+
 ## 9. Antes de confiar datos únicos
 
 1. **Copia de seguridad:** el sistema no hace copias por sí solo. Ten un segundo disco u otra copia de tus datos.

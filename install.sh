@@ -370,6 +370,9 @@ SETUP="$APP/deploy/linux/setup"   # desde aquí, los scripts de la release activ
 # ── 6. Servicio ───────────────────────────────────────────────────────────────────────────────
 
 step "Arrancando el servicio"
+# Antes del servicio: crea el directorio donde pcloud.service abre el socket de invitados.
+run "preparar la puerta de invitados (enlaces para compartir)" bash "$SETUP/pcloud-install-share.sh" --execute
+ok "Enlaces para compartir listos (nada publicado en Internet hasta que crees uno)"
 run "instalar pcloud.service" bash "$SETUP/pcloud-install-service.sh" --execute
 ok "pcloud.service activo (arranca solo con el equipo, aunque no haya disco)"
 run "preparar la copia de seguridad en disco externo" bash "$SETUP/pcloud-install-backup.sh" --execute

@@ -751,6 +751,8 @@ function itemMenu(entry: FsEntry): MenuItem[] {
     { label: t('explorer.duplicate'), icon: 'copy', disabled: w || !entry.portable, hint: w ? noWrite() : t('explorer.notPortable'), run: () => void duplicate(entry) },
     { label: t('explorer.rename'), icon: 'edit', shortcut: 'F2', disabled: w, hint: noWrite(), separator: true, run: () => void rename(entry) },
     { label: t('explorer.copyLink'), icon: 'link', run: () => void copyLink(entry) },
+    // Enlace para invitados sin cuenta (ADR-0018): solo el propietario.
+    ...(isOwner.value ? [{ label: t('shares.menu'), icon: 'globe' as const, run: () => void shareDialog({ path: pathOf(entry.name), name: entry.name, kind: entry.type }) }] : []),
     // «Detalles» solo cuando el panel lateral no se ve (pantalla estrecha o panel cerrado).
     ...(!detailsVisible.value ? [{ label: t('explorer.details'), icon: 'info' as const, run: () => showDetails(entry) }] : []),
     { label: t('explorer.moveToTrash'), icon: 'trash', shortcut: t('explorer.keyDelete'), danger: true, disabled: w, hint: noWrite(), separator: true, run: () => void trash([entry]) },

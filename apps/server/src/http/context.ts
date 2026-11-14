@@ -44,3 +44,22 @@ export function contentDisposition(name: string, inline = false): string {
   const encoded = encodeURIComponent(name).replace(/['()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
   return `${inline ? 'inline' : 'attachment'}; filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
+
+/** Interpreta `Range: bytes=a-b` (un solo rango). null = sin rango válido que aplicar. */
+export function parseRange(header: string | undefined, size: number): { start: number; end: number } | 'unsatisfiable' | null {
+  if (header === undefined) return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (match !== null && size === 0) return 'unsatisfiable';
+  if (match === null) return null; // multirrango u otra unidad: se sirve completo
+  const [, rawStart = '', rawEnd = ''] = match;
+  if (rawStart === '' && rawEnd === '') return null;
+  if (rawStart === '') {
+    const suffix = Number(rawEnd);
+    if (suffix === 0) return 'unsatisfiable';
+    return { start: Math.max(0, size - suffix), end: size - 1 };
+  }
+  const start = Number(rawStart);
+  const end = rawEnd === '' ? size - 1 : Math.min(Number(rawEnd), size - 1);
+  if (!Number.isSafeInteger(start) || start >= size || end < start) return 'unsatisfiable';
+  return { start, end };
+}

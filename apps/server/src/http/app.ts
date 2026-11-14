@@ -64,11 +64,14 @@ import { SerialQueue } from '../storage/serial.ts';
 import { volumeSpace } from '../storage/space.ts';
 import { StorageUnavailableError, toPublicStatus } from '../storage/storage-guardian.ts';
 import type { UploadManager } from '../storage/uploads.ts';
-import { contentDisposition, type GuardianLike, type RouteContext } from './context.ts';
+import { contentDisposition, parseRange, type GuardianLike, type RouteContext } from './context.ts';
 import type { BackupService } from '../backup/service.ts';
 import type { ResourceMonitor } from '../system/resources.ts';
 import { registerAccountRoutes } from './routes-account.ts';
 import { registerBackupRoutes } from './routes-backup.ts';
+import { registerShareRoutes } from './routes-shares.ts';
+import type { ShareGateway } from '../share/gateway.ts';
+import type { ShareStore } from '../share/store.ts';
 import { registerSystemRoutes } from './routes-system.ts';
 import { registerFileRoutes } from './routes-files.ts';
 import { registerMediaRoutes } from './routes-media.ts';
@@ -102,6 +105,8 @@ export interface AppDeps {
   readonly backup?: BackupService;
   /** Recursos del equipo para el panel (opcional). */
   readonly resources?: ResourceMonitor;
+  /** Enlaces para compartir con invitados (opcional: sin ellos no hay rutas /shares). */
+  readonly shares?: { readonly store: ShareStore; readonly gateway: ShareGateway };
 }
 
 const API = '/api/v1';
@@ -186,25 +191,6 @@ function shapeOf(error: unknown): ErrorShape {
   return { status: 500, code: 'INTERNAL', message: 'Error interno', retryable: false };
 }
 
-
-/** Interpreta `Range: bytes=a-b` (un solo rango). null = sin rango válido que aplicar. */
-function parseRange(header: string | undefined, size: number): { start: number; end: number } | 'unsatisfiable' | null {
-  if (header === undefined) return null;
-  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
-  if (match !== null && size === 0) return 'unsatisfiable';
-  if (match === null) return null; // multirrango u otra unidad: se sirve completo
-  const [, rawStart = '', rawEnd = ''] = match;
-  if (rawStart === '' && rawEnd === '') return null;
-  if (rawStart === '') {
-    const suffix = Number(rawEnd);
-    if (suffix === 0) return 'unsatisfiable';
-    return { start: Math.max(0, size - suffix), end: size - 1 };
-  }
-  const start = Number(rawStart);
-  const end = rawEnd === '' ? size - 1 : Math.min(Number(rawEnd), size - 1);
-  if (!Number.isSafeInteger(start) || start >= size || end < start) return 'unsatisfiable';
-  return { start, end };
-}
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const { config, db, guardian, uploads } = deps;
@@ -506,6 +492,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerMediaRoutes(app, ctx);
   registerAccountRoutes(app, ctx);
   if (deps.backup !== undefined) registerBackupRoutes(app, ctx, deps.backup);
+  if (deps.shares !== undefined) registerShareRoutes(app, ctx, deps.shares.store, deps.shares.gateway);
   registerSystemRoutes(app, ctx);
   const resources = deps.resources;
   if (resources !== undefined) {
