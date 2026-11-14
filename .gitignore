@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# nuxt generate crea apps/web/dist como enlace simbólico: «dist/» no cubre enlaces
+/apps/web/dist
 .output/
 .nuxt/
 coverage/

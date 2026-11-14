@@ -54,6 +54,13 @@ mapfile -t FILES < <(
     apps packages deploy tests install.sh package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json tsconfig.base.json .node-version \
     | sort -u
 )
+# Solo ficheros regulares: enlaces simbólicos o directorios (p. ej. apps/web/dist, que crea Nuxt)
+# no forman parte de la release.
+REGULAR=()
+for file in "${FILES[@]}"; do
+  if [ -f "$file" ] && [ ! -L "$file" ]; then REGULAR+=("$file"); fi
+done
+FILES=("${REGULAR[@]}")
 [ "${#FILES[@]}" -gt 0 ] || { echo "Nada que empaquetar" >&2; exit 1; }
 for file in "${FILES[@]}"; do
   # -I: los binarios (PNG, fuentes…) no cuentan; solo ficheros de texto.
