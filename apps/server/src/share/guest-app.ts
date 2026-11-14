@@ -9,6 +9,7 @@
  *   POST /s/<token>                desbloquear con la contraseña (formulario)
  *   GET  /s/<token>/f[?p=/a.mkv]   descargar un archivo
  *   GET  /s/<token>/zip[?p=/sub]   descargar una carpeta como ZIP
+ *   GET  /og-image.jpg             imagen de la vista previa (WhatsApp, Telegram…)
  *   GET  /robots.txt
  *
  * No existe aquí ninguna ruta de la API: ni sesión, ni inicio de sesión, ni escritura, ni listado
@@ -21,7 +22,8 @@
  * descargas simultáneas limitadas · sin disco listo, «no disponible ahora» (nunca una carpeta vacía).
  */
 
-import { createReadStream } from 'node:fs';
+import { createReadStream, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { randomBytes, createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import cookie from '@fastify/cookie';
@@ -118,7 +120,27 @@ const TEXT = {
 type Lang = keyof typeof TEXT;
 type Texts = (typeof TEXT)[Lang];
 
-const langOf = (request: FastifyRequest): Lang => (/^\s*es\b/i.test(String(request.headers['accept-language'] ?? '')) ? 'es' : 'en');
+/** Idioma del invitado. Sin cabecera (bots de vista previa), español: el idioma del propietario. */
+function langOf(request: FastifyRequest): Lang {
+  const header = String(request.headers['accept-language'] ?? '').trim();
+  return header === '' || /^es\b/i.test(header) ? 'es' : 'en';
+}
+
+/** Imagen de la vista previa de los enlaces (1200×630, generada con GPT Image a partir del icono de la app). */
+const OG_IMAGE = readFileSync(path.join(import.meta.dirname, 'og-image.jpg'));
+
+/** Bots que generan la vista previa de un enlace al pegarlo en un chat (no buscadores). */
+const PREVIEW_BOTS = /facebookexternalhit|WhatsApp|TelegramBot|Twitterbot|Slackbot|Discordbot|LinkedInBot|SkypeUriPreview|Signal|iMessage|Applebot|Google-PageRenderer/i;
+const isPreviewBot = (request: FastifyRequest): boolean => PREVIEW_BOTS.test(String(request.headers['user-agent'] ?? ''));
+
+/** Origen público (https://<host>.<tailnet>.ts.net:8443) para las URL absolutas de og:image. */
+function originOf(request: FastifyRequest): string | null {
+  const host = String(request.headers['x-forwarded-host'] ?? request.headers.host ?? '').split(',')[0]?.trim() ?? '';
+  if (!/^[a-z0-9.-]{1,253}(:\d{1,5})?$/i.test(host)) return null;
+  const forwarded = String(request.headers['x-forwarded-proto'] ?? '').split(',')[0]?.trim();
+  const proto = forwarded === 'http' || forwarded === 'https' ? forwarded : /\.ts\.net(:\d+)?$/i.test(host) ? 'https' : 'http';
+  return `${proto}://${host.toLowerCase()}`;
+}
 
 const esc = (value: string): string =>
   value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] as string);
@@ -189,10 +211,41 @@ interface PageInput {
   readonly lang: Lang;
   readonly title: string;
   readonly body: string;
+  /** Texto de la vista previa (og:description). */
+  readonly description?: string;
 }
 
-function page({ lang, title, body }: PageInput, nonce: string): string {
-  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>${esc(title)}</title><style nonce="${nonce}">${STYLE}</style></head><body><main><div class="brand">${svg(ICON.cloud, 18)}Personal Cloud Storage</div>${body}</main><footer>${esc(TEXT[lang].footer)}</footer></body></html>`;
+/** Etiquetas Open Graph / Twitter: la tarjeta que se ve al pegar el enlace en un chat. */
+function previewTags(input: PageInput, origin: string | null): string {
+  const title = `${input.title} · Personal Cloud Storage`;
+  const description = input.description ?? TEXT[input.lang].footer;
+  const image = origin === null ? null : `${origin}/og-image.jpg`;
+  const properties: Array<[string, string]> = [
+    ['og:type', 'website'],
+    ['og:site_name', 'Personal Cloud Storage'],
+    ['og:title', title],
+    ['og:description', description],
+    ['og:locale', input.lang === 'es' ? 'es_ES' : 'en_US'],
+  ];
+  if (image !== null) {
+    properties.push(['og:image', image], ['og:image:secure_url', image], ['og:image:type', 'image/jpeg'], ['og:image:width', '1200'], ['og:image:height', '630'], ['og:image:alt', 'Personal Cloud Storage']);
+  }
+  const names: Array<[string, string]> = [
+    ['description', description],
+    ['twitter:card', image === null ? 'summary' : 'summary_large_image'],
+    ['twitter:title', title],
+    ['twitter:description', description],
+  ];
+  if (image !== null) names.push(['twitter:image', image]);
+  return [
+    ...properties.map(([property, content]) => `<meta property="${property}" content="${esc(content)}">`),
+    ...names.map(([name, content]) => `<meta name="${name}" content="${esc(content)}">`),
+  ].join('');
+}
+
+function page(input: PageInput, nonce: string, origin: string | null): string {
+  const { lang, title, body } = input;
+  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><meta name="theme-color" content="#0f1115"><title>${esc(title)}</title>${previewTags(input, origin)}<style nonce="${nonce}">${STYLE}</style></head><body><main><div class="brand">${svg(ICON.cloud, 18)}Personal Cloud Storage</div>${body}</main><footer>${esc(TEXT[lang].footer)}</footer></body></html>`;
 }
 
 function messageCard(icon: string, title: string, hint: string, warn = false): string {
@@ -285,10 +338,12 @@ export async function buildGuestApp(deps: GuestDeps): Promise<FastifyInstance> {
   });
 
   const nonceOf = (reply: FastifyReply): string => (reply as unknown as { pcloudNonce: string }).pcloudNonce;
+  const origins = new WeakMap<FastifyReply, string | null>();
 
   app.addHook('onRequest', async (request, reply) => {
     const nonce = randomBytes(16).toString('base64');
     (reply as unknown as { pcloudNonce: string }).pcloudNonce = nonce;
+    origins.set(reply, originOf(request));
     reply
       .header('cache-control', 'no-store')
       .header('x-content-type-options', 'nosniff')
@@ -303,7 +358,7 @@ export async function buildGuestApp(deps: GuestDeps): Promise<FastifyInstance> {
   });
 
   const sendHtml = (reply: FastifyReply, status: number, input: PageInput): FastifyReply =>
-    reply.status(status).header('content-type', 'text/html; charset=utf-8').send(page(input, nonceOf(reply)));
+    reply.status(status).header('content-type', 'text/html; charset=utf-8').send(page(input, nonceOf(reply), origins.get(reply) ?? null));
 
   const errorPage = (request: FastifyRequest, reply: FastifyReply, error: unknown): FastifyReply => {
     const lang = langOf(request);
@@ -333,7 +388,8 @@ export async function buildGuestApp(deps: GuestDeps): Promise<FastifyInstance> {
       notFound: messageCard(ICON.alert, t.notFound, t.goneHint, true),
     }[failure.kind];
     const title = { gone: t.gone, moved: t.moved, offline: t.offline, busy: t.busy, slow: t.slow, notFound: t.notFound }[failure.kind];
-    return sendHtml(reply, failure.status, { lang, title, body: card });
+    const hint = { gone: t.goneHint, moved: t.movedHint, offline: t.offlineHint, busy: t.busyHint, slow: t.slowHint, notFound: t.goneHint }[failure.kind];
+    return sendHtml(reply, failure.status, { lang, title, body: card, description: hint });
   };
   app.setErrorHandler((error, request, reply) => errorPage(request, reply, error));
   app.setNotFoundHandler((request, reply) => errorPage(request, reply, new GuestHttpError(404, 'notFound')));
@@ -379,7 +435,8 @@ export async function buildGuestApp(deps: GuestDeps): Promise<FastifyInstance> {
     const body = `<section class="card"><div class="hero"><span class="ico">${svg(ICON.lock, 24)}</span><div><h1>${esc(t.locked)}</h1><p class="muted">${esc(t.lockedHint)}</p></div></div>
 <form method="post" action="/s/${token}" autocomplete="off"><label for="pin">${esc(t.password)}</label><input id="pin" name="pin" type="password" required maxlength="128" autofocus>${wrong ? `<p class="err" role="alert">${esc(t.wrong)}</p>` : ''}<button class="btn" type="submit">${esc(t.open)}</button></form>
 <p class="muted small note">${esc(t.until.replace('{date}', when(share.expiresAt, lang)))}</p></section>`;
-    return sendHtml(reply, status, { lang, title: t.locked, body });
+    // La vista previa de un enlace con contraseña no revela el nombre de lo compartido.
+    return sendHtml(reply, status, { lang, title: t.locked, body, description: t.lockedHint });
   };
 
   const metaLine = (share: ShareRow, t: Texts, lang: Lang): string => {
@@ -390,7 +447,32 @@ export async function buildGuestApp(deps: GuestDeps): Promise<FastifyInstance> {
 
   // ── Rutas ────────────────────────────────────────────────────────────────────────────────
 
-  app.get('/robots.txt', async (_request, reply) => reply.header('content-type', 'text/plain; charset=utf-8').send('User-agent: *\nDisallow: /\n'));
+  // Los buscadores no entran; los bots de vista previa de los chats sí (sin ellos no hay tarjeta).
+  const ROBOTS = [
+    'User-agent: facebookexternalhit',
+    'User-agent: WhatsApp',
+    'User-agent: TelegramBot',
+    'User-agent: Twitterbot',
+    'User-agent: Slackbot-LinkExpanding',
+    'User-agent: Discordbot',
+    'User-agent: LinkedInBot',
+    'Allow: /s/',
+    'Allow: /og-image.jpg',
+    '',
+    'User-agent: *',
+    'Disallow: /',
+    '',
+  ].join('\n');
+  app.get('/robots.txt', async (_request, reply) => reply.header('content-type', 'text/plain; charset=utf-8').send(ROBOTS));
+
+  app.get('/og-image.jpg', async (_request, reply) =>
+    reply
+      .header('content-type', 'image/jpeg')
+      .header('content-length', OG_IMAGE.length)
+      .header('cache-control', 'public, max-age=604800')
+      .header('cross-origin-resource-policy', 'cross-origin')
+      .send(OG_IMAGE),
+  );
 
   app.get('/s/:token', async (request, reply) => {
     const { token } = request.params as { token: string };
@@ -399,13 +481,14 @@ export async function buildGuestApp(deps: GuestDeps): Promise<FastifyInstance> {
     const lang = langOf(request);
     const t = TEXT[lang];
     const lease = await guardian.assertReadableVolume();
-    store.touch(share, clock());
+    // Que WhatsApp o Telegram generen la vista previa no es que alguien lo haya abierto.
+    if (!isPreviewBot(request)) store.touch(share, clock());
 
     if (share.kind === 'file') {
       const file = await resolveInside(lease.dataRoot, parseClientPath(share.path), 'file');
       const body = `<section class="card"><p class="muted small">${esc(t.shared)}</p><div class="hero"><span class="ico">${svg(ICON.file, 24)}</span><div><h1>${esc(share.name)}</h1><div class="meta"><span>${bytes(file.stats.size, lang)}</span>${metaLine(share, t, lang)}</div></div></div>
 <div class="actions"><a class="btn" href="${linkTo(token, '/f', null)}" download>${svg(ICON.download)}${esc(t.download)}</a></div></section>`;
-      return sendHtml(reply, 200, { lang, title: share.name, body });
+      return sendHtml(reply, 200, { lang, title: share.name, body, description: `${t.shared} · ${bytes(file.stats.size, lang)} · ${t.until.replace('{date}', when(share.expiresAt, lang))}` });
     }
 
     const segments = targetSegments(share, (request.query as { p?: unknown }).p);
@@ -427,7 +510,7 @@ export async function buildGuestApp(deps: GuestDeps): Promise<FastifyInstance> {
     const body = `<section class="card"><p class="muted small">${esc(t.shared)}</p><div class="hero"><span class="ico">${svg(ICON.folder, 24)}</span><div><h1>${esc(title)}</h1><div class="meta"><span>${esc(t.files(listing.total))}</span>${metaLine(share, t, lang)}</div></div></div>
 ${listing.total > 0 ? `<div class="actions"><a class="btn" href="${linkTo(token, '/zip', rel)}" download>${svg(ICON.download)}${esc(t.downloadAll)}</a></div>` : ''}</section>
 <section class="card">${relParts.length > 0 ? `<nav class="crumbs" aria-label="${esc(t.folder)}">${crumbs.join(svg(ICON.chevron, 14))}</nav>` : ''}${rows.length > 0 ? `<ul>${rows.join('')}</ul>` : `<p class="muted">${esc(t.empty)}</p>`}${listing.total > listing.entries.length ? `<p class="muted small">${esc(t.more(listing.total - listing.entries.length))}</p>` : ''}</section>`;
-    return sendHtml(reply, 200, { lang, title, body });
+    return sendHtml(reply, 200, { lang, title, body, description: `${t.folder} · ${t.shared} · ${t.files(listing.total)} · ${t.until.replace('{date}', when(share.expiresAt, lang))}` });
   });
 
   app.post('/s/:token', async (request, reply) => {

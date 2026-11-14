@@ -216,6 +216,7 @@ Ver [ADR-0018](adr/0018-enlaces-para-invitados.md). En Archivos, el propietario 
 - **Comprobar:** `tailscale funnel status`. Sin enlaces activos debe salir vacío. Con enlaces, `https://<host>.<tailnet>.ts.net:8443` → `unix:/var/lib/pcloud/share-agent/guest.sock`.
 - **Apagar todo ya:** retirar los enlaces en Ajustes → Enlaces compartidos, o `sudo tailscale funnel --https=8443 off`. Se vuelve a encender si queda algún enlace activo. Para quitar la función: `pcloud-install-share.sh --remove --execute`.
 - **Registro del agente:** `journalctl -u pcloud-share-agent --no-pager -n 30`.
+- **Vista previa en los chats:** las páginas llevan Open Graph (`og:image` = `/og-image.jpg`, 1200×630, generada con GPT Image a partir del icono). `robots.txt` deja entrar solo a los bots de vista previa (WhatsApp, Telegram…), no a los buscadores. Con contraseña, la vista previa no muestra el nombre.
 
 ## 9. Antes de confiar datos únicos
 

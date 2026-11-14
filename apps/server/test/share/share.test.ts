@@ -170,7 +170,7 @@ describe('enlaces para compartir (ADR-0018)', () => {
       guest.inject({ method: 'POST', url: `/s/${created.token}`, headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-forwarded-for': ip }, remoteAddress: '127.0.0.1', payload: `pin=${encodeURIComponent(pin)}` });
     const wrong = await post('perro');
     assert.equal(wrong.statusCode, 401);
-    assert.match(wrong.body, /Wrong password/);
+    assert.match(wrong.body, /Contraseña incorrecta/);
     const ok = await post('gato azul');
     assert.equal(ok.statusCode, 303);
     const setCookie = String(ok.headers['set-cookie']);
@@ -201,6 +201,29 @@ describe('enlaces para compartir (ADR-0018)', () => {
     } finally {
       h.gate.reconnect();
     }
+  });
+
+  it('vista previa (WhatsApp, Telegram…): og:image absoluta, sin el nombre si hay contraseña, sin contar como acceso', async () => {
+    const host = { host: 'pi.tail0.ts.net:8443', 'x-forwarded-proto': 'https' };
+    const open = await share({ path: '/Películas/peli.mkv', expiresInDays: 7 });
+    const bot = await visit(`/s/${open.token}`, { ...host, 'user-agent': 'WhatsApp/2.24.1 A' });
+    assert.match(bot.body, /<meta property="og:image" content="https:\/\/pi\.tail0\.ts\.net:8443\/og-image\.jpg">/);
+    assert.match(bot.body, /<meta property="og:title" content="peli\.mkv · Personal Cloud Storage">/);
+    assert.match(bot.body, /<meta name="twitter:card" content="summary_large_image">/);
+    assert.equal(store.get(open.share.id)?.lastAccessAt, null, 'el bot de vista previa no cuenta como acceso');
+
+    const locked = await share({ path: '/Películas/peli.mkv', expiresInDays: 7, password: 'gato azul' });
+    const lockedBot = await visit(`/s/${locked.token}`, { ...host, 'user-agent': 'TelegramBot (like TwitterBot)' });
+    assert.match(lockedBot.body, /og:image/);
+    assert.doesNotMatch(lockedBot.body.replace(/<body>.*$/s, ''), /peli\.mkv/, 'la vista previa no revela el nombre');
+
+    const image = await visit('/og-image.jpg');
+    assert.equal(image.statusCode, 200);
+    assert.equal(image.headers['content-type'], 'image/jpeg');
+    assert.equal(image.rawPayload.subarray(0, 3).toString('hex'), 'ffd8ff');
+    const robots = (await visit('/robots.txt')).body;
+    assert.match(robots, /User-agent: WhatsApp[\s\S]*Allow: \/s\//);
+    assert.match(robots, /User-agent: \*\nDisallow: \//);
   });
 
   it('solo existen las rutas de los enlaces', async () => {
