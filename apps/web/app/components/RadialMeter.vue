@@ -61,7 +61,7 @@ const percent = computed(() => (props.value === null ? undefined : Math.round(Ma
       />
     </svg>
     <div class="center" aria-hidden="true">
-      <strong :style="{ fontSize: `${Math.round(size * 0.2)}px` }">{{ display }}</strong>
+      <strong :style="{ fontSize: `${Math.round(size * (caption ? 0.2 : 0.22))}px` }">{{ display }}</strong>
       <span v-if="caption">{{ caption }}</span>
     </div>
   </div>
@@ -110,7 +110,7 @@ const percent = computed(() => (props.value === null ? undefined : Math.round(Ma
   align-items: center;
   justify-content: center;
   gap: 2px;
-  padding-bottom: 6%;
+  padding-bottom: 4%;
   text-align: center;
 }
 

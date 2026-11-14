@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DiskSpeedResponse, HealthResponse, MediaCapabilities, PasskeyListResponse, PasskeyView, SessionListResponse, SessionView, UserListResponse, UserView } from '@pcloud/contracts';
+import type { HealthResponse, MediaCapabilities, PasskeyListResponse, PasskeyView, SessionListResponse, SessionView, UserListResponse, UserView } from '@pcloud/contracts';
 import { localePreference, setLocalePreference, type LocalePreference } from '~/utils/i18n';
 
 useHead({ title: () => t('settings.pageTitle') });
@@ -185,38 +185,6 @@ async function removeUser(item: UserView): Promise<void> {
 // ── Sistema ─────────────────────────────────────────────────────────────────────────────────
 const health = ref<HealthResponse | null>(null);
 
-// ── Velocidad del disco ─────────────────────────────────────────────────────────────────────
-const speed = ref<DiskSpeedResponse | null>(null);
-const speedBusy = ref(false);
-const speedError = liveText();
-const SPEED_KEY = 'pcloud.diskspeed';
-try {
-  const saved = JSON.parse(localStorage.getItem(SPEED_KEY) ?? 'null') as DiskSpeedResponse | null;
-  if (saved !== null && typeof saved.readMBps === 'number') speed.value = saved;
-} catch {
-  // ignorar
-}
-
-async function runSpeedTest(): Promise<void> {
-  speedBusy.value = true;
-  speedError.value = '';
-  try {
-    speed.value = await api<DiskSpeedResponse>('/system/disk-speed', { method: 'POST', timeoutMs: 240_000 });
-    try {
-      localStorage.setItem(SPEED_KEY, JSON.stringify(speed.value));
-    } catch {
-      // ignorar
-    }
-  } catch (error) {
-    speedError.value = errorText(error instanceof ApiError ? error : null, 'settings.speedFailed');
-  } finally {
-    speedBusy.value = false;
-  }
-}
-
-/** Escala visual: un HDD USB 3 de 2,5" ronda 100-130 MB/s secuencial; 150 = barra llena. */
-const barPercent = (value: number, max: number): number => Math.max(3, Math.min(100, Math.round((value / max) * 100)));
-const verdict = (mbps: number): string => t(mbps >= 80 ? 'settings.verdictGreat' : mbps >= 40 ? 'settings.verdictOk' : mbps >= 15 ? 'settings.verdictSlow' : 'settings.verdictVerySlow');
 const capabilities = ref<MediaCapabilities | null>(null);
 const origin = ref('');
 
@@ -358,34 +326,7 @@ async function installApp(): Promise<void> {
 
     <BackupSettings v-if="isOwner" />
 
-    <section v-if="isOwner" class="card sec" aria-labelledby="s-speed">
-      <header><AppIcon name="gauge" /><h2 id="s-speed">{{ t('settings.diskSpeed') }}</h2></header>
-      <p class="muted">{{ t('settings.diskSpeedIntro') }}</p>
-      <div v-if="speed" class="speed">
-        <div class="meter">
-          <div class="meter-head"><span>{{ t('settings.write') }}</span><strong>{{ formatNumber(speed.writeMBps, 3) }} MB/s</strong></div>
-          <div class="bar"><span :style="{ width: `${barPercent(speed.writeMBps, 150)}%` }" /></div>
-          <span class="muted small">{{ verdict(speed.writeMBps) }}</span>
-        </div>
-        <div class="meter">
-          <div class="meter-head"><span>{{ t('settings.read') }}</span><strong>{{ formatNumber(speed.readMBps, 3) }} MB/s</strong></div>
-          <div class="bar"><span :style="{ width: `${barPercent(speed.readMBps, 150)}%` }" /></div>
-          <span class="muted small">{{ verdict(speed.readMBps) }}</span>
-        </div>
-        <div class="meter">
-          <div class="meter-head"><span>{{ t('settings.randomAccess') }}</span><strong>{{ formatNumber(speed.randomReadIops, 3) }} IOPS</strong></div>
-          <div class="bar"><span :style="{ width: `${barPercent(speed.randomReadIops, 200)}%` }" /></div>
-          <span class="muted small">{{ t('settings.randomHint') }}</span>
-        </div>
-        <p class="muted small">{{ t('settings.measuredAt', { date: formatDate(speed.testedAt), seconds: formatNumber(speed.durationMs / 1000) }) }}</p>
-      </div>
-      <p v-if="speedError" role="alert" class="notice notice-danger">{{ speedError }}</p>
-      <div>
-        <button type="button" class="btn btn-primary" :disabled="speedBusy" @click="runSpeedTest">
-          <span v-if="speedBusy" class="spin" aria-hidden="true" /><AppIcon v-else name="gauge" />{{ speedBusy ? t('settings.measuring') : speed ? t('settings.measureAgain') : t('settings.measure') }}
-        </button>
-      </div>
-    </section>
+    <DiskSpeedTest v-if="isOwner" />
 
     <section class="card sec" aria-labelledby="s-sys">
       <header><AppIcon name="drive" /><h2 id="s-sys">{{ t('settings.server') }}</h2></header>
@@ -488,59 +429,6 @@ h1 {
   display: grid;
   grid-template-columns: 1fr 1fr 140px auto;
   gap: 8px;
-}
-
-.speed {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.meter {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.meter-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-
-.meter-head strong {
-  font-size: 18px;
-  font-variant-numeric: tabular-nums;
-}
-
-.meter .bar {
-  height: 10px;
-  border-radius: 5px;
-  background: var(--track);
-  overflow: hidden;
-}
-
-.meter .bar span {
-  display: block;
-  height: 100%;
-  border-radius: 5px;
-  background: linear-gradient(90deg, var(--accent-btn), #7b4dd6);
-  transition: width 0.6s cubic-bezier(0.2, 0.9, 0.3, 1);
-}
-
-.spin {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .seg {

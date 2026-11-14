@@ -69,6 +69,7 @@ import type { BackupService } from '../backup/service.ts';
 import type { ResourceMonitor } from '../system/resources.ts';
 import { registerAccountRoutes } from './routes-account.ts';
 import { registerBackupRoutes } from './routes-backup.ts';
+import { registerSystemRoutes } from './routes-system.ts';
 import { registerFileRoutes } from './routes-files.ts';
 import { registerMediaRoutes } from './routes-media.ts';
 
@@ -505,6 +506,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerMediaRoutes(app, ctx);
   registerAccountRoutes(app, ctx);
   if (deps.backup !== undefined) registerBackupRoutes(app, ctx, deps.backup);
+  registerSystemRoutes(app, ctx);
   const resources = deps.resources;
   if (resources !== undefined) {
     app.get(`${API}/system/resources`, async (request): Promise<ResourcesResponse> => {

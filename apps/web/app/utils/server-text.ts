@@ -28,6 +28,8 @@ export const EXACT: Record<string, string> = {
   'Solo el propietario puede hacer esto': 'Only the owner can do this',
   // Copia de seguridad (ADR-0017)
   'Hay una copia en curso': 'A backup is in progress',
+  'Ya hay una prueba de red en curso': 'A network test is already running',
+  'La prueba de subida admite como mucho 32 MB por envío': 'The upload test accepts at most 32 MB per request',
   'Ese disco no está conectado': 'That disk isn’t connected',
   'El disco tiene que estar en exFAT o NTFS': 'The disk must be formatted as exFAT or NTFS',
   'La sincronización espera confirmación': 'The sync is waiting for confirmation',

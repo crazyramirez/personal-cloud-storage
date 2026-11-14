@@ -11,6 +11,9 @@ import type { ResourcesResponse } from '@pcloud/contracts';
 
 type Tone = 'accent' | 'ok' | 'warn' | 'danger';
 
+const session = useSession();
+const isOwner = computed(() => session.user.value?.role === 'owner');
+
 const data = ref<ResourcesResponse | null>(null);
 let timer: ReturnType<typeof setInterval> | null = null;
 
@@ -108,7 +111,7 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
     <div class="res-head">
       <h2 id="t-equipo">{{ t('system.title') }}</h2>
       <span class="live" :class="{ on: data !== null }"><span class="pulse" aria-hidden="true" />{{ t('system.live') }}</span>
-      <span class="muted small">{{ t('system.subtitle') }}</span>
+      <span class="muted small">{{ t('system.subtitle') }} · {{ t('system.last15') }}</span>
     </div>
 
     <div v-if="data" class="grid">
@@ -120,14 +123,14 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
           <span class="chip" :class="cpu.state.chip"><AppIcon :name="cpu.state.icon" :size="13" :stroke="2.2" />{{ cpu.state.label }}</span>
         </header>
         <div class="main">
-          <RadialMeter :value="cpu.value / 100" :display="percent(cpu.value)" :caption="t('system.cpuUsage')" :label="`${t('system.cpuUsage')}: ${percent(cpu.value)}`" :tone="cpu.tone" :size="124" />
+          <RadialMeter :value="cpu.value / 100" :display="percent(cpu.value)" :label="`${t('system.cpuUsage')}: ${percent(cpu.value)}`" :tone="cpu.tone" :size="84" :stroke="8" />
           <dl class="facts">
             <div><dt>{{ t('system.frequency') }}</dt><dd>{{ mhz(data.cpu.mhz) }}<span v-if="data.cpu.maxMhz" class="muted"> / {{ mhz(data.cpu.maxMhz) }}</span></dd></div>
             <div><dt :title="t('system.loadHint')">{{ t('system.load') }}</dt><dd>{{ data.cpu.load.map((value) => formatNumber(value, 2)).join(' · ') }}</dd></div>
           </dl>
         </div>
         <div v-if="data.cpu.cores.length > 1" class="cores-block">
-          <span class="muted small">{{ t('system.cores') }} · {{ data.cpu.cores.length }}</span>
+          <span class="muted small cores-label">{{ data.cpu.cores.length }} {{ t('system.cores').toLowerCase() }}</span>
           <!-- Una columna por núcleo, misma escala 0-100 %: sirve igual para 4 que para 24. -->
           <ul class="cores" :aria-label="t('system.cores')">
             <li
@@ -143,8 +146,7 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
           </ul>
         </div>
         <div v-if="history" class="trend">
-          <span class="muted small">{{ t('system.last15') }}</span>
-          <Sparkline :values="history.cpu" :at="history.at" :min="0" :max="100" :format="percent" :label="t('system.cpuChart')" :tone="cpu.tone" />
+          <Sparkline :values="history.cpu" :at="history.at" :min="0" :max="100" :format="percent" :label="t('system.cpuChart')" :tone="cpu.tone" :height="30" />
         </div>
       </article>
 
@@ -159,12 +161,12 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
           <RadialMeter
             :value="memory.ratio"
             :display="percent(memory.ratio * 100)"
-            :caption="t('system.memoryOf', { used: formatBytes(memory.usedBytes), total: formatBytes(memory.totalBytes) })"
             :label="`${t('system.memoryUsage')}: ${percent(memory.ratio * 100)}`"
             :tone="memory.tone"
-            :size="124"
+            :size="84" :stroke="8"
           />
           <dl class="facts">
+            <div><dt>{{ t('system.memoryUsage') }}</dt><dd>{{ t('system.memoryOf', { used: formatBytes(memory.usedBytes), total: formatBytes(memory.totalBytes) }) }}</dd></div>
             <div><dt>{{ t('system.available') }}</dt><dd>{{ formatBytes(memory.totalBytes - memory.usedBytes) }}</dd></div>
             <div><dt>{{ t('system.appMemory') }}</dt><dd>{{ formatBytes(data.app.memoryBytes) }}</dd></div>
             <div v-if="memory.swapTotalBytes > 0">
@@ -175,8 +177,7 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
           </dl>
         </div>
         <div v-if="history" class="trend">
-          <span class="muted small">{{ t('system.last15') }}</span>
-          <Sparkline :values="history.mem" :at="history.at" :min="0" :max="100" :format="percent" :label="t('system.memoryChart')" :tone="memory.tone" />
+          <Sparkline :values="history.mem" :at="history.at" :min="0" :max="100" :format="percent" :label="t('system.memoryChart')" :tone="memory.tone" :height="30" />
         </div>
       </article>
 
@@ -191,12 +192,12 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
           <RadialMeter
             :value="temperature.value / TEMP_LIMIT"
             :display="celsius(temperature.value)"
-            :caption="t('system.temperatureOf', { limit: celsius(TEMP_LIMIT) })"
             :label="`${t('system.temperature')}: ${celsius(temperature.value)}`"
             :tone="temperature.tone"
-            :size="124"
+            :size="84" :stroke="8"
           />
           <div class="side">
+            <span class="small muted">{{ t('system.temperatureOf', { limit: celsius(TEMP_LIMIT) }) }}</span>
             <p v-if="temperature.tone !== 'accent'" class="small">{{ temperature.label }}</p>
             <div v-if="power" class="power" :class="`p-${power.tone}`">
               <span class="p-ico"><AppIcon :name="power.icon" :size="16" :stroke="2" /></span>
@@ -210,8 +211,7 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
         </div>
         <p v-else class="muted small">{{ t('system.tempNone') }}</p>
         <div v-if="history && hasTempHistory" class="trend">
-          <span class="muted small">{{ t('system.last15') }}</span>
-          <Sparkline :values="tempHistory" :at="history.at" :min="25" :max="TEMP_LIMIT" :format="celsius" :label="t('system.temperatureChart')" :tone="temperature?.tone ?? 'accent'" />
+          <Sparkline :values="tempHistory" :at="history.at" :min="25" :max="TEMP_LIMIT" :format="celsius" :label="t('system.temperatureChart')" :tone="temperature?.tone ?? 'accent'" :height="30" />
         </div>
       </article>
 
@@ -227,37 +227,40 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
               <span class="muted small"><AppIcon name="download" :size="14" />{{ t('system.download') }}</span>
               <strong>{{ speed(data.network.rxBytesPerSecond) }}</strong>
             </div>
-            <Sparkline v-if="history" :values="history.rx" :at="history.at" :min="0" :max="netPeak" :format="(v) => speed(v)" :label="t('system.downloadChart')" :height="44" />
+            <Sparkline v-if="history" :values="history.rx" :at="history.at" :min="0" :max="netPeak" :format="(v) => speed(v)" :label="t('system.downloadChart')" :height="28" />
           </div>
           <div class="net-row">
             <div class="net-figure">
               <span class="muted small"><AppIcon name="upload" :size="14" />{{ t('system.upload') }}</span>
               <strong>{{ speed(data.network.txBytesPerSecond) }}</strong>
             </div>
-            <Sparkline v-if="history" :values="history.tx" :at="history.at" :min="0" :max="netPeak" :format="(v) => speed(v)" :label="t('system.uploadChart')" :height="44" />
+            <Sparkline v-if="history" :values="history.tx" :at="history.at" :min="0" :max="netPeak" :format="(v) => speed(v)" :label="t('system.uploadChart')" :height="28" />
           </div>
         </div>
       </article>
+
+      <!-- Pruebas de velocidad -->
+      <NetworkTest />
+      <DiskSpeedTest v-if="isOwner" variant="tile" />
 
       <!-- Disco del sistema -->
       <article v-if="systemDisk" class="card tile" aria-labelledby="r-sd">
         <header>
           <span class="ico"><AppIcon name="sdcard" :size="18" /></span>
-          <h3 id="r-sd">{{ t('system.systemDisk') }}</h3>
+          <h3 id="r-sd" :title="t('system.systemDiskHint')">{{ t('system.systemDisk') }}</h3>
           <span class="chip" :class="systemDisk.state.chip"><AppIcon :name="systemDisk.state.icon" :size="13" :stroke="2.2" />{{ systemDisk.state.label }}</span>
         </header>
         <div class="main">
           <RadialMeter
             :value="systemDisk.ratio"
             :display="percent(systemDisk.ratio * 100)"
-            :caption="t('system.free', { size: formatBytes(systemDisk.freeBytes) })"
             :label="`${t('system.systemDisk')}: ${t('system.usedOf', { used: formatBytes(systemDisk.used), total: formatBytes(systemDisk.totalBytes) })}`"
             :tone="systemDisk.tone"
-            :size="124"
+            :size="84" :stroke="8"
           />
           <div class="side">
-            <strong>{{ t('system.usedOf', { used: formatBytes(systemDisk.used), total: formatBytes(systemDisk.totalBytes) }) }}</strong>
-            <p class="small muted">{{ t('system.systemDiskHint') }}</p>
+            <strong>{{ t('system.free', { size: formatBytes(systemDisk.freeBytes) }) }}</strong>
+            <span class="small muted">{{ t('system.usedOf', { used: formatBytes(systemDisk.used), total: formatBytes(systemDisk.totalBytes) }) }}</span>
           </div>
         </div>
       </article>
@@ -299,7 +302,7 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
 }
 
 .res-head h2 {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -340,29 +343,39 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
   font-size: 12px;
 }
 
+/* Mosaico en columnas: tarjetas de alturas distintas sin huecos entre filas. */
 .grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  align-items: start;
-  gap: 16px;
+  columns: 250px;
+  column-gap: 12px;
+}
+
+.grid > :deep(*) {
+  break-inside: avoid;
+  margin-bottom: 12px;
 }
 
 .tile {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   min-width: 0;
+  padding: 14px;
 }
 
 .tile header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .tile h3 {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 650;
+}
+
+.tile header .chip {
+  padding: 1px 8px;
+  font-size: 11px;
 }
 
 .tile header .chip {
@@ -373,9 +386,9 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
   background: var(--accent-soft);
   color: var(--accent);
   flex: none;
@@ -384,7 +397,7 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
 .main {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 14px;
 }
 
 .facts,
@@ -393,7 +406,7 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 
 .facts > div {
@@ -402,13 +415,17 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
   gap: 2px;
 }
 
+.facts > div {
+  gap: 0;
+}
+
 .facts dt {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted);
 }
 
 .facts dd {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -419,15 +436,21 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
 
 .cores-block {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.cores-label {
+  flex: none;
+  white-space: nowrap;
 }
 
 .cores {
+  flex: 1;
   display: flex;
   align-items: flex-end;
   gap: 2px;
-  height: 36px;
+  height: 20px;
 }
 
 .core {
@@ -470,9 +493,9 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
 .power {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 12px;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 10px;
   background: var(--surface-2);
 }
 
@@ -480,8 +503,8 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   flex: none;
 }
@@ -508,20 +531,24 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
 }
 
 .p-text strong {
-  font-size: 14px;
+  font-size: 12px;
+}
+
+.p-text .small {
+  font-size: 11px;
 }
 
 .net {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
 }
 
 .net-row {
   display: grid;
-  grid-template-columns: 112px 1fr;
+  grid-template-columns: 96px 1fr;
   align-items: end;
-  gap: 14px;
+  gap: 12px;
 }
 
 .net-figure {
@@ -537,7 +564,7 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
 }
 
 .net-figure strong {
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -551,10 +578,10 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
 .kv-list > div {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
-  padding: 8px 0;
+  gap: 12px;
+  padding: 4px 0;
   border-top: 1px solid var(--border);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .kv-list > div:first-child {
@@ -573,7 +600,7 @@ const mhz = (value: number | null): string => (value === null ? '—' : value >=
 }
 
 .skeleton {
-  height: 260px;
+  height: 170px;
   background: linear-gradient(90deg, var(--surface) 0%, var(--surface-2) 50%, var(--surface) 100%);
   background-size: 200% 100%;
   animation: shimmer 1.4s ease-in-out infinite;

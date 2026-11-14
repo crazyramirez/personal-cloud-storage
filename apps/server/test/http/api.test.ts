@@ -124,6 +124,20 @@ describe('API v1 de extremo a extremo', () => {
     assert.deepEqual((await call('GET', '/auth/me')).json(), { username: 'ana', role: 'owner' });
   });
 
+  it('prueba de red: descarga aleatoria del tamaño pedido y subida que solo se cuenta', async () => {
+    const anonymous = await call('GET', '/system/nettest/download?bytes=1000', { anonymous: true });
+    assert.equal(anonymous.statusCode, 401);
+    const down = await call('GET', `/system/nettest/download?bytes=${3 * 1024 * 1024 + 5}`);
+    assert.equal(down.statusCode, 200);
+    assert.equal(down.rawPayload.length, 3 * 1024 * 1024 + 5);
+    assert.equal(down.headers['cache-control'], 'no-store, no-transform');
+    assert.equal((await call('GET', '/system/nettest/download?bytes=999999999999')).statusCode, 400, 'tamaño acotado');
+    const up = await call('POST', '/system/nettest/upload', { headers: { 'content-type': 'application/offset+octet-stream' }, payload: randomBytes(2 * 1024 * 1024) });
+    assert.equal(up.statusCode, 200);
+    assert.deepEqual(up.json(), { bytes: 2 * 1024 * 1024 });
+    assert.equal((await call('POST', '/system/nettest/upload', { headers: { 'content-type': 'application/json' }, body: {} })).statusCode, 400);
+  });
+
   it('login: credenciales incorrectas → 401 genérico; correctas → sesión nueva; logout la revoca', async () => {
     for (const body of [{ username: 'ana', password: 'incorrecta-incorrecta' }, { username: 'nadie', password: PASSWORD }]) {
       const response = await call('POST', '/auth/login', { body, anonymous: true });
