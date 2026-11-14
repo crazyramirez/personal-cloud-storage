@@ -56,6 +56,14 @@
 		file_server
 	}
 
+	# Manifiesto del build (mismo nombre en cada versión): siempre se revalida.
+	handle /_nuxt/builds/* {
+		root * __PCLOUD_WEB_ROOT__
+		header X-Content-Type-Options nosniff
+		header Cache-Control no-cache
+		file_server
+	}
+
 	# Recursos con hash en el nombre: caché indefinida. Si falta uno, 404 (nunca la página HTML).
 	handle /_nuxt/* {
 		root * __PCLOUD_WEB_ROOT__

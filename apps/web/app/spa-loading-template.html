@@ -1,0 +1,42 @@
+<!--
+  Pantalla de arranque (Nuxt la pinta dentro de #__nuxt hasta que la app monta). Sin ella, mientras
+  carga, la app instalada en el iPhone se ve en NEGRO. Solo HTML y CSS (la CSP no permite scripts
+  en línea sin hash). Si tarda más de 8 s aparece el aviso con «Reintentar» (animación con retardo).
+-->
+<div class="pcs-boot" role="status" aria-live="polite">
+  <svg class="pcs-logo" viewBox="0 0 32 32" width="64" height="64" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#2457D6"/><path d="M11 22a5.5 5.5 0 0 1-.7-10.95A6.6 6.6 0 0 1 23 12.5a5 5 0 0 1-.5 9.5z" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <span class="pcs-spin" aria-label="Cargando"></span>
+  <div class="pcs-slow">
+    <strong>Tarda más de lo normal</strong>
+    <span>No consigo conectar con tu nube. Si estás fuera de casa, abre la app Tailscale y vuelve aquí.</span>
+    <a class="pcs-retry" href="">Reintentar</a>
+  </div>
+</div>
+<style>
+  html, body { margin: 0; background: #f5f6f8; }
+  @media (prefers-color-scheme: dark) { html, body { background: #0f1217; } }
+  .pcs-boot {
+    position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+    padding: 24px; box-sizing: border-box; text-align: center;
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #14171c;
+  }
+  @media (prefers-color-scheme: dark) { .pcs-boot { color: #eceef2; } }
+  .pcs-logo { border-radius: 16px; box-shadow: 0 10px 30px rgb(36 87 214 / 35%); }
+  .pcs-spin {
+    width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid currentColor; border-right-color: transparent;
+    opacity: 0.55; animation: pcs-rot 0.8s linear infinite;
+  }
+  .pcs-slow {
+    display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 320px;
+    opacity: 0; visibility: hidden; animation: pcs-show 0.3s ease-out 8s forwards;
+  }
+  .pcs-slow span { color: #5d6573; font-size: 14px; }
+  @media (prefers-color-scheme: dark) { .pcs-slow span { color: #9aa3b2; } }
+  .pcs-retry {
+    margin-top: 8px; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 22px;
+    border-radius: 10px; background: #2457d6; color: #fff; font-weight: 600; text-decoration: none;
+  }
+  @keyframes pcs-rot { to { transform: rotate(360deg); } }
+  @keyframes pcs-show { to { opacity: 1; visibility: visible; } }
+  @media (prefers-reduced-motion: reduce) { .pcs-spin { animation-duration: 2s; } }
+</style>

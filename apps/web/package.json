@@ -6,7 +6,7 @@
   "description": "Panel web (Nuxt, SPA estática). Se compila en el ordenador de desarrollo; la Raspberry Pi solo sirve los ficheros generados.",
   "scripts": {
     "dev": "nuxt dev",
-    "generate": "nuxt generate && node scripts/apply-csp.mjs",
+    "generate": "nuxt generate && node scripts/apply-csp.mjs && node scripts/write-precache.mjs",
     "preview": "nuxt preview",
     "typecheck": "nuxi typecheck && node scripts/check-i18n.ts && node scripts/check-server-text.ts"
   },
