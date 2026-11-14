@@ -2096,6 +2096,11 @@ h2 {
     box-shadow: 0 10px 24px rgb(36 87 214 / 40%);
   }
 
+  /* En el móvil no se arrastran archivos: se sube con el botón flotante. */
+  .dropzone:not(.dragging) {
+    display: none;
+  }
+
   .upload-btn.fab-hidden {
     transform: scale(0);
   }

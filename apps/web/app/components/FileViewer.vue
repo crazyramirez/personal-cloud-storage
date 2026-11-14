@@ -164,8 +164,8 @@ function onKey(event: KeyboardEvent): void {
   if (event.key === 'Escape') emit('close');
   else if (event.key === 'ArrowRight' && !(event.target instanceof HTMLInputElement)) go(1);
   else if (event.key === 'ArrowLeft' && !(event.target instanceof HTMLInputElement)) go(-1);
-  else if (event.key === '+' || event.key === '=') zoom.value = Math.min(8, zoom.value * 1.25);
-  else if (event.key === '-') zoom.value = Math.max(0.25, zoom.value / 1.25);
+  else if (event.key === '+' || event.key === '=') zoomCenter(zoom.value * 1.25);
+  else if (event.key === '-') zoomCenter(zoom.value / 1.25);
   else if (event.key === ' ' && (kind.value === 'video' || kind.value === 'audio')) togglePlay();
   else if (event.key === 'Delete' && current.value !== null) emit('trash', current.value);
   else if (event.key === 'Tab') trapFocus(event);
@@ -190,15 +190,84 @@ function trapFocus(event: KeyboardEvent): void {
   event.preventDefault();
 }
 
+// ── Zoom anclado a un punto ────────────────────────────────────────────────────────────────
+// El punto de la imagen que está bajo los dedos (o el ratón) se queda bajo ellos al ampliar:
+// se calcula su posición relativa en la imagen y, tras redimensionarla, se desplaza el contenedor
+// para devolverlo a la misma posición de pantalla. Al pellizcar, ese punto sigue además al punto
+// medio de los dedos, así que se puede ampliar y desplazar a la vez.
+
+interface Anchor {
+  /** Posición relativa (0-1) del punto dentro de la imagen. */
+  fx: number;
+  fy: number;
+  /** Dónde debe quedar en la pantalla. */
+  clientX: number;
+  clientY: number;
+}
+
+function imageParts(): { wrap: HTMLElement; img: HTMLImageElement } | null {
+  const wrap = root.value?.querySelector('.image-wrap');
+  const img = wrap?.querySelector('img');
+  return wrap instanceof HTMLElement && img instanceof HTMLImageElement ? { wrap, img } : null;
+}
+
+function anchorAt(clientX: number, clientY: number): Anchor | null {
+  const parts = imageParts();
+  if (parts === null) return null;
+  const rect = parts.img.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return null;
+  const clamp = (value: number): number => Math.min(1, Math.max(0, value));
+  return { fx: clamp((clientX - rect.left) / rect.width), fy: clamp((clientY - rect.top) / rect.height), clientX, clientY };
+}
+
+let pendingAnchor: Anchor | null = null;
+let anchorFrame = 0;
+
+/** Tras aplicar el nuevo tamaño, desplaza para que el punto anclado quede en su sitio. */
+function settleAnchor(anchor: Anchor): void {
+  pendingAnchor = anchor;
+  if (anchorFrame !== 0) return;
+  void nextTick(() => {
+    anchorFrame = requestAnimationFrame(() => {
+      anchorFrame = 0;
+      const target = pendingAnchor;
+      pendingAnchor = null;
+      const parts = imageParts();
+      if (target === null || parts === null) return;
+      const rect = parts.img.getBoundingClientRect();
+      parts.wrap.scrollLeft += rect.left + target.fx * rect.width - target.clientX;
+      parts.wrap.scrollTop += rect.top + target.fy * rect.height - target.clientY;
+    });
+  });
+}
+
+function zoomAt(next: number, clientX: number, clientY: number, min = 0.25): void {
+  const anchor = anchorAt(clientX, clientY);
+  zoom.value = Math.min(8, Math.max(min, next));
+  if (anchor !== null) settleAnchor(anchor);
+}
+
+/** Botones y teclado: amplían sobre el centro de lo que se ve. */
+function zoomCenter(next: number): void {
+  const rect = root.value?.querySelector('.stage')?.getBoundingClientRect();
+  if (rect === undefined) zoom.value = Math.min(8, Math.max(0.25, next));
+  else zoomAt(next, rect.left + rect.width / 2, rect.top + rect.height / 2);
+}
+
+function onDoubleClick(event: MouseEvent): void {
+  if (zoom.value === 1) zoomAt(2.5, event.clientX, event.clientY);
+  else zoom.value = 1;
+}
+
 function onWheel(event: WheelEvent): void {
   if (kind.value !== 'image' || !event.ctrlKey) return;
   event.preventDefault();
-  zoom.value = Math.min(8, Math.max(0.25, zoom.value * (event.deltaY < 0 ? 1.15 : 1 / 1.15)));
+  zoomAt(zoom.value * (event.deltaY < 0 ? 1.15 : 1 / 1.15), event.clientX, event.clientY);
 }
 
 // Deslizar a izquierda/derecha para cambiar de archivo (solo sin zoom) y pellizcar para ampliar.
 let touchStart: { x: number; y: number; t: number } | null = null;
-let pinch: { distance: number; zoom: number } | null = null;
+let pinch: { distance: number; zoom: number; fx: number; fy: number } | null = null;
 
 function distanceOf(touches: TouchList): number {
   const a = touches[0] as Touch;
@@ -206,9 +275,17 @@ function distanceOf(touches: TouchList): number {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 }
 
+function midpointOf(touches: TouchList): { x: number; y: number } {
+  const a = touches[0] as Touch;
+  const b = touches[1] as Touch;
+  return { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
+}
+
 function onTouchStart(event: TouchEvent): void {
   if (event.touches.length === 2 && kind.value === 'image') {
-    pinch = { distance: distanceOf(event.touches), zoom: zoom.value };
+    const mid = midpointOf(event.touches);
+    const anchor = anchorAt(mid.x, mid.y);
+    pinch = { distance: Math.max(1, distanceOf(event.touches)), zoom: zoom.value, fx: anchor?.fx ?? 0.5, fy: anchor?.fy ?? 0.5 };
     touchStart = null;
     return;
   }
@@ -221,7 +298,9 @@ function onTouchStart(event: TouchEvent): void {
 function onTouchMove(event: TouchEvent): void {
   if (pinch === null || event.touches.length !== 2) return;
   event.preventDefault();
+  const mid = midpointOf(event.touches);
   zoom.value = Math.min(8, Math.max(1, pinch.zoom * (distanceOf(event.touches) / pinch.distance)));
+  settleAnchor({ fx: pinch.fx, fy: pinch.fy, clientX: mid.x, clientY: mid.y });
 }
 function onTouchEnd(event: TouchEvent): void {
   const touch = event.changedTouches[0];
@@ -240,6 +319,7 @@ onMounted(() => {
   document.documentElement.style.overflow = 'hidden';
 });
 onBeforeUnmount(() => {
+  cancelAnimationFrame(anchorFrame);
   window.removeEventListener('keydown', onKey);
   window.removeEventListener('resize', measureStage);
   document.documentElement.style.overflow = '';
@@ -255,9 +335,9 @@ onBeforeUnmount(() => {
         <span v-if="current" class="sub">{{ formatBytes(current.size) }} · {{ t('viewer.position', { n: index + 1, total: items.length }) }}</span>
       </div>
       <template v-if="kind === 'image'">
-        <button type="button" class="ib hide-sm" :aria-label="t('viewer.zoomOut')" :title="t('viewer.zoomOutHint')" @click="zoom = Math.max(0.25, zoom / 1.25)"><AppIcon name="zoom-out" /></button>
+        <button type="button" class="ib hide-sm" :aria-label="t('viewer.zoomOut')" :title="t('viewer.zoomOutHint')" @click="zoomCenter(zoom / 1.25)"><AppIcon name="zoom-out" /></button>
         <button type="button" class="ib zoom hide-sm" :title="t('viewer.fitSize')" @click="zoom = 1">{{ Math.round(zoom * 100) }}%</button>
-        <button type="button" class="ib hide-sm" :aria-label="t('viewer.zoomIn')" :title="t('viewer.zoomInHint')" @click="zoom = Math.min(8, zoom * 1.25)"><AppIcon name="zoom-in" /></button>
+        <button type="button" class="ib hide-sm" :aria-label="t('viewer.zoomIn')" :title="t('viewer.zoomInHint')" @click="zoomCenter(zoom * 1.25)"><AppIcon name="zoom-in" /></button>
       </template>
       <button v-if="kind === 'text'" type="button" class="ib" :aria-pressed="wrap" :aria-label="t('viewer.wrapLines')" :title="t('viewer.wrapLines')" @click="wrap = !wrap"><AppIcon name="wrap" /></button>
       <a v-if="kind === 'image' || kind === 'pdf' || kind === 'text'" class="ib hide-sm" :href="kind === 'image' ? imageSrc : inlineUrl(path)" target="_blank" rel="noopener" :aria-label="t('viewer.openInNewTab')" :title="t('viewer.openInNewTab')"><AppIcon name="external" /></a>
@@ -278,7 +358,7 @@ onBeforeUnmount(() => {
       </div>
 
       <template v-else-if="current">
-        <div v-if="kind === 'image'" class="image-wrap" :class="{ zoomed: zoom > 1 }" @dblclick="zoom = zoom === 1 ? 2.5 : 1">
+        <div v-if="kind === 'image'" class="image-wrap" :class="{ zoomed: zoom > 1 }" @dblclick="onDoubleClick">
           <img
             :key="imageSrc"
             :src="imageSrc"
