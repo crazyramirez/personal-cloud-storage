@@ -156,6 +156,13 @@ async function shareDownload(url: string, fallbackName: string): Promise<void> {
   }
 }
 
+/** Nombre provisional de un ZIP (el definitivo lo pone el servidor, con el mismo formato). */
+export function zipName(base = 'files'): string {
+  const now = new Date();
+  const two = (value: number): string => String(value).padStart(2, '0');
+  return `${base}-${now.getFullYear()}${two(now.getMonth() + 1)}${two(now.getDate())}-${two(now.getHours())}${two(now.getMinutes())}${two(now.getSeconds())}.zip`;
+}
+
 /**
  * Descarga un archivo o un ZIP. `name` es el nombre de reserva para el aviso de progreso (el real
  * llega en Content-Disposition).

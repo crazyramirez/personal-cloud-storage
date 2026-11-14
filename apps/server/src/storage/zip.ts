@@ -64,7 +64,25 @@ function dosDateTime(date: Date): { time: number; date: number } {
  * Inventario del ZIP: `dir` y opcionalmente `names` (elementos de esa carpeta). Sin `names` se
  * empaqueta el contenido completo de la carpeta.
  */
-export async function planZip(dataRoot: string, dir: string, names: readonly string[] | null): Promise<ZipPlan> {
+/** Marca de tiempo local para el nombre del ZIP: 20261114-130326. */
+export function zipStamp(now: Date): string {
+  const two = (value: number): string => String(value).padStart(2, '0');
+  return `${now.getFullYear()}${two(now.getMonth() + 1)}${two(now.getDate())}-${two(now.getHours())}${two(now.getMinutes())}${two(now.getSeconds())}`;
+}
+
+/**
+ * Nombre del ZIP, siempre con la fecha y hora de la descarga (no se pisan descargas sucesivas):
+ * un elemento → «nombre-20261114-130326.zip»; una carpeta completa → «Carpeta-…zip»; varios
+ * elementos o la raíz → «files-…zip».
+ */
+export function zipFileName(dirSegments: readonly string[], selected: readonly string[] | null, now: Date): string {
+  const single = selected !== null && new Set(selected).size === 1 ? (selected[0] as string) : null;
+  const base = single ?? (selected === null ? dirSegments.at(-1) : undefined) ?? 'files';
+  const stem = single !== null ? path.parse(base).name || base : base;
+  return `${stem}-${zipStamp(now)}.zip`;
+}
+
+export async function planZip(dataRoot: string, dir: string, names: readonly string[] | null, now: Date = new Date()): Promise<ZipPlan> {
   const dirSegments = parseClientPath(dir);
   const base = await resolveInside(dataRoot, dirSegments, 'dir');
   const selected = names ?? null;
@@ -105,8 +123,7 @@ export async function planZip(dataRoot: string, dir: string, names: readonly str
     length += LOCAL_FIXED + nameBytes + LOCAL_EXTRA + entry.size + DESCRIPTOR + CENTRAL_FIXED + nameBytes + CENTRAL_EXTRA;
   }
 
-  const baseName = selected !== null && selected.length === 1 ? (selected[0] as string) : (dirSegments.at(-1) ?? 'Archivos');
-  return { entries, length, fileName: `${path.parse(baseName).name || baseName}.zip` };
+  return { entries, length, fileName: zipFileName(dirSegments, selected, now) };
 }
 
 interface Written {

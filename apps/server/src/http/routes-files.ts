@@ -95,7 +95,7 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
     const query = request.query as ZipQuery;
     const lease = await guardian.assertReadableVolume();
     const names = query.names === undefined || query.names === '' ? null : query.names.split('/');
-    const plan = await planZip(lease.dataRoot, query.dir, names);
+    const plan = await planZip(lease.dataRoot, query.dir, names, clock());
     audit(db, { userId: session.userId, action: 'fs.zip', path: query.dir, result: 'ok', ip: request.ip, detail: `${plan.entries.length} elementos` }, clock());
     const stream = Readable.from(streamZip(plan));
     stream.on('error', (error) => request.log.warn({ err: error }, 'descarga ZIP interrumpida'));

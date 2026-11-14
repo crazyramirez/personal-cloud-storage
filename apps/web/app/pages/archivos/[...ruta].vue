@@ -355,11 +355,11 @@ function download(list: FsEntry[]): void {
   if (list.length === 0) return;
   const first = list[0] as FsEntry;
   if (list.length === 1 && first.type === 'file') startDownload(downloadUrl(pathOf(first.name)), first.name);
-  else startDownload(zipUrl(clientPath.value, list.map((entry) => entry.name)), list.length === 1 ? `${first.name}.zip` : `${folderName.value}.zip`);
+  else startDownload(zipUrl(clientPath.value, list.map((entry) => entry.name)), zipName(list.length === 1 ? first.name : 'files'));
 }
 
 function downloadFolder(): void {
-  startDownload(zipUrl(clientPath.value), `${folderName.value}.zip`);
+  startDownload(zipUrl(clientPath.value), zipName(segments.value.length === 0 ? 'files' : folderName.value));
 }
 
 async function newFolder(): Promise<void> {
@@ -790,7 +790,7 @@ function crumbMenu(path: string, link: string): MenuItem[] {
     { label: t('explorer.open'), icon: 'folder', run: () => void navigateTo(link) },
     { label: t('explorer.openInNewTab'), icon: 'external', run: () => window.open(link, '_blank', 'noopener') },
     ...(clip !== null ? [{ label: t('explorer.pasteHere', { n: clip.paths.length }), icon: 'paste' as const, disabled: !canWrite.value, hint: noWrite(), run: () => void paste(path) }] : []),
-    { label: t('explorer.downloadAsZip'), icon: 'archive', run: () => startDownload(zipUrl(path), `${path.split('/').filter(Boolean).at(-1) ?? folderName.value}.zip`) },
+    { label: t('explorer.downloadAsZip'), icon: 'archive', run: () => startDownload(zipUrl(path), zipName(path.split('/').filter(Boolean).at(-1) ?? 'files')) },
   ];
 }
 

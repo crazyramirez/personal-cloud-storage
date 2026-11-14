@@ -79,7 +79,7 @@ function menu(entry: RecentEntry): MenuItem[] {
       label: entry.type === 'dir' ? t('recent.downloadZip') : t('recent.download'),
       icon: entry.type === 'dir' ? 'archive' : 'download',
       separator: true,
-      run: () => startDownload(entry.type === 'dir' ? zipUrl(entry.dir, [entry.name]) : downloadUrl(entry.path), entry.type === 'dir' ? `${entry.name}.zip` : entry.name),
+      run: () => startDownload(entry.type === 'dir' ? zipUrl(entry.dir, [entry.name]) : downloadUrl(entry.path), entry.type === 'dir' ? zipName(entry.name) : entry.name),
     },
   ];
 }

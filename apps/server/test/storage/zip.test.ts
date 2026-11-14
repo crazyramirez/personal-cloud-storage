@@ -8,6 +8,9 @@ import { AppError } from '../../src/errors.ts';
 import { planZip, streamZip } from '../../src/storage/zip.ts';
 import { createHarness, type Harness } from '../support/harness.ts';
 
+/** Hora local fija para los nombres de ZIP con fecha. */
+const NOW = new Date(2026, 10, 14, 13, 3, 26);
+
 interface Parsed {
   readonly name: string;
   readonly data: Buffer;
@@ -72,8 +75,8 @@ describe('ZIP en streaming', () => {
   });
 
   it('carpeta completa: tamaño anunciado exacto, CRC y contenido correctos, nombres UTF-8', async () => {
-    const plan = await planZip(h.dataRoot, '/Viaje', null);
-    assert.equal(plan.fileName, 'Viaje.zip');
+    const plan = await planZip(h.dataRoot, '/Viaje', null, NOW);
+    assert.equal(plan.fileName, 'Viaje-20261114-130326.zip');
     const zip = await collect(streamZip(plan));
     assert.equal(zip.length, plan.length, 'Content-Length exacto');
     const entries = parseZip(zip);
@@ -87,13 +90,15 @@ describe('ZIP en streaming', () => {
   });
 
   it('selección de elementos de una carpeta, con la raíz como origen', async () => {
-    const plan = await planZip(h.dataRoot, '/', ['suelto.txt', 'Viaje']);
-    assert.equal(plan.fileName, 'Archivos.zip');
+    const plan = await planZip(h.dataRoot, '/', ['suelto.txt', 'Viaje'], NOW);
+    assert.equal(plan.fileName, 'files-20261114-130326.zip');
     const names = parseZip(await collect(streamZip(plan))).map((entry) => entry.name);
     assert.ok(names.includes('suelto.txt'));
     assert.ok(names.includes('Viaje/'));
     assert.ok(names.includes('Viaje/Días/ñandú 📷.jpg'));
-    assert.equal((await planZip(h.dataRoot, '/', ['suelto.txt'])).fileName, 'suelto.zip');
+    assert.equal((await planZip(h.dataRoot, '/', ['suelto.txt'], NOW)).fileName, 'suelto-20261114-130326.zip');
+    assert.equal((await planZip(h.dataRoot, '/', null, NOW)).fileName, 'files-20261114-130326.zip');
+    assert.equal((await planZip(h.dataRoot, '/', ['Viaje'], NOW)).fileName, 'Viaje-20261114-130326.zip');
   });
 
   it('rechaza rutas fuera de la carpeta y elementos inexistentes', async () => {

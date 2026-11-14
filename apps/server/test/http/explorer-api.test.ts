@@ -218,7 +218,7 @@ describe('API del explorador, papelera, cuenta y passkeys', () => {
     assert.equal(response.statusCode, 200);
     assert.equal(response.headers['content-type'], 'application/zip');
     assert.equal(Number(response.headers['content-length']), response.rawPayload.length);
-    assert.match(String(response.headers['content-disposition']), /Archivos\.zip/);
+    assert.match(String(response.headers['content-disposition']), /files-\d{8}-\d{6}\.zip/);
   });
 
   it('actividad: el propietario ve todo; filtro por prefijo y paginación', async () => {
