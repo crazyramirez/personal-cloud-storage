@@ -65,6 +65,19 @@ Abre esa dirección desde el móvil o el ordenador (en la misma red), pega el c�
 
 > El navegador avisará del certificado la primera vez: es la CA propia de tu nube. Para quitar el aviso, instálala desde `https://<equipo>.local/pcloud-ca.crt` ([cómo](docs/OPERATIONS.md#4-bis-acceso-a-la-web-y-primera-configuración)).
 
+### O pídeselo a un asistente de IA
+
+Si usas un asistente con terminal (Claude Code, Codex CLI, Gemini CLI, Cursor…), puede hacer la instalación entera por ti, desde tu ordenador y por SSH. Pégale esto, cambiando `usuario@equipo` por el tuyo (p. ej. `pi@raspberrypi.local`):
+
+```text
+Instala Personal Cloud Storage en mi servidor usuario@equipo siguiendo las instrucciones de
+https://raw.githubusercontent.com/crazyramirez/personal-cloud-storage/main/AGENTS.md
+```
+
+El asistente comprueba el equipo con `install.sh --check` (solo lectura), te pregunta qué disco usar y si quieres visores y acceso remoto, instala, verifica que todo responde y te da la dirección y el código para crear tu cuenta. Las reglas que sigue están en [AGENTS.md](AGENTS.md): nunca formatea discos, nunca te pide contraseñas (si `sudo` la necesita, te da el comando para que lo pegues tú) y nunca abre el servidor a Internet. Con el repositorio clonado, en Claude Code basta con `/instalar usuario@equipo`.
+
+Un chat sin terminal (ChatGPT, Gemini o Claude en la web) también puede guiarte con el mismo enlace: tú ejecutas los comandos y le pegas la salida.
+
 ### Qué hace el instalador (y qué no)
 
 - Descarga la última [release](https://github.com/crazyramirez/personal-cloud-storage/releases) y comprueba su SHA-256.
@@ -94,6 +107,7 @@ curl -fsSL https://raw.githubusercontent.com/crazyramirez/personal-cloud-storage
 | `--version v0.1.0` | Instalar una versión concreta |
 | `--from-source` | Compilar desde un clon del repositorio (`git clone … && sudo bash install.sh --from-source`) |
 | `--upgrade-system` | Aplicar también las actualizaciones pendientes del sistema |
+| `--check` | Solo diagnosticar, sin cambiar nada ni pedir root: sistema, instalación y discos compatibles en formato `clave=valor` |
 
 Instalación paso a paso, runbooks (desconexiones, cambio de disco) y detalles: [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
@@ -116,6 +130,7 @@ Instalación paso a paso, runbooks (desconexiones, cambio de disco) y detalles: 
 | Protección del mountpoint (dry-run por defecto) | [deploy/linux/setup/pcloud-mountpoint-guard.sh](deploy/linux/setup/pcloud-mountpoint-guard.sh) |
 | Instalación del servidor y despliegue por releases | [deploy/linux/setup/](deploy/linux/setup/), [deploy/dev/pack-release.sh](deploy/dev/pack-release.sh) |
 | Operación del servidor | [docs/OPERATIONS.md](docs/OPERATIONS.md) |
+| Instrucciones para asistentes de IA (instalación guiada, reglas) | [AGENTS.md](AGENTS.md) |
 | Laboratorio F0 con exFAT real en RAM | [tests/fault-injection/](tests/fault-injection/README.md) |
 
 ## Estructura

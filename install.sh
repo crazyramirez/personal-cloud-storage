@@ -22,6 +22,9 @@
 #   --release FICHERO  instalar un paquete pcloud-*.tar.gz local (creado con deploy/dev/pack-release.sh)
 #   --from-source      compilar desde este repositorio clonado en lugar de descargar la release
 #   --upgrade-system   aplicar también las actualizaciones pendientes del sistema (apt full-upgrade)
+#   --check            solo diagnosticar (no cambia nada, no necesita root): imprime clave=valor
+#                      con el sistema, la instalación y los discos compatibles. Pensado para
+#                      asistentes de IA y scripts (ver AGENTS.md).
 #
 # Variables: PCLOUD_REPO=usuario/repo para instalar desde un fork.
 # Registro completo de la instalación: /var/log/pcloud-install.log
@@ -35,9 +38,9 @@ MP=/srv/pcloud
 CONFIG=/etc/pcloud/config.yaml
 NAME_RE='^pcloud-[0-9]{8}T[0-9]{6}Z$'
 
-DISK=ask VIEWERS=ask TAILSCALE=ask YES=0 VERSION=latest RELEASE_FILE="" FROM_SOURCE=0 UPGRADE=0
+DISK=ask VIEWERS=ask TAILSCALE=ask YES=0 VERSION=latest RELEASE_FILE="" FROM_SOURCE=0 UPGRADE=0 CHECK=0
 
-usage() { sed -n '2,29p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//' || true; }
+usage() { sed -n '2,30p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//' || true; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -52,6 +55,7 @@ while [ $# -gt 0 ]; do
     --release) RELEASE_FILE="${2:-}"; shift 2 ;;
     --from-source) FROM_SOURCE=1; shift ;;
     --upgrade-system) UPGRADE=1; shift ;;
+    --check) CHECK=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Opción desconocida: $1 (usa --help)" >&2; exit 64 ;;
   esac
@@ -111,6 +115,124 @@ ask_choice() {  # ask_choice "pregunta" defecto máximo → número elegido en s
   done
 }
 
+# ── Discos compatibles (exFAT/NTFS que no son el disco del sistema) ─────────────────────────
+
+field() { [[ "$2" =~ $1=\"([^\"]*)\" ]] && printf '%s' "${BASH_REMATCH[1]}"; }
+scan_disks() {
+  ROOT_SRC="$(findmnt -no SOURCE / 2>/dev/null || true)"
+  ROOT_DISK="$(lsblk -no PKNAME "$ROOT_SRC" 2>/dev/null | head -n1 || true)"
+  if [ -n "$ROOT_DISK" ]; then ROOT_DISK="/dev/$ROOT_DISK"; fi
+
+  CAND_DEV=() CAND_UUID=() CAND_FS=() CAND_DESC=() CAND_MP=() CAND_PK=()
+  CAND_SIZE=() CAND_LABEL=() CAND_MODEL=() CAND_TRAN=()
+  while IFS= read -r line; do
+    fs="$(field FSTYPE "$line" || true)"
+    case "$fs" in exfat|ntfs) ;; *) continue ;; esac
+    dev="$(field NAME "$line" || true)"
+    uuid="$(field UUID "$line" || true)"
+    pk="$(field PKNAME "$line" || true)"
+    [ -n "$uuid" ] || continue
+    if [ -n "$pk" ] && [ "$pk" = "$ROOT_DISK" ]; then continue; fi
+    size="$(field SIZE "$line" || true)"
+    label="$(field LABEL "$line" || true)"
+    model="$(lsblk -dno MODEL "${pk:-$dev}" 2>/dev/null | xargs || true)"
+    tran="$(lsblk -dno TRAN "${pk:-$dev}" 2>/dev/null | xargs || true)"
+    CAND_DEV+=("$dev"); CAND_UUID+=("$uuid"); CAND_FS+=("$fs"); CAND_PK+=("$pk")
+    CAND_SIZE+=("$size"); CAND_LABEL+=("$label"); CAND_MODEL+=("$model"); CAND_TRAN+=("$tran")
+    CAND_MP+=("$(field MOUNTPOINT "$line" || true)")
+    CAND_DESC+=("$dev · $size · $fs${label:+ «$label»}${model:+ · $model}${tran:+ ($tran)}")
+  done < <(lsblk -Ppno NAME,PKNAME,FSTYPE,UUID,SIZE,LABEL,MOUNTPOINT 2>/dev/null)
+}
+
+# ── Modo diagnóstico (--check): solo lectura, sin root, salida clave=valor estable ────────────
+# Formato: una línea «clave=valor» (el valor puede llevar espacios; nunca saltos de línea).
+# Los asistentes de IA lo usan antes y después de instalar (AGENTS.md). No modifica nada,
+# no escribe el registro y no muestra secretos (ni el código de configuración).
+
+if [ "$CHECK" -eq 1 ]; then
+  kv() { printf '%s=%s\n' "$1" "$(printf '%s' "${2:-}" | tr '\n\r' '  ')"; }
+  yn() { if "$@" >/dev/null 2>&1; then echo yes; else echo no; fi; }
+  PROBLEMS=()
+  kv check.format 1
+  kv system.kernel "$(uname -s) $(uname -r)"
+  [ "$(uname -s)" = Linux ] || PROBLEMS+=("no es Linux")
+  OS_NAME=""; [ -r /etc/os-release ] && OS_NAME="$(. /etc/os-release && echo "${PRETTY_NAME:-}")"
+  kv system.os "$OS_NAME"
+  if command -v dpkg >/dev/null; then ARCH="$(dpkg --print-architecture)"; else ARCH="$(uname -m)"; fi
+  kv system.arch "$ARCH"
+  case "$ARCH" in arm64|amd64) ;; *) PROBLEMS+=("arquitectura $ARCH (hace falta arm64 o amd64)") ;; esac
+  SYSTEMD="$(yn test -d /run/systemd/system)"; kv system.systemd "$SYSTEMD"
+  [ "$SYSTEMD" = yes ] || PROBLEMS+=("sin systemd")
+  CONTAINER=no
+  if command -v systemd-detect-virt >/dev/null && systemd-detect-virt --container --quiet; then CONTAINER=yes; PROBLEMS+=("dentro de un contenedor"); fi
+  kv system.container "$CONTAINER"
+  APT="$(yn command -v apt-get)"; kv system.apt "$APT"
+  [ "$APT" = yes ] || PROBLEMS+=("sin apt (Debian/Ubuntu/Raspberry Pi OS)")
+  kv system.memory_mb "$(awk '/^MemTotal:/ { print int($2 / 1024) }' /proc/meminfo 2>/dev/null)"
+  kv system.root_free_mb "$(df -Pm / 2>/dev/null | awk 'NR == 2 { print $4 }')"
+  if command -v vcgencmd >/dev/null; then kv system.throttled "$(vcgencmd get_throttled 2>/dev/null | cut -d= -f2)"; fi
+  if [ "$(id -u)" -eq 0 ]; then kv system.root yes; kv system.sudo_nopasswd yes
+  else kv system.root no; kv system.sudo_nopasswd "$(yn sudo -n true)"; fi
+  kv system.internet "$(yn curl -fsS --max-time 8 -o /dev/null https://api.github.com)"
+  if [ "${#PROBLEMS[@]}" -eq 0 ]; then kv system.supported yes; else kv system.supported no; kv system.problems "$(IFS=';'; echo "${PROBLEMS[*]}")"; fi
+
+  kv host.name "$(hostname -s 2>/dev/null | tr '[:upper:]' '[:lower:]')"
+  kv host.ip "$(hostname -I 2>/dev/null | awk '{ print $1 }')"
+
+  if [ -L /opt/pcloud/current ]; then
+    kv pcloud.installed yes
+    kv pcloud.release "$(basename "$(readlink /opt/pcloud/current)")"
+  else
+    kv pcloud.installed no
+  fi
+  svc() { if command -v systemctl >/dev/null; then systemctl is-active "$1" 2>/dev/null || true; else echo unknown; fi; }
+  kv pcloud.service "$(svc pcloud)"
+  kv caddy.service "$(svc caddy)"
+  HEALTH="$(curl -fsS --max-time 5 http://127.0.0.1:3000/api/v1/system/health 2>/dev/null || true)"
+  if [ -n "$HEALTH" ]; then
+    kv pcloud.health ok
+    kv pcloud.volume_state "$(grep -oE '"volumeState":"[^"]*"' <<<"$HEALTH" | cut -d'"' -f4)"
+    SETUP_STATUS="$(curl -fsS --max-time 5 http://127.0.0.1:3000/api/v1/setup/status 2>/dev/null || true)"
+    if grep -q '"needsOwner":true' <<<"$SETUP_STATUS"; then kv pcloud.needs_owner yes
+    elif grep -q '"needsOwner":false' <<<"$SETUP_STATUS"; then kv pcloud.needs_owner no
+    else kv pcloud.needs_owner unknown; fi
+  else
+    kv pcloud.health no
+  fi
+  kv pcloud.mounted "$(yn mountpoint -q "$MP")"
+  if [ -r "$CONFIG" ]; then
+    kv pcloud.disk_uuid "$(sed -nE "s/^[[:space:]]*expected_fs_uuid:[[:space:]]*[\"']?([0-9A-Fa-f-]{9,36})[\"']?([[:space:]].*)?\$/\1/p" "$CONFIG" | head -n1)"
+  elif [ -e "$CONFIG" ]; then
+    kv pcloud.disk_uuid unknown
+  fi
+  if command -v tailscale >/dev/null; then
+    kv tailscale.installed yes
+    kv tailscale.connected "$(yn tailscale status)"
+  else
+    kv tailscale.installed no
+  fi
+
+  scan_disks
+  kv disks.count "${#CAND_DEV[@]}"
+  for i in "${!CAND_DEV[@]}"; do
+    n=$((i + 1))
+    kv "disk.$n.device" "${CAND_DEV[$i]}"
+    kv "disk.$n.uuid" "${CAND_UUID[$i]}"
+    kv "disk.$n.fs" "${CAND_FS[$i]}"
+    kv "disk.$n.size" "${CAND_SIZE[$i]}"
+    kv "disk.$n.label" "${CAND_LABEL[$i]}"
+    kv "disk.$n.model" "${CAND_MODEL[$i]}"
+    kv "disk.$n.transport" "${CAND_TRAN[$i]}"
+    kv "disk.$n.mountpoint" "${CAND_MP[$i]}"
+    # Montado en /srv/pcloud: es el de esta nube (sin root no se puede leer su contenido).
+    if [ "${CAND_MP[$i]}" = "$MP" ]; then
+      kv "disk.$n.used_by_pcloud" yes
+    elif [ -n "${CAND_MP[$i]}" ] && [ -r "${CAND_MP[$i]}" ]; then
+      kv "disk.$n.used_by_pcloud" "$(yn test -e "${CAND_MP[$i]}/.pcloud/volume-id")"
+    fi
+  done
+  exit 0
+fi
 # ── 1. Comprobaciones ─────────────────────────────────────────────────────────────────────────
 
 printf '\n%sPersonal Cloud Storage%s — instalador\n' "$B" "$N"
@@ -274,28 +396,7 @@ ok "https://$HOST.local con certificado propio"
 # ── 9. Disco de datos ─────────────────────────────────────────────────────────────────────────
 
 step "Disco de datos"
-ROOT_SRC="$(findmnt -no SOURCE / 2>/dev/null || true)"
-ROOT_DISK="$(lsblk -no PKNAME "$ROOT_SRC" 2>/dev/null | head -n1 || true)"
-if [ -n "$ROOT_DISK" ]; then ROOT_DISK="/dev/$ROOT_DISK"; fi
-
-field() { [[ "$2" =~ $1=\"([^\"]*)\" ]] && printf '%s' "${BASH_REMATCH[1]}"; }
-CAND_DEV=() CAND_UUID=() CAND_FS=() CAND_DESC=() CAND_MP=() CAND_PK=()
-while IFS= read -r line; do
-  fs="$(field FSTYPE "$line" || true)"
-  case "$fs" in exfat|ntfs) ;; *) continue ;; esac
-  dev="$(field NAME "$line" || true)"
-  uuid="$(field UUID "$line" || true)"
-  pk="$(field PKNAME "$line" || true)"
-  [ -n "$uuid" ] || continue
-  if [ -n "$pk" ] && [ "$pk" = "$ROOT_DISK" ]; then continue; fi
-  size="$(field SIZE "$line" || true)"
-  label="$(field LABEL "$line" || true)"
-  model="$(lsblk -dno MODEL "${pk:-$dev}" 2>/dev/null | xargs || true)"
-  tran="$(lsblk -dno TRAN "${pk:-$dev}" 2>/dev/null | xargs || true)"
-  CAND_DEV+=("$dev"); CAND_UUID+=("$uuid"); CAND_FS+=("$fs"); CAND_PK+=("$pk")
-  CAND_MP+=("$(field MOUNTPOINT "$line" || true)")
-  CAND_DESC+=("$dev · $size · $fs${label:+ «$label»}${model:+ · $model}${tran:+ ($tran)}")
-done < <(lsblk -Ppno NAME,PKNAME,FSTYPE,UUID,SIZE,LABEL,MOUNTPOINT 2>/dev/null)
+scan_disks
 
 PICK=-1
 CONFIGURED_UUID="$(sed -nE "s/^[[:space:]]*expected_fs_uuid:[[:space:]]*[\"']?([0-9A-Fa-f-]{9,36})[\"']?([[:space:]].*)?\$/\1/p" "$CONFIG" 2>/dev/null | head -n1 || true)"

@@ -66,6 +66,12 @@ jobs:
           sudo mkfs.exfat -L PCLOUDTEST "$LOOP"
           sudo udevadm settle
           lsblk -f
+      - name: Diagnóstico previo (--check, sin root)
+        run: |
+          bash install.sh --check | tee "$RUNNER_TEMP/check-before.txt"
+          grep -qx 'system.supported=yes' "$RUNNER_TEMP/check-before.txt"
+          grep -qx 'pcloud.installed=no' "$RUNNER_TEMP/check-before.txt"
+          grep -qx 'disk.1.fs=exfat' "$RUNNER_TEMP/check-before.txt"
       - name: Instalar (sin preguntas)
         run: sudo bash install.sh --yes --no-viewers --no-tailscale --release dist/pcloud-*.tar.gz
       - name: Verificar
@@ -75,7 +81,7 @@ jobs:
           systemctl is-active pcloud caddy
           HOST="$(hostname -s | tr '[:upper:]' '[:lower:]')"
           curl -fsS --cacert /etc/caddy/pcloud-public/pcloud-ca.crt --resolve "$HOST.local:443:127.0.0.1" \
-            "https://$HOST.local/api/v1/system/health"
+            "https://$HOST.local/api/v1/system/health" | tee /dev/stderr | grep -q '"volumeState":"READY"'
           curl -fsS --cacert /etc/caddy/pcloud-public/pcloud-ca.crt --resolve "$HOST.local:443:127.0.0.1" \
             "https://$HOST.local/" -o /dev/null
           test -d /srv/pcloud/data && test -d /srv/pcloud/.pcloud
@@ -84,6 +90,12 @@ jobs:
           if sudo touch /srv/pcloud/prueba; then echo "ERROR: se pudo escribir sin disco"; exit 1; fi
           sudo systemctl start srv-pcloud.mount
           pcloud-volume-status
+      - name: Diagnóstico posterior (--check)
+        run: |
+          bash install.sh --check | tee "$RUNNER_TEMP/check-after.txt"
+          for want in pcloud.installed=yes pcloud.service=active caddy.service=active pcloud.health=ok pcloud.needs_owner=yes pcloud.mounted=yes; do
+            grep -qx "$want" "$RUNNER_TEMP/check-after.txt" || { echo "Falta: $want"; exit 1; }
+          done
       - name: Reinstalar (idempotente)
         run: sudo bash install.sh --yes --no-viewers --no-tailscale --release dist/pcloud-*.tar.gz
       - name: Registro
