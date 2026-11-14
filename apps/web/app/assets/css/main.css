@@ -454,6 +454,19 @@ a,
   background: var(--bg);
 }
 
+/*
+ * Barra de pestañas del móvil (layouts/default.vue). En iPhone solo se reserva la parte del área
+ * segura que ocupa el indicador de inicio, no entera: así la barra no queda despegada del borde.
+ * --toast-lift lo fija UiHost con la altura de los avisos visibles: el botón flotante y la barra de
+ * selección suben para no quedar tapados.
+ */
+@media (max-width: 820px) {
+  :root {
+    --tabbar-pad-bottom: max(6px, calc(env(safe-area-inset-bottom) - 14px));
+    --tabbar-h: calc(58px + var(--tabbar-pad-bottom));
+  }
+}
+
 /* Alto real de la pantalla en móvil (sin la barra del navegador). */
 .vh-fill {
   min-height: 100vh;

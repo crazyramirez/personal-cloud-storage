@@ -1,6 +1,23 @@
 <script setup lang="ts">
 /** Anfitrión único de avisos, diálogos y menú contextual (va en los layouts). */
 const { toasts } = useToasts();
+
+// Altura de los avisos visibles → --toast-lift: lo que suben el botón flotante y la barra de
+// selección en el móvil para que un aviso nunca los tape (como un «snackbar» de Android).
+const stack = ref<HTMLElement | null>(null);
+let observer: ResizeObserver | null = null;
+onMounted(() => {
+  if (stack.value === null || typeof ResizeObserver === 'undefined') return;
+  observer = new ResizeObserver(([entry]) => {
+    const height = entry?.contentRect.height ?? 0;
+    document.documentElement.style.setProperty('--toast-lift', height > 0 ? `${Math.ceil(height) + 10}px` : '0px');
+  });
+  observer.observe(stack.value);
+});
+onBeforeUnmount(() => {
+  observer?.disconnect();
+  document.documentElement.style.removeProperty('--toast-lift');
+});
 const { dialog } = useDialogState();
 
 function settle(value: unknown): void {
@@ -25,7 +42,7 @@ watch(() => route.fullPath, () => {
   <ConfirmDialog v-else-if="dialog?.kind === 'confirm'" :options="dialog.options" @done="settle" />
   <FolderPickerDialog v-else-if="dialog?.kind === 'folder'" :options="dialog.options" @done="settle" />
 
-  <div class="toasts" aria-live="polite" aria-atomic="false">
+  <div ref="stack" class="toasts" aria-live="polite" aria-atomic="false">
     <div v-for="item in toasts" :key="item.id" class="toast" :class="`t-${item.tone}`" role="status">
       <span v-if="item.busy" class="spinner" aria-hidden="true" />
       <AppIcon v-else :name="item.tone === 'ok' ? 'check' : item.tone === 'info' ? 'info' : 'alert'" :size="18" />
@@ -106,7 +123,8 @@ watch(() => route.fullPath, () => {
 
 @media (max-width: 820px) {
   .toasts {
-    bottom: calc(150px + env(safe-area-inset-bottom));
+    /* Encima de la barra de pestañas (la define el layout) o del borde si no hay barra. */
+    bottom: var(--toast-bottom, calc(16px + env(safe-area-inset-bottom)));
   }
 }
 

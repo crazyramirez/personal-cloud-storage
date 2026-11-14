@@ -277,6 +277,11 @@ a.link:hover {
     display: none;
   }
 
+  /* Los avisos (UiHost) se apoyan justo encima de la barra de pestañas. */
+  .shell {
+    --toast-bottom: calc(var(--tabbar-h) + 8px);
+  }
+
   .top {
     position: sticky;
     top: 0;
@@ -296,7 +301,7 @@ a.link:hover {
   }
 
   .content {
-    padding: 14px calc(12px + env(safe-area-inset-right)) calc(84px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left));
+    padding: 14px calc(12px + env(safe-area-inset-right)) calc(var(--tabbar-h) + 20px) calc(12px + env(safe-area-inset-left));
   }
 
   .tabbar {
@@ -307,7 +312,7 @@ a.link:hover {
     bottom: 0;
     display: flex;
     justify-content: space-around;
-    padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    padding: 6px calc(4px + env(safe-area-inset-right)) var(--tabbar-pad-bottom) calc(4px + env(safe-area-inset-left));
     background: var(--surface);
     border-top: 1px solid var(--border);
   }

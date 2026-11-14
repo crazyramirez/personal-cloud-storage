@@ -2075,7 +2075,8 @@ h2 {
 
 @media (max-width: 820px) {
   .selbar {
-    bottom: calc(84px + env(safe-area-inset-bottom));
+    bottom: calc(var(--tabbar-h) + 12px + var(--toast-lift, 0px));
+    transition: bottom 0.18s ease;
   }
 }
 
@@ -2085,7 +2086,8 @@ h2 {
     position: fixed;
     z-index: 35;
     right: 18px;
-    bottom: calc(96px + env(safe-area-inset-bottom));
+    bottom: calc(var(--tabbar-h) + 18px + var(--toast-lift, 0px));
+    transition: bottom 0.18s ease, transform 0.18s ease;
     width: 58px;
     height: 58px;
     padding: 0;
