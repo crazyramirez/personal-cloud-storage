@@ -9,15 +9,22 @@ const transfers = useTransfers();
 const phase = ref<'idle' | 'rebooting' | 'slow' | 'back' | 'poweringOff' | 'off'>('idle');
 let timer: ReturnType<typeof setTimeout> | null = null;
 
-onMounted(async () => {
+/**
+ * ¿Está instalado el agente? Si el servidor no responde (sin red, reiniciando) NO se concluye que
+ * no lo esté: se reintenta. Solo un «available: false» del servidor bloquea los botones.
+ */
+let check: ReturnType<typeof setTimeout> | null = null;
+async function loadStatus(): Promise<void> {
   try {
     available.value = (await api<PowerStatusResponse>('/system/power', { handle401: false })).available;
   } catch {
-    available.value = false;
+    check = setTimeout(() => void loadStatus(), 5000);
   }
-});
+}
+onMounted(() => void loadStatus());
 onBeforeUnmount(() => {
   if (timer !== null) clearTimeout(timer);
+  if (check !== null) clearTimeout(check);
 });
 
 /** ¿Responde el servidor? (sin pasar por la caché ni por la sesión). */
