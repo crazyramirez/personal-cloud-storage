@@ -227,6 +227,14 @@ Ver [ADR-0018](adr/0018-enlaces-para-invitados.md) y [ADR-0019](adr/0019-nodo-ta
   - `robots.txt` deja entrar solo a los bots de vista previa (WhatsApp, Telegram…), no a los buscadores.
   - Si el enlace tiene contraseña, la vista previa no muestra el nombre.
 
+## 8 quater. Reiniciar y apagar desde Ajustes
+
+Ver [ADR-0020](adr/0020-reiniciar-apagar-desde-la-web.md). Ajustes → «Reiniciar o apagar» (solo el propietario).
+
+- **Instalación:** `sudo bash /opt/pcloud/current/deploy/linux/setup/pcloud-install-power.sh --execute` (lo hace `install.sh`).
+- **Registro:** `journalctl -u pcloud-power-agent --no-pager -n 20`.
+- **Apagar:** la Raspberry Pi no tiene botón; para encenderla, desconecta y vuelve a conectar la alimentación.
+
 ## 9. Antes de confiar datos únicos
 
 1. **Copia de seguridad:** el sistema no hace copias por sí solo. Ten un segundo disco u otra copia de tus datos.

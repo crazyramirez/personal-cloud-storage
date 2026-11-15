@@ -19,6 +19,7 @@ import { LinuxDiskLister } from './backup/disks.ts';
 import { BackupService, type BackupLogger } from './backup/service.ts';
 import { buildApp } from './http/app.ts';
 import { ResourceMonitor } from './system/resources.ts';
+import { FilePowerAgent } from './system/power.ts';
 import { FileGatewayAgent, GUEST_SOCKET, ShareGateway, type GatewayLogger } from './share/gateway.ts';
 import { buildGuestApp } from './share/guest-app.ts';
 import { ShareStore } from './share/store.ts';
@@ -95,7 +96,7 @@ async function main(): Promise<void> {
     activeCount: () => shareStore.countActive(new Date()),
     log: { info: (o, m) => gatewayLog.info(o, m), warn: (o, m) => gatewayLog.warn(o, m) },
   });
-  const app = await buildApp({ config, db, guardian, uploads, operations, media, release, backup, resources, shares: { store: shareStore, gateway } });
+  const app = await buildApp({ config, db, guardian, uploads, operations, media, release, backup, resources, shares: { store: shareStore, gateway }, power: new FilePowerAgent() });
   backupLog = app.log;
   gatewayLog = app.log;
   const guest = await buildGuestApp({ db, store: shareStore, guardian, logLevel: config.server.logLevel, onShareChanged: () => void gateway.reconcile() });

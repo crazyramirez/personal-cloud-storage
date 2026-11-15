@@ -21,6 +21,7 @@ Formato: Contexto → Decisión → Consecuencias → Alternativas. Un ADR acept
 | [0017](0017-copia-de-seguridad-disco-externo.md) | Copia de seguridad en un disco USB externo (espejo con archivo, agente root mínimo) | Aceptado |
 | [0018](0018-enlaces-para-invitados.md) | Enlaces para compartir con invitados (puerta de invitados por Tailscale Funnel, solo mientras hay enlaces) | Aceptado |
 | [0019](0019-nodo-tailscale-dedicado-enlaces.md) | Nodo Tailscale dedicado (`<host>-compartir`) para la puerta de invitados | Aceptado |
+| [0020](0020-reiniciar-apagar-desde-la-web.md) | Reiniciar y apagar el equipo desde Ajustes (agente root mínimo) | Aceptado |
 
 ## Pendientes
 

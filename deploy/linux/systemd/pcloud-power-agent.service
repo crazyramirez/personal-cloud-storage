@@ -1,0 +1,19 @@
+# /etc/systemd/system/pcloud-power-agent.service — agente root mínimo de reinicio y apagado
+# (ADR-0020). Lo lanza pcloud-power-agent.path; procesa las peticiones pendientes y termina.
+# Instalado por pcloud-install-power.sh. No editar a mano.
+#
+# Solo programa «systemctl reboot» o «systemctl poweroff» 5 s después (ver el script).
+
+[Unit]
+Description=Personal Cloud Storage: agente de reinicio y apagado
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/pcloud/current/deploy/linux/power/pcloud-power-agent.sh
+TimeoutStartSec=30
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any

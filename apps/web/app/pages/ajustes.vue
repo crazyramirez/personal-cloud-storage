@@ -328,6 +328,7 @@ async function installApp(): Promise<void> {
     <SharesSettings v-if="isOwner" />
 
     <DiskSpeedTest v-if="isOwner" />
+    <PowerSettings v-if="isOwner" />
 
     <section class="card sec" aria-labelledby="s-sys">
       <header><AppIcon name="drive" /><h2 id="s-sys">{{ t('settings.server') }}</h2></header>

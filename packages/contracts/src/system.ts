@@ -59,3 +59,15 @@ export type NetTestUploadResponse = Static<typeof NetTestUploadResponse>;
 /** Prueba de descarga: bytes a enviar (hasta 256 MiB). */
 export const NetTestDownloadQuery = Type.Object({ bytes: Type.Integer({ minimum: 1, maximum: 256 * 1024 * 1024 }) }, { additionalProperties: false });
 export type NetTestDownloadQuery = Static<typeof NetTestDownloadQuery>;
+
+/** Reiniciar o apagar el equipo (propietario, ADR-0020). */
+export const PowerRequest = Type.Object(
+  { action: Type.Union([Type.Literal('reboot'), Type.Literal('poweroff')]) },
+  { additionalProperties: false },
+);
+export type PowerRequest = Static<typeof PowerRequest>;
+
+export interface PowerStatusResponse {
+  /** El agente de reinicio y apagado está instalado (pcloud-install-power.sh). */
+  readonly available: boolean;
+}

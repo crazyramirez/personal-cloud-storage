@@ -34,6 +34,8 @@ import {
   type ApiErrorCode,
   type HealthResponse,
   type ResourcesResponse,
+  PowerRequest,
+  type PowerStatusResponse,
   type SessionUser,
   type SetupStatus,
   type StorageResponse,
@@ -67,6 +69,7 @@ import type { UploadManager } from '../storage/uploads.ts';
 import { contentDisposition, parseRange, type GuardianLike, type RouteContext } from './context.ts';
 import type { BackupService } from '../backup/service.ts';
 import type { ResourceMonitor } from '../system/resources.ts';
+import type { PowerAgent } from '../system/power.ts';
 import { registerAccountRoutes } from './routes-account.ts';
 import { registerBackupRoutes } from './routes-backup.ts';
 import { registerShareRoutes } from './routes-shares.ts';
@@ -105,6 +108,8 @@ export interface AppDeps {
   readonly backup?: BackupService;
   /** Recursos del equipo para el panel (opcional). */
   readonly resources?: ResourceMonitor;
+  /** Reinicio y apagado del equipo desde Ajustes (opcional, ADR-0020). */
+  readonly power?: PowerAgent;
   /** Enlaces para compartir con invitados (opcional: sin ellos no hay rutas /shares). */
   readonly shares?: { readonly store: ShareStore; readonly gateway: ShareGateway };
 }
@@ -494,6 +499,33 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   if (deps.backup !== undefined) registerBackupRoutes(app, ctx, deps.backup);
   if (deps.shares !== undefined) registerShareRoutes(app, ctx, deps.shares.store, deps.shares.gateway);
   registerSystemRoutes(app, ctx);
+  // ── Reiniciar y apagar (propietario, ADR-0020) ────────────────────────────────────────────
+  const power = deps.power;
+  if (power !== undefined) {
+    app.get(`${API}/system/power`, async (request): Promise<PowerStatusResponse> => {
+      ctx.owner(request);
+      return { available: await power.ready() };
+    });
+    app.post(`${API}/system/power`, { schema: { body: PowerRequest } }, async (request, reply) => {
+      const session = ctx.owner(request);
+      const { action } = request.body as PowerRequest;
+      // Una copia de seguridad a medias se puede retomar, pero cortarla a propósito no tiene sentido.
+      const phase = deps.backup?.status().phase ?? 'idle';
+      if (phase !== 'idle' && phase !== 'confirm') {
+        throw new AppError('CONFLICT', 'Hay una copia de seguridad en curso: espera a que termine o cancélala');
+      }
+      const result = await power.request(action);
+      audit(db, { userId: session.userId, action: `system.${action}`, result: result.ok ? 'ok' : 'error', ip: request.ip, detail: result.code }, clock());
+      if (!result.ok) {
+        throw new AppError(
+          'INTERNAL',
+          result.code === 'AGENT_UNAVAILABLE' ? 'El reinicio desde la web no está instalado en este equipo' : 'No se pudo programar la orden',
+        );
+      }
+      return reply.status(202).send({ scheduled: true });
+    });
+  }
+
   const resources = deps.resources;
   if (resources !== undefined) {
     app.get(`${API}/system/resources`, async (request): Promise<ResourcesResponse> => {

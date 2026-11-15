@@ -377,6 +377,7 @@ run "instalar pcloud.service" bash "$SETUP/pcloud-install-service.sh" --execute
 ok "pcloud.service activo (arranca solo con el equipo, aunque no haya disco)"
 run "preparar la copia de seguridad en disco externo" bash "$SETUP/pcloud-install-backup.sh" --execute
 ok "Copia de seguridad lista: conecta un disco USB externo y elígelo en Ajustes"
+run "preparar reinicio y apagado desde Ajustes" bash "$SETUP/pcloud-install-power.sh" --execute
 
 # ── 7. Visores ────────────────────────────────────────────────────────────────────────────────
 

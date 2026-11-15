@@ -1,0 +1,12 @@
+# /etc/systemd/system/pcloud-power-agent.path — despierta al agente de reinicio/apagado cuando
+# pcloud.service deja una petición (ADR-0020). Instalado por pcloud-install-power.sh.
+
+[Unit]
+Description=Personal Cloud Storage: peticiones de reinicio o apagado
+
+[Path]
+DirectoryNotEmpty=/var/lib/pcloud/power-agent/inbox
+Unit=pcloud-power-agent.service
+
+[Install]
+WantedBy=paths.target

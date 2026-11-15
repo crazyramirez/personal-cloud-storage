@@ -115,7 +115,16 @@ gateway.start(5000);
 const guest = await buildGuestApp({ db: harness.db, store: shareStore, guardian: harness.gate, logger: false, onShareChanged: () => void gateway.reconcile() });
 await guest.ready();
 
-const app = await buildApp({ config: harness.config, db: harness.db, guardian: harness.gate, uploads: harness.uploads({ chunkSize: 1024 * 1024, maxChunkSize: 16 * 1024 * 1024, checkpointBytes: 8 * 1024 * 1024 }), logger: false, backup, resources, shares: { store: shareStore, gateway } });
+// Reinicio y apagado simulados: solo se anotan (el servidor de desarrollo no se reinicia).
+const devPower = {
+  ready: async () => true,
+  request: async (action: 'reboot' | 'poweroff') => {
+    console.log(`[dev] ${action} pedido desde la web (simulado)`);
+    return { ok: true, code: 'SCHEDULED' };
+  },
+};
+
+const app = await buildApp({ config: harness.config, db: harness.db, guardian: harness.gate, uploads: harness.uploads({ chunkSize: 1024 * 1024, maxChunkSize: 16 * 1024 * 1024, checkpointBytes: 8 * 1024 * 1024 }), logger: false, backup, resources, shares: { store: shareStore, gateway }, power: devPower });
 await app.ready();
 
 async function sendFile(response: http.ServerResponse, file: string, status = 200): Promise<boolean> {
