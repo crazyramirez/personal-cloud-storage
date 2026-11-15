@@ -1,7 +1,7 @@
 import type { Message, MessageTable } from '~/utils/i18n';
 
 const es = {
-  appName: 'Personal Cloud',
+  appName: 'Personal Cloud Storage',
   cancel: 'Cancelar',
   close: 'Cerrar',
   ok: 'Aceptar',
@@ -37,7 +37,7 @@ const es = {
 export default {
   es,
   en: {
-    appName: 'Personal Cloud',
+    appName: 'Personal Cloud Storage',
     cancel: 'Cancel',
     close: 'Close',
     ok: 'OK',

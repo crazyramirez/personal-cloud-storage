@@ -13,7 +13,7 @@ export default defineNuxtConfig({
   ],
   app: {
     head: {
-      title: 'Personal Cloud',
+      title: 'Personal Cloud Storage',
       htmlAttrs: { lang: 'es' },
       meta: [
         // viewport-fit=cover: la app instalada ocupa toda la pantalla (zonas seguras con env()).
