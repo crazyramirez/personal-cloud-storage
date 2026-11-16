@@ -20,6 +20,13 @@
 #          disco en ahorro de energía tarda en responder y puede «desaparecer» bajo carga.
 #          Deshacer: borrar /etc/udev/rules.d/90-pcloud-usb-awake.rules.
 #
+#   Registro del sistema persistente y acotado: Raspberry Pi OS lo guarda solo en memoria
+#          (40-rpi-volatile-storage.conf) y se pierde al reiniciar, así que tras un cuelgue no
+#          hay forma de saber qué pasó. Se guarda en la tarjeta, como mucho 50 MB y 1 mes,
+#          volcando cada 5 min (pocas escrituras). Reinicia systemd-journald (no corta nada).
+#          Deshacer: borrar /etc/systemd/journald.conf.d/90-pcloud-persistent.conf y
+#          `systemctl restart systemd-journald`.
+#
 # Uso:
 #   sudo bash pcloud-system-tuning.sh
 #   sudo bash pcloud-system-tuning.sh --execute
@@ -56,6 +63,18 @@ UDEV_CONTENT='# Gestionado por pcloud-system-tuning.sh (Personal Cloud Storage).
 ACTION=="add", SUBSYSTEM=="usb", TEST=="power/control", ATTR{power/control}="on"
 '
 
+JOURNAL_CONF=/etc/systemd/journald.conf.d/90-pcloud-persistent.conf
+JOURNAL_CONTENT='# Gestionado por pcloud-system-tuning.sh (Personal Cloud Storage).
+# Registro persistente para poder diagnosticar cuelgues y reinicios; acotado para cuidar la tarjeta.
+# Va después de 40-rpi-volatile-storage.conf de Raspberry Pi OS y lo sustituye.
+[Journal]
+Storage=persistent
+SystemMaxUse=50M
+SystemKeepFree=1G
+MaxRetentionSec=1month
+SyncIntervalSec=5m
+'
+
 WIFI_DEVS=()
 if command -v iw >/dev/null; then
   mapfile -t WIFI_DEVS < <(iw dev | awk '$1 == "Interface" { print $2 }')
@@ -75,6 +94,7 @@ for target in "${SLEEP_TARGETS[@]}"; do
 done
 [ "$(cat "$LOGIND_CONF" 2>/dev/null)" = "$(printf '%s' "$LOGIND_CONTENT")" ] || PLAN+=("logind")
 [ "$(cat "$UDEV_RULE" 2>/dev/null)" = "$(printf '%s' "$UDEV_CONTENT")" ] || PLAN+=("udev")
+[ "$(cat "$JOURNAL_CONF" 2>/dev/null)" = "$(printf '%s' "$JOURNAL_CONTENT")" ] || PLAN+=("journal")
 for control in /sys/bus/usb/devices/*/power/control; do
   [ -f "$control" ] || continue
   [ "$(cat "$control" 2>/dev/null)" = on ] || PLAN+=("usb:$control")
@@ -92,6 +112,7 @@ else
       logind) echo "  escribir $LOGIND_CONF (logind ignora inactividad y teclas de suspender)" ;;
       udev) echo "  escribir $UDEV_RULE (USB siempre despierto)" ;;
       usb:*) echo "  on → ${item#usb:}" ;;
+      journal) echo "  escribir $JOURNAL_CONF (registro persistente, máx. 50 MB y 1 mes) y reiniciar systemd-journald" ;;
     esac
   done
   if [ "$EXECUTE" -ne 1 ]; then
@@ -114,6 +135,14 @@ else
         udevadm control --reload-rules 2>/dev/null || true
         ;;
       usb:*) echo on > "${item#usb:}" 2>/dev/null || echo "  aviso: no se pudo cambiar ${item#usb:}" ;;
+      journal)
+        install -d -m 0755 "$(dirname "$JOURNAL_CONF")"
+        printf '%s' "$JOURNAL_CONTENT" > "$JOURNAL_CONF"
+        chmod 0644 "$JOURNAL_CONF"
+        install -d -m 2755 -g systemd-journal /var/log/journal
+        systemctl restart systemd-journald
+        journalctl --flush 2>/dev/null || true
+        ;;
     esac
   done
 fi
@@ -121,4 +150,5 @@ fi
 for dev in "${WIFI_DEVS[@]}"; do
   echo "$dev: $(iw dev "$dev" get power_save 2>/dev/null)"
 done
+echo "Registro: $(journalctl --disk-usage 2>/dev/null | sed 's/^Archived and active journals take up //')"
 echo "Suspensión: $(for t in "${SLEEP_TARGETS[@]}"; do printf '%s=%s ' "${t%.target}" "$(systemctl is-enabled "$t" 2>/dev/null || true)"; done)"
