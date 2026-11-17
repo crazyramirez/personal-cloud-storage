@@ -17,7 +17,28 @@ Nube personal autocontenida: un servidor Linux pequeño (una **Raspberry Pi**, u
 - `StorageGuardian`: bloquea las escrituras en cuanto el disco desaparece, se cuelga o cambia, y nunca escribe en el mountpoint vacío.
 - Los ficheros siguen siendo ficheros normales en el disco: lo conectas a Windows o macOS y los lees tal cual.
 - **Copia de seguridad en un disco USB externo**: lo conectas, la nube lo reconoce y sincroniza solo lo nuevo y lo modificado. Lo borrado no se borra de la copia: se aparta con fecha. Al terminar se expulsa solo ([ADR-0017](docs/adr/0017-copia-de-seguridad-disco-externo.md)).
-- **Carpeta de red para las copias de tus ordenadores** (opcional): comparte por SMB solo la carpeta `Copias`, para que Windows o macOS (por ejemplo con DEV Backup Studio) hagan ahí su copia de seguridad. Cada ordenador se conecta con un botón y un código de 6 cifras, sin contraseñas. Si el disco no está, la conexión se rechaza ([ADR-0021](docs/adr/0021-carpeta-de-red-smb.md), [ADR-0022](docs/adr/0022-emparejar-ordenadores-con-codigo.md)).
+- **Carpeta de red para las copias de tus ordenadores** (opcional): comparte por SMB solo la carpeta `Copias`, para que Windows o macOS (por ejemplo con [DEV Backup Studio](#juntos-con-dev-backup-studio)) hagan ahí su copia de seguridad. Cada ordenador se conecta con un botón y un código de 6 cifras, sin contraseñas. Si el disco no está, la conexión se rechaza ([ADR-0021](docs/adr/0021-carpeta-de-red-smb.md), [ADR-0022](docs/adr/0022-emparejar-ordenadores-con-codigo.md)).
+
+## Juntos con DEV Backup Studio
+
+[DEV Backup Studio](https://github.com/crazyramirez/dev-backup-studio) es una app de escritorio para Windows y macOS que hace copias de seguridad de tus carpetas de proyectos: copia solo lo que ha cambiado, guarda versiones de lo que modificas o borras y comprueba cada archivo con SHA-256. Puede guardar esas copias **en tu nube, por la red de casa**.
+
+Así se suman lo mejor de las dos:
+
+- **Los ordenadores de casa se copian solos en la nube**, sin conectar discos: basta con estar en casa (o en Tailscale). Si la nube está apagada, la app espera y sincroniza en cuanto vuelve.
+- **Ves y descargas esas copias desde la web**, en cualquier dispositivo: cada ordenador tiene su carpeta dentro de `Copias`.
+- **Tres copias sin esfuerzo.** El original en el ordenador, la copia en la nube y, con la copia de seguridad en disco externo, una tercera en otro disco. `Copias` entra en ella como cualquier otra carpeta.
+
+Conectarlas es cosa de un minuto, sin escribir direcciones ni contraseñas:
+
+1. Activa la carpeta de red una vez, en el servidor:
+   ```bash
+   sudo bash /opt/pcloud/current/deploy/linux/setup/pcloud-install-smb.sh --execute
+   ```
+2. En la web: **Ajustes → Copias de tus ordenadores → Conectar un ordenador**. Aparece un código de 6 cifras, válido 10 minutos y de un solo uso.
+3. En DEV Backup Studio ([descargar](https://github.com/crazyramirez/dev-backup-studio/releases/latest)), debajo del destino: **Conectar con mi nube…** La app encuentra la nube en la red; escribe el código y pulsa *Conectar*.
+
+Detalles y seguridad en [OPERATIONS §8 quinquies](docs/OPERATIONS.md#8-quinquies-carpeta-de-red-para-copias-de-los-ordenadores-smb-opcional), [ADR-0021](docs/adr/0021-carpeta-de-red-smb.md) y [ADR-0022](docs/adr/0022-emparejar-ordenadores-con-codigo.md).
 
 ## Requisitos
 
