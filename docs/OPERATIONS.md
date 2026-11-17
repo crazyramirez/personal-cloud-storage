@@ -235,6 +235,19 @@ Ver [ADR-0020](adr/0020-reiniciar-apagar-desde-la-web.md). Ajustes → «Reinici
 - **Registro:** `journalctl -u pcloud-power-agent --no-pager -n 20`.
 - **Apagar:** la Raspberry Pi no tiene botón; para encenderla, desconecta y vuelve a conectar la alimentación.
 
+## 8 quinquies. Carpeta de red para copias de los ordenadores (SMB, opcional)
+
+Ver [ADR-0021](adr/0021-carpeta-de-red-smb.md). Comparte por SMB solo la carpeta `Copias` de la nube para que los ordenadores de casa hagan su copia de seguridad en ella (por ejemplo con DEV Backup Studio). `install.sh` no la activa.
+
+- **Activar:** con el disco conectado y la web funcionando, `sudo bash /opt/pcloud/current/deploy/linux/setup/pcloud-install-smb.sh --execute`. Al terminar muestra la dirección, el usuario (`pcloud-smb`) y una contraseña que solo se ve esa vez.
+- **Conectar desde Windows:** Explorador → *Este equipo* → *Conectar unidad de red* → `\\<host>.local\Copias`, marca *Conectar con otras credenciales* y *Recordar mis credenciales*. En DEV Backup Studio, elige como destino esa unidad (`Z:\…`) o la ruta `\\<host>.local\Copias\<equipo>`.
+- **Conectar desde macOS:** Finder → *Ir* → *Conectarse al servidor* → `smb://<host>.local/Copias`.
+- **Fuera de casa:** solo por Tailscale (`\\<host>\Copias`). Nunca se abre el puerto 445 en el router.
+- **Sin disco:** la conexión se rechaza (`pcloud-smb-check.sh` exige `/srv/pcloud` montado y el estado READY). DEV Backup Studio espera a que vuelva.
+- **Cambiar la contraseña:** `pcloud-install-smb.sh --new-password --execute`.
+- **Comprobar:** `systemctl status smbd`, `sudo smbstatus`, `testparm -s`, `tail /var/log/samba/log.*`.
+- **Apagar:** `pcloud-install-smb.sh --remove --execute`. No borra la carpeta ni lo copiado.
+
 ## 9. Antes de confiar datos únicos
 
 1. **Copia de seguridad:** el sistema no hace copias por sí solo. Ten un segundo disco u otra copia de tus datos.

@@ -1,0 +1,55 @@
+# /etc/samba/smb.conf — Personal Cloud Storage: carpeta de red para copias (ADR-0021)
+# Generado por deploy/linux/setup/pcloud-install-smb.sh. No editar a mano: los cambios se hacen
+# en deploy/linux/samba/smb.conf.tmpl y se reinstalan con ese script.
+# El smb.conf que traía el sistema queda en /etc/samba/smb.conf.pcloud-original.
+
+[global]
+   server role = standalone server
+   server string = Personal Cloud Storage
+   # Solo SMB3 (Windows 8+, macOS 10.10+). Sin NetBIOS ni SMB1.
+   server min protocol = SMB3
+   disable netbios = yes
+   smb ports = 445
+   # Solo la red de casa y Tailscale; nunca Internet (AGENTS.md, regla 4).
+   hosts allow = 127.0.0.1 ::1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7 fe80::/10
+   hosts deny = ALL
+   # Cifrado si el cliente lo admite (todos los Windows y macOS actuales).
+   server smb encrypt = desired
+   # Sin invitados ni sesiones anónimas.
+   map to guest = never
+   restrict anonymous = 2
+   usershare allow guests = no
+   usershare max shares = 0
+   # Sin impresoras.
+   load printers = no
+   printing = bsd
+   printcap name = /dev/null
+   disable spoolss = yes
+   # exFAT/NTFS montados con uid/gid fijos: sin atributos extendidos ni permisos por archivo.
+   ea support = no
+   store dos attributes = no
+   map archive = no
+   map hidden = no
+   map system = no
+   map readonly = no
+   unix extensions = no
+   log file = /var/log/samba/log.%m
+   max log size = 1000
+   logging = file
+
+[@SHARE@]
+   comment = Copias de seguridad de tus ordenadores
+   path = @SHARE_PATH@
+   valid users = @SMB_USER@
+   # Todo se escribe como el usuario del servicio, igual que lo que sube la web.
+   force user = pcloud
+   force group = pcloud
+   read only = no
+   browseable = yes
+   create mask = 0600
+   directory mask = 0700
+   # Cada conexión se acepta solo si el disco está montado y el StorageGuardian dice READY.
+   root preexec = /usr/local/lib/pcloud/pcloud-smb-check.sh @PORT@ "@SHARE_PATH@"
+   root preexec close = yes
+   # Un volcado del cliente («flush») llega al disco antes de responder.
+   strict sync = yes
