@@ -56,6 +56,10 @@ const es = {
   linkCopied: 'Enlace copiado: ábrelo en cualquier dispositivo de tu red con la sesión iniciada',
   linkCopyFailed: 'No se pudo copiar el enlace',
   folderCreateFailed: 'No se pudo crear la carpeta «{dir}»: {message}',
+  readingDropped: (p) => (Number(p.n) === 0 ? 'Leyendo lo que has soltado…' : `Leyendo lo que has soltado… ${p.n} archivos`),
+  preparingFolders: 'Creando carpetas: {done} de {total}',
+  unreadableSkipped: (p) => (Number(p.n) === 1 ? 'Se ha omitido 1 elemento que no se podía leer' : `Se han omitido ${p.n} elementos que no se podían leer`),
+  foldersCreated: (p) => (Number(p.n) === 1 ? 'Carpeta creada' : `${p.n} carpetas creadas`),
   uploading: (p) => (Number(p.n) === 1 ? `Subiendo «${p.name}»` : `Subiendo ${p.n} archivos`),
   viewProgress: 'Ver progreso',
 
@@ -226,6 +230,10 @@ export default {
     linkCopied: 'Link copied: open it on any device on your network where you’re signed in',
     linkCopyFailed: 'Couldn’t copy the link',
     folderCreateFailed: 'Couldn’t create folder “{dir}”: {message}',
+    readingDropped: (p) => (Number(p.n) === 0 ? 'Reading what you dropped…' : `Reading what you dropped… ${p.n} files`),
+    preparingFolders: 'Creating folders: {done} of {total}',
+    unreadableSkipped: (p) => (Number(p.n) === 1 ? '1 item that couldn’t be read was skipped' : `${p.n} items that couldn’t be read were skipped`),
+    foldersCreated: (p) => (Number(p.n) === 1 ? 'Folder created' : `${p.n} folders created`),
     uploading: (p) => (Number(p.n) === 1 ? `Uploading “${p.name}”` : `Uploading ${p.n} files`),
     viewProgress: 'View progress',
 

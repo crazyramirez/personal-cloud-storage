@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import type { BatchResponse, FsEntry, FsListResponse } from '@pcloud/contracts';
 
+// La misma instancia para todas las carpetas: cambiar de carpeta NO vuelve a montar la página
+// (si no, la lista se vacía y aparece el esqueleto en cada clic). watch(clientPath) reinicia lo
+// que depende de la carpeta.
+definePageMeta({ key: 'archivos' });
+
 const route = useRoute();
 const storage = useStorage();
 const { transfers, enqueue, completedTick, lastCompletedDest, pause, resume, confirmCancel, openPanel } = useTransfers();
@@ -24,6 +29,26 @@ const entries = ref<FsEntry[]>([]);
 const total = ref(0);
 const nextCursor = ref<string | null>(null);
 const loading = ref(true);
+/**
+ * Cambiando de carpeta: la lista anterior sigue a la vista (sin responder a clics) hasta que llega
+ * la nueva. Si tarda más de SKELETON_DELAY_MS, entonces sí se muestra el esqueleto. Así abrir una
+ * carpeta que responde rápido no da un «flash» de esqueleto.
+ */
+const pending = ref(false);
+const SKELETON_DELAY_MS = 250;
+let skeletonTimer: ReturnType<typeof setTimeout> | null = null;
+/** Últimas listas vistas (por ruta): al volver a una carpeta se muestra al instante y se actualiza. */
+const listCache = new Map<string, FsListResponse>();
+function remember(path: string, page: FsListResponse): void {
+  listCache.delete(path);
+  listCache.set(path, page);
+  if (listCache.size > 40) listCache.delete(listCache.keys().next().value as string);
+}
+function settle(): void {
+  if (skeletonTimer !== null) clearTimeout(skeletonTimer);
+  skeletonTimer = null;
+  pending.value = false;
+}
 const loadingMore = ref(false);
 const failure = ref<ApiError | null>(null);
 const selection = ref<Set<string>>(new Set());
@@ -91,12 +116,14 @@ function pathOf(name: string, dir = clientPath.value): string {
 
 async function load(options: { keepSelection?: boolean; select?: string[] } = {}): Promise<void> {
   const current = ++requestId;
-  if (entries.value.length === 0) loading.value = true;
+  if (entries.value.length === 0 && !pending.value && !listCache.has(clientPath.value)) loading.value = true;
   failure.value = null;
   try {
     const limit = Math.min(1000, Math.max(PAGE_SIZE, entries.value.length));
     const page = await api<FsListResponse>('/fs/list', { query: { path: clientPath.value, limit } });
     if (current !== requestId) return;
+    settle();
+    remember(clientPath.value, page);
     entries.value = page.entries;
     total.value = page.total;
     nextCursor.value = page.nextCursor;
@@ -112,13 +139,18 @@ async function load(options: { keepSelection?: boolean; select?: string[] } = {}
     }
   } catch (error) {
     if (current !== requestId) return;
+    settle();
+    listCache.delete(clientPath.value);
     failure.value = asApiError(error);
     entries.value = [];
     total.value = 0;
     nextCursor.value = null;
     if (failure.value.code === 'STORAGE_UNAVAILABLE') void storage.refresh();
   } finally {
-    if (current === requestId) loading.value = false;
+    if (current === requestId) {
+      loading.value = false;
+      openRequestedFile();
+    }
   }
 }
 
@@ -139,9 +171,30 @@ async function loadMore(): Promise<void> {
   }
 }
 
-watch(clientPath, () => {
+watch(clientPath, (path) => {
   filter.value = '';
-  entries.value = [];
+  settle();
+  const cached = listCache.get(path);
+  if (cached !== undefined) {
+    // Ya visitada: se ve al instante y load() la actualiza por detrás.
+    entries.value = cached.entries;
+    total.value = cached.total;
+    nextCursor.value = cached.nextCursor;
+    failure.value = null;
+    loading.value = false;
+  } else if (entries.value.length > 0 && failure.value === null) {
+    pending.value = true;
+    skeletonTimer = setTimeout(() => {
+      skeletonTimer = null;
+      if (!pending.value) return;
+      pending.value = false;
+      entries.value = [];
+      loading.value = true;
+    }, SKELETON_DELAY_MS);
+  } else {
+    entries.value = [];
+    loading.value = true;
+  }
   selection.value = new Set();
   focused.value = null;
   viewerName.value = null;
@@ -298,9 +351,9 @@ function openEntry(entry: FsEntry): void {
 }
 
 // Enlace copiado con «Copiar enlace» (…?ver=archivo): al cargar la carpeta se abre ese archivo.
-watch(loading, (now) => {
+function openRequestedFile(): void {
   const wanted = route.query.ver;
-  if (now || typeof wanted !== 'string' || wanted === '') return;
+  if (typeof wanted !== 'string' || wanted === '') return;
   if (files.value.some((file) => file.name === wanted)) {
     selectOnly(wanted);
     viewerName.value = wanted;
@@ -308,7 +361,7 @@ watch(loading, (now) => {
     toast(t('explorer.notInFolder', { name: wanted }), { tone: 'warn' });
   }
   void navigateTo({ path: route.path, query: {} }, { replace: true });
-});
+}
 
 const viewerIndex = computed(() => (viewerName.value === null ? -1 : files.value.findIndex((file) => file.name === viewerName.value)));
 // Si el archivo abierto desaparece (otro dispositivo lo borró o movió), se cierra el visor.
@@ -596,27 +649,67 @@ async function copyLink(entry: FsEntry | null): Promise<void> {
 
 // ── Subidas (archivos y carpetas) ───────────────────────────────────────────────────────────
 
-/** Sube archivos con su ruta relativa («Viaje/día 1/foto.jpg»), creando antes las carpetas. */
-async function uploadTree(items: Array<{ file: File; rel: string }>): Promise<void> {
-  if (items.length === 0 || !canWrite.value) return;
+/** Ejecuta `fn` sobre `items` con como mucho `limit` a la vez. */
+async function eachLimit<T>(items: readonly T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < items.length) await fn(items[next++] as T);
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
+
+/**
+ * Sube archivos con su ruta relativa («Viaje/día 1/foto.jpg»), creando antes las carpetas
+ * (también las vacías de `emptyDirs`). Las carpetas se crean por niveles y en paralelo, con el
+ * progreso a la vista: con miles de carpetas no parece que «no hace nada».
+ */
+async function uploadTree(items: Array<{ file: File; rel: string }>, emptyDirs: readonly string[] = [], notice?: number): Promise<void> {
+  if ((items.length === 0 && emptyDirs.length === 0) || !canWrite.value) {
+    if (notice !== undefined) dismissToast(notice);
+    return;
+  }
   const base = clientPath.value;
   const dirs = new Set<string>();
-  for (const item of items) {
-    const parts = item.rel.split('/').slice(0, -1);
+  const addDir = (rel: string): void => {
+    const parts = rel.split('/').filter(Boolean);
     for (let i = 1; i <= parts.length; i++) dirs.add(parts.slice(0, i).join('/'));
+  };
+  for (const item of items) addDir(item.rel.split('/').slice(0, -1).join('/'));
+  for (const dir of emptyDirs) addDir(dir);
+  const byDepth = new Map<number, string[]>();
+  for (const dir of dirs) {
+    const depth = dir.split('/').length;
+    byDepth.set(depth, [...(byDepth.get(depth) ?? []), dir]);
   }
-  const ordered = [...dirs].sort((a, b) => a.split('/').length - b.split('/').length);
-  for (const dir of ordered) {
-    const parts = dir.split('/');
-    const parent = parts.length === 1 ? base : pathOf(parts.slice(0, -1).join('/'), base);
-    try {
-      await api('/fs/folders', { method: 'POST', body: { path: parent, name: parts.at(-1) } });
-    } catch (error) {
-      if (!(error instanceof ApiError && error.code === 'CONFLICT')) {
-        toast(t('explorer.folderCreateFailed', { dir, message: asApiError(error).message }), { tone: 'danger' });
-        return;
+  // Aviso de progreso solo si hay carpetas que crear (el de la lectura, si viene, se reutiliza).
+  let progress: number | null = notice ?? null;
+  if (dirs.size > 0) {
+    const message = t('explorer.preparingFolders', { done: 0, total: dirs.size });
+    if (progress === null) progress = toast(message, { busy: true });
+    else updateToast(progress, { message });
+  }
+  let created = 0;
+  let failedDir: { dir: string; message: string } | null = null;
+  for (const depth of [...byDepth.keys()].sort((x, y) => x - y)) {
+    await eachLimit(byDepth.get(depth) ?? [], 6, async (dir) => {
+      if (failedDir !== null) return;
+      const parts = dir.split('/');
+      const parent = parts.length === 1 ? base : pathOf(parts.slice(0, -1).join('/'), base);
+      try {
+        await api('/fs/folders', { method: 'POST', body: { path: parent, name: parts.at(-1) } });
+      } catch (error) {
+        if (!(error instanceof ApiError && error.code === 'CONFLICT')) failedDir = { dir, message: asApiError(error).message };
       }
-    }
+      created += 1;
+      if (progress !== null && (created % 10 === 0 || created === dirs.size)) updateToast(progress, { message: t('explorer.preparingFolders', { done: created, total: dirs.size }) });
+    });
+    if (failedDir !== null) break;
+  }
+  if (progress !== null) dismissToast(progress);
+  if (failedDir !== null) {
+    const { dir, message } = failedDir as { dir: string; message: string };
+    toast(t('explorer.folderCreateFailed', { dir, message }), { tone: 'danger' });
+    return;
   }
   const groups = new Map<string, File[]>();
   for (const item of items) {
@@ -625,10 +718,14 @@ async function uploadTree(items: Array<{ file: File; rel: string }>): Promise<vo
     groups.set(dest, [...(groups.get(dest) ?? []), item.file]);
   }
   for (const [dest, group] of groups) enqueue(group, dest);
-  if (ordered.length > 0) void load({ keepSelection: true });
-  toast(t('explorer.uploading', { n: items.length, name: (items[0] as { file: File }).file.name }), {
-    action: { label: t('explorer.viewProgress'), run: openPanel },
-  });
+  if (dirs.size > 0) void load({ keepSelection: true });
+  if (items.length > 0) {
+    toast(t('explorer.uploading', { n: items.length, name: (items[0] as { file: File }).file.name }), {
+      action: { label: t('explorer.viewProgress'), run: openPanel },
+    });
+  } else {
+    toast(t('explorer.foldersCreated', { n: dirs.size }), { tone: 'ok' });
+  }
 }
 
 function onPicked(event: Event): void {
@@ -638,19 +735,60 @@ function onPicked(event: Event): void {
   void uploadTree(picked);
 }
 
-async function readEntry(entry: FileSystemEntry, prefix: string, out: Array<{ file: File; rel: string }>): Promise<void> {
-  if (entry.isFile) {
-    const file = await new Promise<File>((resolve, reject) => (entry as FileSystemFileEntry).file(resolve, reject));
-    out.push({ file, rel: `${prefix}${entry.name}` });
-    return;
-  }
-  if (!entry.isDirectory) return;
-  const reader = (entry as FileSystemDirectoryEntry).createReader();
-  for (;;) {
-    const batch = await new Promise<FileSystemEntry[]>((resolve, reject) => reader.readEntries(resolve, reject));
-    if (batch.length === 0) break;
-    for (const child of batch) await readEntry(child, `${prefix}${entry.name}/`, out);
-  }
+/**
+ * Recorre lo soltado (archivos y carpetas, a cualquier profundidad) con varias lecturas a la vez.
+ * Devuelve los archivos con su ruta relativa y las carpetas vacías. `onProgress` recibe cuántos
+ * archivos lleva: el aviso se actualiza mientras se lee.
+ */
+async function scanDropped(
+  roots: FileSystemEntry[],
+  onProgress: (files: number) => void,
+): Promise<{ files: Array<{ file: File; rel: string }>; emptyDirs: string[]; failed: number }> {
+  const files: Array<{ file: File; rel: string }> = [];
+  const emptyDirs: string[] = [];
+  let failed = 0;
+  const fileOf = (entry: FileSystemFileEntry): Promise<File> => new Promise((resolve, reject) => entry.file(resolve, reject));
+  const childrenOf = async (entry: FileSystemDirectoryEntry): Promise<FileSystemEntry[]> => {
+    const reader = entry.createReader();
+    const all: FileSystemEntry[] = [];
+    for (;;) {
+      const batch = await new Promise<FileSystemEntry[]>((resolve, reject) => reader.readEntries(resolve, reject));
+      if (batch.length === 0) return all;
+      all.push(...batch);
+    }
+  };
+  const queue: Array<{ entry: FileSystemEntry; prefix: string }> = roots.map((entry) => ({ entry, prefix: '' }));
+  let active = 0;
+  await new Promise<void>((resolve) => {
+    const pump = (): void => {
+      if (queue.length === 0 && active === 0) return resolve();
+      while (active < 8 && queue.length > 0) {
+        const { entry, prefix } = queue.shift() as { entry: FileSystemEntry; prefix: string };
+        active += 1;
+        const work = async (): Promise<void> => {
+          if (entry.isFile) {
+            files.push({ file: await fileOf(entry as FileSystemFileEntry), rel: `${prefix}${entry.name}` });
+            if (files.length % 25 === 0) onProgress(files.length);
+          } else if (entry.isDirectory) {
+            const children = await childrenOf(entry as FileSystemDirectoryEntry);
+            if (children.length === 0) emptyDirs.push(`${prefix}${entry.name}`);
+            for (const child of children) queue.push({ entry: child, prefix: `${prefix}${entry.name}/` });
+          }
+        };
+        work()
+          .catch(() => {
+            failed += 1; // ilegible (permisos, enlace roto): se omite y se avisa al final
+          })
+          .finally(() => {
+            active -= 1;
+            pump();
+          });
+      }
+    };
+    pump();
+  });
+  onProgress(files.length);
+  return { files, emptyDirs, failed };
 }
 
 // Arrastrar y soltar: archivos del ordenador (subir) o elementos de la nube (mover; Ctrl = copiar).
@@ -672,17 +810,21 @@ async function onDrop(event: DragEvent): Promise<void> {
   dragging.value = false;
   if (!canWrite.value || event.dataTransfer === null) return;
   if (event.dataTransfer.types.includes(INTERNAL)) return; // soltado fuera de una carpeta: nada
+  // Hay que sacar las entradas YA: tras el primer await el navegador vacía dataTransfer.
   const roots = Array.from(event.dataTransfer.items)
     .filter((item) => item.kind === 'file')
     .map((item) => item.webkitGetAsEntry?.() ?? null);
   const plain = Array.from(event.dataTransfer.files);
-  const out: Array<{ file: File; rel: string }> = [];
-  if (roots.every((entry) => entry !== null)) {
-    for (const entry of roots) await readEntry(entry as FileSystemEntry, '', out);
-  } else {
-    out.push(...plain.map((file) => ({ file, rel: file.name })));
+  if (roots.length === 0 && plain.length === 0) return;
+  if (roots.length === 0 || roots.some((entry) => entry === null)) {
+    await uploadTree(plain.map((file) => ({ file, rel: file.name })));
+    return;
   }
-  await uploadTree(out);
+  // Aviso inmediato: leer carpetas grandes (p. ej. node_modules) lleva su tiempo.
+  const notice = toast(t('explorer.readingDropped', { n: 0 }), { busy: true });
+  const scanned = await scanDropped(roots as FileSystemEntry[], (n) => updateToast(notice, { message: t('explorer.readingDropped', { n }) }));
+  if (scanned.failed > 0) toast(t('explorer.unreadableSkipped', { n: scanned.failed }), { tone: 'warn', timeoutMs: 8000 });
+  await uploadTree(scanned.files, scanned.emptyDirs, notice);
 }
 
 function onItemDragStart(event: DragEvent, entry: FsEntry): void {
@@ -1115,8 +1257,8 @@ function ghostMenu(item: Transfer): MenuItem[] {
         ref="listing"
         :aria-label="t('explorer.listing')"
         class="listing"
-        :class="{ dragging }"
-        :aria-busy="loading"
+        :class="{ dragging, stale: pending }"
+        :aria-busy="loading || pending"
         @click="onBackgroundClick"
         @touchstart.passive="longPress.onTouchstart"
         @touchmove.passive="longPress.onTouchmove"
@@ -1554,6 +1696,24 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* Entra con un fundido y un pequeño retraso: si la carga es rápida, ni se llega a ver. */
+  animation: skeleton-in 0.25s ease-out 0.15s both;
+}
+
+@keyframes skeleton-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Lista de la carpeta anterior mientras llega la nueva: no responde a clics y, si tarda, se atenúa. */
+.listing.stale {
+  pointer-events: none;
+}
+
+.listing.stale > * {
+  opacity: 0.55;
+  transition: opacity 0.15s ease 0.12s;
 }
 
 .skeleton li {
