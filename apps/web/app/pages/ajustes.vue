@@ -204,104 +204,6 @@ onMounted(async () => {
 async function installApp(): Promise<void> {
   if (await pwa.install()) toast(t('settings.appInstalled'), { tone: 'ok' });
 }
-
-// ── Índice lateral (pantalla grande) ────────────────────────────────────────────────────────
-interface NavItem {
-  id: string;
-  icon: IconName;
-  label: string;
-}
-
-const navGroups = computed<Array<{ key: string; label: string; items: NavItem[] }>>(() => {
-  const owner = isOwner.value;
-  const groups: Array<{ key: string; label: string; items: NavItem[] }> = [
-    {
-      key: 'account',
-      label: t('settings.groupAccount'),
-      items: [
-        { id: 'cfg-keys', icon: 'fingerprint', label: t('settings.passkeys') },
-        { id: 'cfg-password', icon: 'lock', label: t('settings.password') },
-        { id: 'cfg-sessions', icon: 'monitor', label: t('settings.sessions') },
-        ...(owner ? [{ id: 'cfg-users', icon: 'users' as IconName, label: t('settings.users') }] : []),
-      ],
-    },
-    {
-      key: 'prefs',
-      label: t('settings.groupPreferences'),
-      items: [
-        { id: 'cfg-language', icon: 'globe', label: t('settings.language') },
-        { id: 'cfg-look', icon: 'sun', label: t('settings.appearance') },
-        { id: 'cfg-app', icon: 'install', label: t('settings.app') },
-      ],
-    },
-  ];
-  if (owner) {
-    groups.push({
-      key: 'cloud',
-      label: t('settings.groupCloud'),
-      items: [
-        { id: 'cfg-backup', icon: 'backup', label: t('backup.title') },
-        { id: 'cfg-shares', icon: 'globe', label: t('shares.settingsTitle') },
-      ],
-    });
-  }
-  groups.push({
-    key: 'device',
-    label: t('settings.groupDevice'),
-    items: [
-      { id: 'cfg-server', icon: 'drive', label: t('settings.server') },
-      ...(owner
-        ? [
-            { id: 'cfg-power', icon: 'bolt' as IconName, label: t('power.title') },
-            { id: 'cfg-speed', icon: 'gauge' as IconName, label: t('settings.diskSpeed') },
-          ]
-        : []),
-    ],
-  });
-  return groups;
-});
-
-const activeId = ref('cfg-keys');
-let spy: IntersectionObserver | null = null;
-const reduceMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-/** Mientras dura un salto desde el índice, el resaltado no sigue a las secciones que pasan. */
-let jumpingUntil = 0;
-
-function goTo(id: string): void {
-  const target = document.getElementById(id);
-  if (target === null) return;
-  activeId.value = id;
-  jumpingUntil = Date.now() + 900;
-  // El foco va a la tarjeta (teclado y lectores de pantalla siguen el salto). ANTES de desplazar:
-  // en Chrome, dar el foco durante un desplazamiento suave lo interrumpe a medias.
-  target.focus({ preventScroll: true });
-  target.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'start' });
-}
-
-/** Marca en el índice la sección que está a la vista. */
-function watchSections(): void {
-  spy?.disconnect();
-  if (typeof IntersectionObserver === 'undefined') return;
-  spy = new IntersectionObserver(
-    (entries) => {
-      if (Date.now() < jumpingUntil) return;
-      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-      const first = visible[0];
-      if (first !== undefined) activeId.value = first.target.id;
-    },
-    { rootMargin: '-12% 0px -70% 0px' },
-  );
-  for (const group of navGroups.value) {
-    for (const item of group.items) {
-      const element = document.getElementById(item.id);
-      if (element !== null) spy.observe(element);
-    }
-  }
-}
-onMounted(() => void nextTick(watchSections));
-watch(isOwner, () => void nextTick(watchSections));
-onBeforeUnmount(() => spy?.disconnect());
 </script>
 
 <template>
@@ -311,28 +213,12 @@ onBeforeUnmount(() => spy?.disconnect());
       <p class="muted">{{ t('settings.subtitle') }}</p>
     </header>
 
-    <!-- Índice lateral fijo (pantalla grande): agrupado y con la sección visible marcada. -->
-    <nav class="toc" :aria-label="t('settings.onThisPage')">
-      <div v-for="group in navGroups" :key="group.key" class="toc-group">
-        <p class="toc-label">{{ group.label }}</p>
-        <a
-          v-for="item in group.items"
-          :key="item.id"
-          :href="`#${item.id}`"
-          class="toc-link"
-          :class="{ on: activeId === item.id }"
-          :aria-current="activeId === item.id ? 'location' : undefined"
-          @click.prevent="goTo(item.id)"
-        ><AppIcon :name="item.icon" :size="16" />{{ item.label }}</a>
-      </div>
-    </nav>
-
     <div class="groups">
       <!-- ── Cuenta y seguridad ─────────────────────────────────────────────────────────── -->
       <div class="group" role="group" :aria-label="t('settings.groupAccount')">
         <p class="group-label" aria-hidden="true">{{ t('settings.groupAccount') }}</p>
         <div class="grid">
-          <section id="cfg-keys" tabindex="-1" class="card sec cell" aria-labelledby="s-key">
+          <section id="cfg-keys" class="card sec cell" aria-labelledby="s-key">
             <header><AppIcon name="fingerprint" /><h2 id="s-key">{{ t('settings.passkeys') }}</h2></header>
             <p class="muted">{{ t('settings.passkeysIntro') }}</p>
             <p v-if="!passkeysSupportedHere" class="notice notice-warn">
@@ -354,7 +240,7 @@ onBeforeUnmount(() => spy?.disconnect());
             </div>
           </section>
 
-          <section id="cfg-password" tabindex="-1" class="card sec cell" aria-labelledby="s-pass">
+          <section id="cfg-password" class="card sec cell" aria-labelledby="s-pass">
             <header><AppIcon name="lock" /><h2 id="s-pass">{{ t('settings.password') }}</h2></header>
             <form class="stack" @submit.prevent="changePassword">
               <input type="text" autocomplete="username" :value="session.user.value?.username" class="sr-only" tabindex="-1" aria-hidden="true" readonly>
@@ -380,7 +266,7 @@ onBeforeUnmount(() => spy?.disconnect());
             </form>
           </section>
 
-          <section id="cfg-sessions" tabindex="-1" class="card sec cell" :class="{ 'span-2': !isOwner }" aria-labelledby="s-ses">
+          <section id="cfg-sessions" class="card sec cell" :class="{ 'span-2': !isOwner }" aria-labelledby="s-ses">
             <header><AppIcon name="monitor" /><h2 id="s-ses">{{ t('settings.sessions') }}</h2></header>
             <ul class="rows">
               <li v-for="item in sessions" :key="item.id" class="line">
@@ -395,7 +281,7 @@ onBeforeUnmount(() => spy?.disconnect());
             </ul>
           </section>
 
-          <section v-if="isOwner" id="cfg-users" tabindex="-1" class="card sec cell" aria-labelledby="s-users">
+          <section v-if="isOwner" id="cfg-users" class="card sec cell" aria-labelledby="s-users">
             <header><AppIcon name="users" /><h2 id="s-users">{{ t('settings.users') }}</h2></header>
             <p class="muted">{{ t('settings.usersIntro') }}</p>
             <ul class="rows">
@@ -427,7 +313,7 @@ onBeforeUnmount(() => spy?.disconnect());
       <div class="group" role="group" :aria-label="t('settings.groupPreferences')">
         <p class="group-label" aria-hidden="true">{{ t('settings.groupPreferences') }}</p>
         <div class="grid three">
-          <section id="cfg-language" tabindex="-1" class="card sec cell" aria-labelledby="s-lang">
+          <section id="cfg-language" class="card sec cell" aria-labelledby="s-lang">
             <header><AppIcon name="globe" /><h2 id="s-lang">{{ t('settings.language') }}</h2></header>
             <div class="seg" role="radiogroup" aria-labelledby="s-lang">
               <button v-for="option in languageOptions" :key="option.v" type="button" role="radio" :aria-checked="localePreference === option.v" :lang="option.lang" @click="setLocalePreference(option.v)">{{ option.l }}</button>
@@ -435,14 +321,14 @@ onBeforeUnmount(() => spy?.disconnect());
             <p v-if="localePreference === 'system'" class="muted small" aria-live="polite">{{ t('settings.languageNow', { name: t('common.languageName') }) }}</p>
           </section>
 
-          <section id="cfg-look" tabindex="-1" class="card sec cell" aria-labelledby="s-look">
+          <section id="cfg-look" class="card sec cell" aria-labelledby="s-look">
             <header><AppIcon name="sun" /><h2 id="s-look">{{ t('settings.appearance') }}</h2></header>
             <div class="seg" role="radiogroup" :aria-label="t('settings.theme')">
               <button v-for="option in [{ v: 'system', l: t('settings.themeSystem') }, { v: 'light', l: t('settings.themeLight') }, { v: 'dark', l: t('settings.themeDark') }]" :key="option.v" type="button" role="radio" :aria-checked="preference === option.v" @click="setTheme(option.v as 'system' | 'light' | 'dark')">{{ option.l }}</button>
             </div>
           </section>
 
-          <section id="cfg-app" tabindex="-1" class="card sec cell" aria-labelledby="s-app">
+          <section id="cfg-app" class="card sec cell" aria-labelledby="s-app">
             <header><AppIcon name="install" /><h2 id="s-app">{{ t('settings.app') }}</h2></header>
             <p v-if="pwa.installed.value" class="notice notice-info"><AppIcon name="check" class="accent" /><span>{{ t('settings.usingInstalled') }}</span></p>
             <template v-else>
@@ -459,8 +345,8 @@ onBeforeUnmount(() => spy?.disconnect());
       <div v-if="isOwner" class="group" role="group" :aria-label="t('settings.groupCloud')">
         <p class="group-label" aria-hidden="true">{{ t('settings.groupCloud') }}</p>
         <div class="grid">
-          <div id="cfg-backup" tabindex="-1" class="cell span-2"><BackupSettings /></div>
-          <div id="cfg-shares" tabindex="-1" class="cell span-2"><SharesSettings /></div>
+          <div id="cfg-backup" class="cell span-2"><BackupSettings /></div>
+          <div id="cfg-shares" class="cell span-2"><SharesSettings /></div>
         </div>
       </div>
 
@@ -468,7 +354,7 @@ onBeforeUnmount(() => spy?.disconnect());
       <div class="group" role="group" :aria-label="t('settings.groupDevice')">
         <p class="group-label" aria-hidden="true">{{ t('settings.groupDevice') }}</p>
         <div class="grid">
-          <section id="cfg-server" tabindex="-1" class="card sec cell" :class="{ 'span-2': !isOwner }" aria-labelledby="s-sys">
+          <section id="cfg-server" class="card sec cell" :class="{ 'span-2': !isOwner }" aria-labelledby="s-sys">
             <header><AppIcon name="drive" /><h2 id="s-sys">{{ t('settings.server') }}</h2></header>
             <dl class="kv">
               <dt>{{ t('settings.address') }}</dt>
@@ -483,8 +369,8 @@ onBeforeUnmount(() => spy?.disconnect());
               <dd><a href="/pcloud-ca.crt" download>{{ t('settings.downloadCert') }}</a>{{ t('settings.certAfter') }}</dd>
             </dl>
           </section>
-          <div v-if="isOwner" id="cfg-power" tabindex="-1" class="cell"><PowerSettings /></div>
-          <div v-if="isOwner" id="cfg-speed" tabindex="-1" class="cell span-2"><DiskSpeedTest /></div>
+          <div v-if="isOwner" id="cfg-power" class="cell"><PowerSettings /></div>
+          <div v-if="isOwner" id="cfg-speed" class="cell span-2"><DiskSpeedTest /></div>
         </div>
       </div>
     </div>
@@ -492,11 +378,11 @@ onBeforeUnmount(() => spy?.disconnect());
 </template>
 
 <style scoped>
-/* ── Estructura: índice lateral + grupos en rejilla ───────────────────────────────────────── */
+/* ── Estructura: grupos de tarjetas en rejilla ──────────────────────────────────────────── */
 .settings {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 20px 36px;
+  gap: 20px;
   width: 100%;
   max-width: 1440px;
 }
@@ -515,10 +401,6 @@ h1 {
 
 .page-head p {
   font-size: 14px;
-}
-
-.toc {
-  display: none;
 }
 
 .groups {
@@ -557,8 +439,6 @@ h1 {
 /* Las tarjetas llenan su celda: las de una misma fila tienen la misma altura. */
 .cell {
   min-width: 0;
-  scroll-margin-top: 20px;
-  outline: none;
 }
 
 div.cell {
@@ -571,34 +451,6 @@ div.cell > :deep(.card) {
 }
 
 @media (min-width: 1180px) {
-  .settings {
-    grid-template-columns: 220px minmax(0, 1fr);
-    grid-template-areas:
-      'head head'
-      'toc groups';
-  }
-
-  .page-head {
-    grid-area: head;
-  }
-
-  .groups {
-    grid-area: groups;
-  }
-
-  .toc {
-    grid-area: toc;
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-    position: sticky;
-    top: 20px;
-    align-self: start;
-    max-height: calc(100vh - 40px);
-    overflow-y: auto;
-    padding: 4px 0;
-  }
-
   .grid.three {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -613,60 +465,6 @@ div.cell > :deep(.card) {
   .span-2 {
     grid-column: auto;
   }
-}
-
-/* ── Índice ──────────────────────────────────────────────────────────────────────────────── */
-.toc-group {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.toc-label {
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-  padding: 0 10px 6px;
-}
-
-.toc-link {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 36px;
-  padding: 0 10px;
-  border-radius: 9px;
-  color: var(--text);
-  font-size: 13.5px;
-  font-weight: 500;
-  text-decoration: none;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.toc-link :deep(svg) {
-  flex: none;
-  color: var(--muted);
-}
-
-.toc-link:hover {
-  background: var(--surface-2);
-}
-
-.toc-link.on {
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 650;
-}
-
-.toc-link.on :deep(svg) {
-  color: var(--accent);
-}
-
-.toc-link:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
 }
 
 /* ── Tarjetas: la misma cabecera en todas (también en las de los componentes) ───────────── */
@@ -696,12 +494,6 @@ div.cell > :deep(.card) {
   font-size: 16px;
   font-weight: 650;
   letter-spacing: -0.01em;
-}
-
-.cell:focus-visible,
-div.cell:focus-visible > :deep(.card) {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
 }
 
 /* El pie (botón principal) siempre abajo: las tarjetas de una fila quedan alineadas. */
