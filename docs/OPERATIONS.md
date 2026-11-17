@@ -245,6 +245,7 @@ Ver [ADR-0021](adr/0021-carpeta-de-red-smb.md) y [ADR-0022](adr/0022-emparejar-o
 - **A mano, en macOS:** Finder → *Ir* → *Conectarse al servidor* → `smb://<host>.local/Copias`.
 - **Fuera de casa:** solo por Tailscale (`\\<host>\Copias`). Nunca se abre el puerto 445 en el router.
 - **Sin disco:** la conexión se rechaza (`pcloud-smb-check.sh` exige `/srv/pcloud` montado y el estado READY). DEV Backup Studio espera a que vuelva.
+- **Si se borra `Copias` desde la web:** se vuelve a crear vacía en la siguiente conexión (con el disco en READY). Lo copiado no vuelve: está en la papelera, si no se ha vaciado.
 - **Cambiar la contraseña:** `pcloud-install-smb.sh --new-password --execute`. Después, vuelve a conectar cada ordenador con un código nuevo.
 - **Comprobar:** `systemctl status smbd`, `sudo smbstatus`, `testparm -s`, `tail /var/log/samba/log.*`.
 - **Apagar:** `pcloud-install-smb.sh --remove --execute`. No borra la carpeta ni lo copiado.
