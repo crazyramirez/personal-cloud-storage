@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { after, before, beforeEach, describe, it } from 'node:test';
 import type { FastifyInstance } from 'fastify';
@@ -93,6 +93,34 @@ describe('emparejar un ordenador con la carpeta de red (ADR-0022)', () => {
     const wrong = code === '000000' ? '111111' : '000000';
     for (let i = 0; i < PAIRING_MAX_FAILURES; i++) assert.equal((await claim(wrong)).statusCode, 403);
     assert.equal((await claim(code)).statusCode, 403);
+  });
+
+  it('la carpeta compartida no se puede borrar, mover ni renombrar; lo de dentro sí', async () => {
+    await mkdir(path.join(h.dataRoot, 'Copias', 'PC de Ana'), { recursive: true });
+    const op = (url: string, payload: object) =>
+      app.inject({ method: 'POST', url: `/api/v1/fs/${url}`, headers: { ...CSRF, cookie: owner }, payload });
+    for (const [url, payload] of [
+      ['trash', { paths: ['/Copias'] }],
+      ['trash', { paths: ['/copias/'] }],
+      ['move', { paths: ['/Copias'], destination: '/' }],
+      ['rename', { path: '/Copias', name: 'Otra' }],
+    ] as const) {
+      const response = await op(url, payload);
+      assert.equal(response.statusCode, 409, `${url} ${JSON.stringify(payload)}`);
+    }
+    assert.ok((await stat(path.join(h.dataRoot, 'Copias'))).isDirectory());
+    const inner = await op('trash', { paths: ['/Copias/PC de Ana'] });
+    assert.equal(inner.statusCode, 200);
+    assert.equal(inner.json().results[0].ok, true);
+  });
+
+  it('pedir o canjear un código vuelve a crear la carpeta compartida si falta', async () => {
+    await rm(path.join(h.dataRoot, 'Copias'), { recursive: true, force: true });
+    const code = await newCode();
+    assert.ok((await stat(path.join(h.dataRoot, 'Copias'))).isDirectory(), 'al pedir el código');
+    await rm(path.join(h.dataRoot, 'Copias'), { recursive: true, force: true });
+    assert.equal((await claim(code)).statusCode, 200);
+    assert.ok((await stat(path.join(h.dataRoot, 'Copias'))).isDirectory(), 'al canjearlo');
   });
 
   it('rechaza códigos mal formados', async () => {

@@ -474,8 +474,14 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   // ── Explorador, papelera, visores, cuenta y actividad ─────────────────────────────────────
 
+  const pairingForFolders = deps.pairing;
+  const systemFolders = async (): Promise<readonly string[]> => {
+    const share = await pairingForFolders?.share();
+    return share === null || share === undefined ? [] : [`/${share.share}`];
+  };
   const ctx: RouteContext = {
     config,
+    systemFolders,
     db,
     guardian,
     operations:

@@ -194,6 +194,10 @@ export const PATTERNS: Array<[RegExp, (match: RegExpMatchArray) => string]> = [
   // Errores de la API (AppError)
   [/^La subida está en estado (.+)$/, (m) => `The upload is in state ${m[1] ?? ''}`],
   [/^Falta la cabecera (.+)$/, (m) => `The ${m[1] ?? ''} header is missing`],
+  [
+    /^La carpeta «(.+)» guarda las copias de tus ordenadores: no se puede borrar, mover ni renombrar mientras la carpeta de red esté activa$/,
+    (m) => `The “${m[1] ?? ''}” folder holds your computers’ backups: it can’t be deleted, moved or renamed while the network folder is on`,
+  ],
   [/^La prueba de velocidad falló: ([\s\S]*)$/, (m) => `The speed test failed: ${m[1] ?? ''}`],
   [
     /^«(.+)»: (.+)\. Renómbralo antes de copiar\.$/,

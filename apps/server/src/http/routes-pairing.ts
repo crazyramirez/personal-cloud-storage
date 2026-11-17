@@ -26,6 +26,20 @@ export interface PairingRouteDeps {
 }
 
 export function registerPairingRoutes(app: FastifyInstance, ctx: RouteContext, pairing: PairingService, deps: PairingRouteDeps): void {
+  /**
+   * La carpeta compartida tiene que existir: si se borró (por SSH, o desde una versión anterior que
+   * lo permitía), Samba rechaza el acceso incluso a las conexiones ya abiertas. Samba la busca por
+   * su ruta en cada operación, así que con volver a crearla vacía basta. Pasa por el guardián:
+   * sin disco listo no se crea nada.
+   */
+  const ensureShareFolder = async (share: string): Promise<void> => {
+    try {
+      await ctx.operations.createFolder('/', share);
+    } catch {
+      // ya existe (CONFLICT) o el disco no está listo: en ambos casos no hay nada que hacer aquí
+    }
+  };
+
   const status = async (): Promise<PairingStatusResponse> => {
     const share = await pairing.share();
     const current = share === null ? null : pairing.current(deps.clock());
@@ -45,9 +59,11 @@ export function registerPairingRoutes(app: FastifyInstance, ctx: RouteContext, p
 
   app.post(`${API}/pairing/code`, async (request): Promise<PairingStatusResponse> => {
     const session = ctx.owner(request);
-    if ((await pairing.share()) === null) {
+    const share = await pairing.share();
+    if (share === null) {
       throw new AppError('CONFLICT', 'La carpeta de red no está instalada en este equipo');
     }
+    await ensureShareFolder(share.share);
     pairing.createCode(deps.clock());
     audit(deps.db, { userId: session.userId, action: 'pairing.code', result: 'ok', ip: request.ip }, deps.clock());
     return status();
@@ -70,6 +86,7 @@ export function registerPairingRoutes(app: FastifyInstance, ctx: RouteContext, p
       throw new AppError('FORBIDDEN', 'El código no es correcto o ha caducado. Pide uno nuevo en Ajustes de la nube.');
     }
     audit(deps.db, { userId: null, action: 'pairing.claim', result: 'ok', ip: request.ip, detail: folder }, deps.clock());
+    await ensureShareFolder(share.share);
     return { host: deps.host(), share: share.share, user: share.user, password: share.password, folder };
   });
 }

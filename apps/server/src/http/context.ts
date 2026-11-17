@@ -31,6 +31,8 @@ export interface RouteContext {
   readonly clock: () => Date;
   readonly loginLimiter: AttemptLimit;
   readonly challenges: ChallengeStore;
+  /** Carpetas que no se pueden borrar, mover ni renombrar (p. ej. «/Copias» de la carpeta de red, ADR-0022). */
+  readonly systemFolders: () => Promise<readonly string[]>;
   /** Sesión de la petición o 401. */
   user(request: FastifyRequest): SessionInfo;
   /** Sesión de propietario o 403. */

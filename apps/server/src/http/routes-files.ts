@@ -20,6 +20,7 @@ import {
 } from '@pcloud/contracts';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { audit } from '../auth/sessions.ts';
+import { AppError } from '../errors.ts';
 import { measureDiskSpeed } from '../storage/speedtest.ts';
 import { formatClientPath, parseClientPath, resolveInside } from '../storage/paths.ts';
 import { planZip, streamZip } from '../storage/zip.ts';
@@ -29,6 +30,22 @@ const API = '/api/v1';
 
 export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): void {
   const { db, guardian, operations, clock } = ctx;
+
+  /** Rechaza tocar una carpeta del sistema (la de la carpeta de red: borrarla se llevaría las copias). */
+  const guardSystemFolders = async (paths: readonly string[]): Promise<void> => {
+    const system = (await ctx.systemFolders()).map((p) => formatClientPath(parseClientPath(p)).toLowerCase());
+    if (system.length === 0) return;
+    for (const p of paths) {
+      const normalized = formatClientPath(parseClientPath(p)).toLowerCase();
+      const hit = system.find((s) => s === normalized);
+      if (hit !== undefined) {
+        throw new AppError(
+          'CONFLICT',
+          `La carpeta «${hit.slice(1)}» guarda las copias de tus ordenadores: no se puede borrar, mover ni renombrar mientras la carpeta de red esté activa`,
+        );
+      }
+    }
+  };
 
   const logBatch = (request: FastifyRequest, userId: number, action: string, results: ItemResult[], target?: string): void => {
     for (const result of results.slice(0, 200)) {
@@ -61,6 +78,7 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
   app.post(`${API}/fs/rename`, { schema: { body: RenameRequest } }, async (request) => {
     const session = ctx.user(request);
     const body = request.body as RenameRequest;
+    await guardSystemFolders([body.path]);
     const renamed = await operations.rename(body.path, body.name);
     audit(db, { userId: session.userId, action: 'fs.rename', path: body.path, result: 'ok', ip: request.ip, detail: `→ ${renamed.path}` }, clock());
     return renamed;
@@ -69,6 +87,7 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
   app.post(`${API}/fs/move`, { schema: { body: TransferItemsRequest } }, async (request): Promise<BatchResponse> => {
     const session = ctx.user(request);
     const body = request.body as TransferItemsRequest;
+    await guardSystemFolders(body.paths);
     const results = await operations.move(body.paths, body.destination);
     logBatch(request, session.userId, 'fs.move', results, body.destination);
     return { results };
@@ -85,6 +104,7 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
   app.post(`${API}/fs/trash`, { schema: { body: TrashItemsRequest } }, async (request): Promise<BatchResponse> => {
     const session = ctx.user(request);
     const body = request.body as TrashItemsRequest;
+    await guardSystemFolders(body.paths);
     const results = await operations.trash(body.paths, session.userId);
     logBatch(request, session.userId, 'fs.trash', results);
     return { results };
