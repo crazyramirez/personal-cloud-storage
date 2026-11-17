@@ -347,6 +347,7 @@ async function installApp(): Promise<void> {
         <div class="grid">
           <div id="cfg-backup" class="cell span-2"><BackupSettings /></div>
           <div id="cfg-shares" class="cell span-2"><SharesSettings /></div>
+          <div id="cfg-pairing" class="cell span-2"><PairingSettings /></div>
         </div>
       </div>
 

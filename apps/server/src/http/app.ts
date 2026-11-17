@@ -70,6 +70,8 @@ import { contentDisposition, parseRange, type GuardianLike, type RouteContext } 
 import type { BackupService } from '../backup/service.ts';
 import type { ResourceMonitor } from '../system/resources.ts';
 import type { PowerAgent } from '../system/power.ts';
+import type { PairingService } from '../system/pairing.ts';
+import { registerPairingRoutes } from './routes-pairing.ts';
 import { registerAccountRoutes } from './routes-account.ts';
 import { registerBackupRoutes } from './routes-backup.ts';
 import { registerShareRoutes } from './routes-shares.ts';
@@ -112,6 +114,8 @@ export interface AppDeps {
   readonly resources?: ResourceMonitor;
   /** Reinicio y apagado del equipo desde Ajustes (opcional, ADR-0020). */
   readonly power?: PowerAgent;
+  /** Emparejar ordenadores con la carpeta de red (opcional, ADR-0022). */
+  readonly pairing?: PairingService;
   /** Enlaces para compartir con invitados (opcional: sin ellos no hay rutas /shares). */
   readonly shares?: { readonly store: ShareStore; readonly gateway: ShareGateway };
 }
@@ -502,6 +506,15 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   if (deps.backup !== undefined) registerBackupRoutes(app, ctx, deps.backup);
   if (deps.shares !== undefined) registerShareRoutes(app, ctx, deps.shares.store, deps.shares.gateway);
   registerSystemRoutes(app, ctx);
+  if (deps.pairing !== undefined) {
+    const pairingLimiter = new AttemptLimiter(10, 10 * 60 * 1000);
+    registerPairingRoutes(app, ctx, deps.pairing, {
+      db,
+      clock,
+      host: localName,
+      limit: (ip) => pairingLimiter.hit(`pairing:${ip}`, clock().getTime()),
+    });
+  }
   // ── Reiniciar y apagar (propietario, ADR-0020) ────────────────────────────────────────────
   const power = deps.power;
   if (power !== undefined) {

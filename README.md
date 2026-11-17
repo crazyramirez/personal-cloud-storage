@@ -17,7 +17,7 @@ Nube personal autocontenida: un servidor Linux pequeño (una **Raspberry Pi**, u
 - `StorageGuardian`: bloquea las escrituras en cuanto el disco desaparece, se cuelga o cambia, y nunca escribe en el mountpoint vacío.
 - Los ficheros siguen siendo ficheros normales en el disco: lo conectas a Windows o macOS y los lees tal cual.
 - **Copia de seguridad en un disco USB externo**: lo conectas, la nube lo reconoce y sincroniza solo lo nuevo y lo modificado. Lo borrado no se borra de la copia: se aparta con fecha. Al terminar se expulsa solo ([ADR-0017](docs/adr/0017-copia-de-seguridad-disco-externo.md)).
-- **Carpeta de red para las copias de tus ordenadores** (opcional): comparte por SMB solo la carpeta `Copias`, para que Windows o macOS (por ejemplo con DEV Backup Studio) hagan ahí su copia de seguridad. Si el disco no está, la conexión se rechaza ([ADR-0021](docs/adr/0021-carpeta-de-red-smb.md)).
+- **Carpeta de red para las copias de tus ordenadores** (opcional): comparte por SMB solo la carpeta `Copias`, para que Windows o macOS (por ejemplo con DEV Backup Studio) hagan ahí su copia de seguridad. Cada ordenador se conecta con un botón y un código de 6 cifras, sin contraseñas. Si el disco no está, la conexión se rechaza ([ADR-0021](docs/adr/0021-carpeta-de-red-smb.md), [ADR-0022](docs/adr/0022-emparejar-ordenadores-con-codigo.md)).
 
 ## Requisitos
 

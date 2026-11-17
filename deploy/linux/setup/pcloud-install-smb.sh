@@ -12,7 +12,10 @@
 #   4. Instala /usr/local/lib/pcloud/pcloud-smb-check.sh, que Samba ejecuta antes de aceptar cada
 #      conexión, y /etc/samba/smb.conf desde deploy/linux/samba/smb.conf.tmpl (validado con testparm).
 #   5. Si pcloud-smb aún no tiene contraseña (o con --new-password) genera una aleatoria y la
-#      muestra UNA vez. No se guarda en ningún fichero.
+#      guarda en /etc/pcloud/smb.json (root:pcloud 0640). La web la entrega solo a un ordenador
+#      que escribe el código de un solo uso de Ajustes → «Conectar un ordenador» (ADR-0022).
+#   6. Anuncia la nube en la red con avahi (_pcloud._tcp y _smb._tcp) para que DEV Backup Studio
+#      la encuentre sola, y macOS la vea en el Finder.
 #
 # Uso:
 #   sudo bash pcloud-install-smb.sh                    # muestra el plan
@@ -43,6 +46,8 @@ SMB_USER=pcloud-smb
 SMB_CONF=/etc/samba/smb.conf
 ORIGINAL=/etc/samba/smb.conf.pcloud-original
 CHECK_DST=/usr/local/lib/pcloud/pcloud-smb-check.sh
+CREDS=/etc/pcloud/smb.json
+AVAHI=/etc/avahi/services/pcloud.service
 
 if [ "$REMOVE" -eq 1 ]; then
   echo "Plan: parar y deshabilitar smbd, quitar $SMB_USER de Samba y restaurar el smb.conf original."
@@ -51,7 +56,7 @@ if [ "$REMOVE" -eq 1 ]; then
   systemctl disable --now smbd 2>/dev/null || true
   if command -v pdbedit >/dev/null && pdbedit -L 2>/dev/null | grep -q "^$SMB_USER:"; then pdbedit -x -u "$SMB_USER" >/dev/null; fi
   if [ -f "$ORIGINAL" ]; then mv -f "$ORIGINAL" "$SMB_CONF"; fi
-  rm -f "$CHECK_DST"
+  rm -f "$CHECK_DST" "$CREDS" "$AVAHI"
   echo "Carpeta de red apagada. Para quitar Samba del todo: sudo apt-get remove samba"
   exit 0
 fi
@@ -94,8 +99,20 @@ cmp -s "$CHECK_SRC" "$CHECK_DST" 2>/dev/null || PLAN+=("instalar $CHECK_DST")
 RENDERED="$(sed -e "s|@SHARE@|$SHARE|g" -e "s|@SHARE_PATH@|$SHARE_PATH|g" -e "s|@SMB_USER@|$SMB_USER|g" -e "s|@PORT@|$PORT|g" "$TMPL")"
 [ "$(cat "$SMB_CONF" 2>/dev/null)" = "$RENDERED" ] || PLAN+=("escribir $SMB_CONF (carpeta «$SHARE»)")
 HAS_PASSWORD=0
-if command -v pdbedit >/dev/null && pdbedit -L 2>/dev/null | grep -q "^$SMB_USER:"; then HAS_PASSWORD=1; fi
-if [ "$HAS_PASSWORD" -eq 0 ] || [ "$NEW_PASSWORD" -eq 1 ]; then PLAN+=("generar una contraseña nueva para $SMB_USER (se muestra una vez)"); fi
+if command -v pdbedit >/dev/null && pdbedit -L 2>/dev/null | grep -q "^$SMB_USER:" && grep -q "\"share\": *\"$SHARE\"" "$CREDS" 2>/dev/null; then HAS_PASSWORD=1; fi
+if [ "$HAS_PASSWORD" -eq 0 ] || [ "$NEW_PASSWORD" -eq 1 ]; then PLAN+=("generar una contraseña nueva para $SMB_USER y guardarla en $CREDS (root:pcloud 0640)"); fi
+AVAHI_XML="$(cat <<XML
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!-- Personal Cloud Storage: lo genera pcloud-install-smb.sh (ADR-0022). -->
+<service-group>
+  <name replace-wildcards="yes">%h</name>
+  <service><type>_pcloud._tcp</type><port>443</port><txt-record>share=$SHARE</txt-record></service>
+  <service><type>_smb._tcp</type><port>445</port></service>
+</service-group>
+XML
+)"
+[ -d "$(dirname "$AVAHI")" ] && [ "$(cat "$AVAHI" 2>/dev/null)" != "$AVAHI_XML" ] && PLAN+=("anunciar la nube en la red ($AVAHI)")
 systemctl is-enabled --quiet smbd 2>/dev/null && systemctl is-active --quiet smbd 2>/dev/null || PLAN+=("habilitar y arrancar smbd")
 systemctl is-enabled --quiet nmbd 2>/dev/null && PLAN+=("deshabilitar nmbd (sin NetBIOS)")
 
@@ -126,16 +143,28 @@ printf '%s\n' "$RENDERED" > "$SMB_CONF.nuevo"
 testparm -s "$SMB_CONF.nuevo" >/dev/null 2>&1 || { rm -f "$SMB_CONF.nuevo"; die "testparm rechaza la configuración generada"; }
 mv -f "$SMB_CONF.nuevo" "$SMB_CONF"
 
-PASSWORD=""
 if [ "$HAS_PASSWORD" -eq 0 ] || [ "$NEW_PASSWORD" -eq 1 ]; then
-  # 24 caracteres sin los que se confunden al copiarlos a mano (0/O, 1/l/I)
-  PASSWORD="$(LC_ALL=C tr -dc 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789' </dev/urandom | head -c 24)"
+  # 24 caracteres sin los que se confunden al copiarlos a mano (0/O, 1/l/I). Sin «head» sobre
+  # /dev/urandom: con pipefail, su SIGPIPE pararía el script.
+  PASSWORD="$(openssl rand -base64 96 | LC_ALL=C tr -dc 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789' | cut -c1-24)"
   [ "${#PASSWORD}" -eq 24 ] || die "no se pudo generar la contraseña"
-  if [ "$HAS_PASSWORD" -eq 1 ]; then
+  umask 0137
+  printf '{\n  "share": "%s",\n  "user": "%s",\n  "password": "%s"\n}\n' "$SHARE" "$SMB_USER" "$PASSWORD" > "$CREDS.nuevo"
+  umask 0022
+  chown root:pcloud "$CREDS.nuevo"
+  chmod 0640 "$CREDS.nuevo"
+  if [ "$HAS_PASSWORD" -eq 1 ] || { command -v pdbedit >/dev/null && pdbedit -L 2>/dev/null | grep -q "^$SMB_USER:"; }; then
     printf '%s\n%s\n' "$PASSWORD" "$PASSWORD" | smbpasswd -s "$SMB_USER" >/dev/null
   else
     printf '%s\n%s\n' "$PASSWORD" "$PASSWORD" | smbpasswd -s -a "$SMB_USER" >/dev/null
   fi
+  mv -f "$CREDS.nuevo" "$CREDS"
+fi
+
+if [ -d "$(dirname "$AVAHI")" ] && [ "$(cat "$AVAHI" 2>/dev/null)" != "$AVAHI_XML" ]; then
+  printf '%s\n' "$AVAHI_XML" > "$AVAHI.nuevo"
+  chmod 0644 "$AVAHI.nuevo"
+  mv -f "$AVAHI.nuevo" "$AVAHI"  # avahi-daemon recarga los servicios solo
 fi
 
 systemctl enable smbd >/dev/null 2>&1
@@ -143,11 +172,6 @@ systemctl restart smbd
 
 HOST="$(hostname -s)"
 echo
-echo "Carpeta de red preparada."
-echo "  Dirección:  \\\\$HOST.local\\$SHARE      (macOS: smb://$HOST.local/$SHARE)"
-echo "  Usuario:    $SMB_USER"
-if [ -n "$PASSWORD" ]; then
-  echo "  Contraseña: $PASSWORD"
-  echo "  Apúntala ahora: no se guarda en ningún sitio. Para cambiarla: --new-password --execute"
-fi
-echo "  En la nube aparece como la carpeta «$SHARE»."
+echo "Carpeta de red preparada: \\\\$HOST.local\\$SHARE (en la nube, la carpeta «$SHARE»)."
+echo "Para conectar un ordenador: en la web, Ajustes → «Copias de tus ordenadores» → «Conectar un"
+echo "ordenador», y escribe el código en DEV Backup Studio («Conectar con mi nube»)."

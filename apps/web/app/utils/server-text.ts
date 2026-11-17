@@ -24,6 +24,8 @@ export const EXACT: Record<string, string> = {
   'Hay una copia de seguridad en curso: espera a que termine o cancélala': 'A backup is in progress: wait for it to finish or cancel it',
   'El reinicio desde la web no está instalado en este equipo': 'Restarting from the web isn’t installed on this device',
   'No se pudo programar la orden': 'The command couldn’t be scheduled',
+  'La carpeta de red no está instalada en este equipo': 'The network folder isn’t installed on this device',
+  'El código no es correcto o ha caducado. Pide uno nuevo en Ajustes de la nube.': 'The code is wrong or has expired. Get a new one in the cloud’s Settings.',
   'El límite de descargas solo se puede poner a un archivo': 'A download limit can only be set on a file',
   'Ya existe un usuario con ese nombre': 'A user with that name already exists',
   'Ya hay un bloque en curso para esta subida': 'A chunk is already uploading for this upload',

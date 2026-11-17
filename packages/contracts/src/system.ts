@@ -71,3 +71,36 @@ export interface PowerStatusResponse {
   /** El agente de reinicio y apagado está instalado (pcloud-install-power.sh). */
   readonly available: boolean;
 }
+
+/** Emparejar un ordenador con la carpeta de red (propietario, ADR-0022). */
+export interface PairingStatusResponse {
+  /** La carpeta de red está instalada (pcloud-install-smb.sh). */
+  readonly available: boolean;
+  /** Nombre de la carpeta compartida («Copias»). */
+  readonly share: string | null;
+  /** Nombre del equipo en la red («nube.local»). */
+  readonly host: string;
+  /** Código vigente, si hay uno. */
+  readonly code: string | null;
+  readonly expiresAt: string | null;
+}
+
+/** Lo que envía DEV Backup Studio con el código que ha escrito la persona. */
+export const PairingClaimRequest = Type.Object(
+  {
+    code: Type.String({ pattern: '^[0-9]{6}$' }),
+    device: Type.String({ minLength: 1, maxLength: 64 }),
+  },
+  { additionalProperties: false },
+);
+export type PairingClaimRequest = Static<typeof PairingClaimRequest>;
+
+export interface PairingClaimResponse {
+  /** Nombre del equipo en la red («nube.local»). */
+  readonly host: string;
+  readonly share: string;
+  readonly user: string;
+  readonly password: string;
+  /** Carpeta propuesta para este ordenador dentro de la compartida. */
+  readonly folder: string;
+}
