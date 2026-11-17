@@ -31,15 +31,23 @@ import { UploadManager } from './storage/uploads.ts';
 const MiB = 1024 * 1024;
 const HOUR = 60 * 60 * 1000;
 
-/** Nombre de la release desplegada (release.json en la raíz del paquete); null en desarrollo. */
-async function releaseName(): Promise<string | null> {
-  try {
-    const raw: unknown = JSON.parse(await readFile(path.resolve(import.meta.dirname, '../../../release.json'), 'utf8'));
-    const name = (raw as { name?: unknown } | null)?.name;
-    return typeof name === 'string' ? name : null;
-  } catch {
-    return null;
-  }
+/**
+ * Release desplegada (release.json en la raíz del paquete) y versión de la app. En desarrollo no
+ * hay release.json: la versión sale de package.json.
+ */
+async function releaseInfo(): Promise<{ name: string | null; version: string | null }> {
+  const readJson = async (file: string): Promise<Record<string, unknown> | null> => {
+    try {
+      const raw: unknown = JSON.parse(await readFile(path.resolve(import.meta.dirname, '../../..', file), 'utf8'));
+      return typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  };
+  const release = await readJson('release.json');
+  const text = (value: unknown): string | null => (typeof value === 'string' && value !== '' ? value : null);
+  const version = text(release?.['version']) ?? text((await readJson('package.json'))?.['version']);
+  return { name: text(release?.['name']), version };
 }
 
 async function main(): Promise<void> {
@@ -74,7 +82,7 @@ async function main(): Promise<void> {
     minFreePercent: config.storage.minFreePercent,
     minFreeBytes: config.storage.minFreeBytes,
   });
-  const release = await releaseName();
+  const { name: release, version } = await releaseInfo();
   const BACKUP_MOUNTPOINT = '/srv/pcloud-backup';
   let backupLog: BackupLogger = console as unknown as BackupLogger;
   const backup = new BackupService({
@@ -96,7 +104,7 @@ async function main(): Promise<void> {
     activeCount: () => shareStore.countActive(new Date()),
     log: { info: (o, m) => gatewayLog.info(o, m), warn: (o, m) => gatewayLog.warn(o, m) },
   });
-  const app = await buildApp({ config, db, guardian, uploads, operations, media, release, backup, resources, shares: { store: shareStore, gateway }, power: new FilePowerAgent() });
+  const app = await buildApp({ config, db, guardian, uploads, operations, media, release, backup, resources, shares: { store: shareStore, gateway }, power: new FilePowerAgent(), version });
   backupLog = app.log;
   gatewayLog = app.log;
   const guest = await buildGuestApp({ db, store: shareStore, guardian, logLevel: config.server.logLevel, onShareChanged: () => void gateway.reconcile() });
@@ -163,7 +171,7 @@ async function main(): Promise<void> {
   } else {
     app.log.warn('puerta de invitados sin instalar (pcloud-install-share.sh): los enlaces no serán accesibles desde Internet');
   }
-  app.log.info({ release, node: process.version, volume: guardian.current.state }, 'servidor en marcha');
+  app.log.info({ release, version, node: process.version, volume: guardian.current.state }, 'servidor en marcha');
 }
 
 main().catch((error: unknown) => {

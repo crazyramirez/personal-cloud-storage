@@ -360,7 +360,10 @@ async function installApp(): Promise<void> {
               <dt>{{ t('settings.address') }}</dt>
               <dd class="mono selectable">{{ origin }}</dd>
               <dt>{{ t('settings.version') }}</dt>
-              <dd class="mono selectable">{{ health?.release ?? t('settings.development') }}</dd>
+              <dd class="selectable">
+                <strong>{{ health?.version ?? '…' }}</strong>
+                <span class="muted mono small"> · {{ health?.release ?? t('settings.development') }}</span>
+              </dd>
               <dt>{{ t('settings.media') }}</dt>
               <dd>{{ capabilities === null ? '…' : capabilities.ffmpeg ? `${t('settings.transcodeAvailable')}${capabilities.hardwareVideo ? t('settings.hardwareAccel') : ''}` : t('settings.browserFormatsOnly') }}</dd>
               <dt>{{ t('settings.documents') }}</dt>

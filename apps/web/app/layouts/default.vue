@@ -27,6 +27,7 @@ async function signOut(): Promise<void> {
   await session.logout();
   await navigateTo('/entrar');
 }
+const appVersion = useAppVersion();
 </script>
 
 <template>
@@ -49,6 +50,7 @@ async function signOut(): Promise<void> {
       </ul>
 
       <DiskWidget />
+      <p v-if="appVersion?.version" class="version muted" :title="appVersion.release ?? undefined">{{ t('nav.version', { v: appVersion.version }) }}</p>
     </nav>
 
     <div class="main">
@@ -110,6 +112,13 @@ async function signOut(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+.version {
+  margin-top: -14px;
+  padding: 0 10px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
 }
 
 .brand {

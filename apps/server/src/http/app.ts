@@ -104,6 +104,8 @@ export interface AppDeps {
   readonly logger?: boolean;
   /** Nombre de la release desplegada (release.json); se publica en /system/health. */
   readonly release?: string | null;
+  /** Versión de la aplicación («0.2.0»); se publica en /system/health. */
+  readonly version?: string | null;
   /** Copia de seguridad en disco externo (opcional: sin ella no hay rutas /backup). */
   readonly backup?: BackupService;
   /** Recursos del equipo para el panel (opcional). */
@@ -282,6 +284,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     time: clock().toISOString(),
     volumeState: guardian.current.state,
     release: deps.release ?? null,
+    version: deps.version ?? null,
   }));
 
   app.get(`${API}/system/storage`, async (): Promise<StorageResponse> => {

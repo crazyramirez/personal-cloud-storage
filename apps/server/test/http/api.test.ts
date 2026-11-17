@@ -90,6 +90,7 @@ describe('API v1 de extremo a extremo', () => {
     const health = await call('GET', '/system/health');
     assert.equal(health.statusCode, 200);
     assert.equal(health.json().volumeState, 'READY');
+    assert.ok('version' in health.json(), 'publica la versión de la app');
     for (const url of ['/system/storage', '/auth/me', '/fs/list?path=/', '/fs/download?path=/a']) {
       const response = await call('GET', url);
       assert.equal(response.statusCode, 401, url);

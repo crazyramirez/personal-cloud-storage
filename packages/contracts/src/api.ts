@@ -50,6 +50,8 @@ export const HealthResponse = Type.Object({
   volumeState: Type.String(),
   /** Nombre de la release en ejecución (release.json); null en desarrollo. */
   release: Type.Union([Type.String(), Type.Null()]),
+  /** Versión de la aplicación («0.2.0»): la de package.json con la que se compiló. */
+  version: Type.Union([Type.String(), Type.Null()]),
 });
 export type HealthResponse = Static<typeof HealthResponse>;
 

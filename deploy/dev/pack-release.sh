@@ -71,11 +71,15 @@ mapfile -t WEB_FILES < <(find "$WEB_OUT" -type f | sort)
 [ "${#WEB_FILES[@]}" -gt 0 ] || { echo "La web compilada está vacía" >&2; exit 1; }
 
 HEAD="$(git rev-parse --short HEAD 2>/dev/null || echo sin-commits)"
+# Versión visible en la app (barra lateral y Ajustes): la de package.json de la raíz.
+VERSION="$(sed -n 's/^  "version": "\([^"]*\)".*/\1/p' "$ROOT/package.json" | head -n1)"
+[ -n "$VERSION" ] || { echo "No se encuentra la versión en package.json" >&2; exit 1; }
 DIRTY=false
 [ -n "$(git status --porcelain 2>/dev/null)" ] && DIRTY=true
 cat > "$META/release.json" <<EOF
 {
   "name": "$NAME",
+  "version": "$VERSION",
   "createdAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "gitHead": "$HEAD",
   "dirtyWorktree": $DIRTY,

@@ -2,6 +2,7 @@ import type { Message, MessageTable } from '~/utils/i18n';
 
 const es = {
   mainNav: 'Navegación principal',
+  version: 'Versión {v}',
   tabNav: 'Navegación',
   remote: 'vía Tailscale',
   local: 'red local',
@@ -20,6 +21,7 @@ export default {
   es,
   en: {
     mainNav: 'Main navigation',
+    version: 'Version {v}',
     tabNav: 'Navigation',
     remote: 'via Tailscale',
     local: 'local network',
