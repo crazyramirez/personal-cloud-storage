@@ -93,7 +93,7 @@ const rows = computed(() => {
       <p class="muted small">{{ t('settings.measuredAt', { date: formatDate(speed.testedAt), seconds: formatNumber(speed.durationMs / 1000) }) }}</p>
     </div>
     <p v-if="error" role="alert" class="notice notice-danger">{{ error }}</p>
-    <div>
+    <div class="foot">
       <button type="button" class="btn btn-primary" :disabled="busy" @click="run">
         <span v-if="busy" class="spin" aria-hidden="true" /><AppIcon v-else name="gauge" />{{ busy ? t('settings.measuring') : speed ? t('settings.measureAgain') : t('settings.measure') }}
       </button>
@@ -133,6 +133,7 @@ const rows = computed(() => {
   flex-direction: column;
   gap: 14px;
   padding: 20px;
+  container-type: inline-size;
 }
 
 .sec header {
@@ -154,18 +155,22 @@ const rows = computed(() => {
   font-size: 12px;
 }
 
+.foot {
+  margin-top: auto;
+}
+
 .speed {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-/* A todo el ancho (Ajustes en pantalla grande): escritura, lectura y aleatorio en tres columnas. */
-@media (min-width: 900px) {
+/* Tres columnas cuando la TARJETA es ancha (no la pantalla): sirve a media o a toda anchura. */
+@container (min-width: 480px) {
   .speed {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px 28px;
+    gap: 14px 22px;
   }
 
   .speed > p {

@@ -374,7 +374,8 @@ async function installApp(): Promise<void> {
             </dl>
           </section>
           <div v-if="isOwner" id="cfg-power" class="cell"><PowerSettings /></div>
-          <div v-if="isOwner" id="cfg-speed" class="cell span-2"><DiskSpeedTest /></div>
+          <div id="cfg-net" class="cell" :class="{ 'span-2': !isOwner }"><NetworkTest variant="section" /></div>
+          <div v-if="isOwner" id="cfg-speed" class="cell"><DiskSpeedTest /></div>
         </div>
       </div>
     </div>

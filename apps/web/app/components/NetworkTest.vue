@@ -4,6 +4,9 @@
  * bajada y subida reales. Los datos salen de la memoria del servidor y la subida se descarta:
  * no se toca ningún disco. Unos 15 s en total; el último resultado se recuerda en este navegador.
  */
+const props = withDefaults(defineProps<{ variant?: 'tile' | 'section' }>(), { variant: 'tile' });
+const tile = computed(() => props.variant === 'tile');
+
 const KEY = 'pcloud.nettest';
 const PHASE_SECONDS = 5;
 const MiB = 1024 * 1024;
@@ -131,10 +134,36 @@ function verdict(value: number): string {
   return t(value >= 300 ? 'system.netGreat' : value >= 80 ? 'system.netGood' : value >= 20 ? 'system.netFair' : 'system.netSlow');
 }
 const phaseLabel = computed(() => (phase.value === 'idle' ? '' : t(`system.netPhase_${phase.value}`)));
+
+// ── Variante de Ajustes: tres medidores con barra y valoración, como la velocidad del disco ──
+const fmtMs = (ms: number): string => `${formatNumber(ms, ms < 10 ? 1 : 0)} ms`;
+/** Latencia: menos es mejor (≤ 5 ms = barra llena, ≥ 200 ms = casi vacía). */
+const latencyPct = (ms: number): number => Math.max(3, Math.min(100, Math.round(100 - ((ms - 5) / 195) * 100)));
+const latencyVerdict = (ms: number): string => t(ms <= 20 ? 'system.netLatencyGreat' : ms <= 60 ? 'system.netLatencyGood' : 'system.netLatencyHigh');
+const meters = computed(() => {
+  const r = busy.value ? null : result.value;
+  const meter = (key: 'download' | 'upload' | 'latency', label: string, value: number | null, pctOf: (v: number) => number, text: (v: number) => string, hint: (v: number) => string) => {
+    const running = phase.value === key;
+    const shown = running && key !== 'latency' ? live.value : value;
+    return {
+      key,
+      label,
+      running,
+      value: running && key === 'latency' ? '…' : shown === null ? '—' : text(shown),
+      pct: shown === null ? 0 : running && key === 'latency' ? 8 : pctOf(shown),
+      hint: running ? phaseLabel.value : value === null ? '' : hint(value),
+    };
+  };
+  return [
+    meter('download', t('system.netDown'), r?.downMbps ?? null, pct, fmt, verdict),
+    meter('upload', t('system.netUp'), r?.upMbps ?? null, pct, fmt, verdict),
+    meter('latency', t('system.netLatency'), r?.latencyMs ?? null, latencyPct, fmtMs, latencyVerdict),
+  ];
+});
 </script>
 
 <template>
-  <article class="res-cell" aria-labelledby="r-nettest">
+  <article v-if="tile" class="res-cell" aria-labelledby="r-nettest">
     <header class="res-cell-head">
       <span class="res-ico"><AppIcon name="gauge" :size="15" /></span>
       <h3 id="r-nettest">{{ t('system.netTest') }}</h3>
@@ -164,6 +193,27 @@ const phaseLabel = computed(() => (phase.value === 'idle' ? '' : t(`system.netPh
       <button v-else type="button" class="btn" @click="run"><AppIcon name="gauge" />{{ result ? t('system.netAgain') : t('system.netRun') }}</button>
     </div>
   </article>
+
+  <section v-else class="card sec" aria-labelledby="s-net">
+    <header>
+      <AppIcon name="network" />
+      <h2 id="s-net">{{ t('system.netTest') }}</h2>
+    </header>
+    <p class="muted">{{ t('system.netTestIntroLong') }}</p>
+    <div class="speed" aria-live="polite">
+      <div v-for="m in meters" :key="m.key" class="meter" :class="{ running: m.running }">
+        <div class="meter-head"><span>{{ m.label }}</span><strong>{{ m.value }}</strong></div>
+        <div class="mbar"><span :style="{ width: `${m.pct}%` }" /></div>
+        <span class="muted small">{{ m.hint || '\u00a0' }}</span>
+      </div>
+    </div>
+    <p v-if="result && !busy" class="muted small">{{ t('system.netMeasuredAt', { when: formatRelative(result.at) }) }}</p>
+    <p v-if="error" role="alert" class="notice notice-danger">{{ error }}</p>
+    <div class="foot">
+      <button v-if="busy" type="button" class="btn" @click="stop"><AppIcon name="close" />{{ t('system.netStop') }}</button>
+      <button v-else type="button" class="btn btn-primary" @click="run"><AppIcon name="gauge" />{{ result ? t('system.netAgain') : t('system.netRun') }}</button>
+    </div>
+  </section>
 </template>
 
 <style scoped>
@@ -187,10 +237,94 @@ const phaseLabel = computed(() => (phase.value === 'idle' ? '' : t(`system.netPh
   transition: width 0.4s ease;
 }
 
-.btn {
+.res-cell-foot .btn {
   align-self: flex-start;
   min-height: 36px;
   font-size: 13px;
+}
+
+/* ── Variante de Ajustes ──────────────────────────────────────────────────────────────────── */
+.sec {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  container-type: inline-size;
+}
+
+.sec header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sec h2 {
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.small {
+  font-size: 12px;
+}
+
+.speed {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Tres columnas cuando la TARJETA es ancha (no la pantalla): sirve a media o a toda anchura. */
+@container (min-width: 480px) {
+  .speed {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px 22px;
+  }
+}
+
+.meter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.meter-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.meter-head strong {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.meter.running .meter-head span {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.mbar {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--accent-soft);
+  overflow: hidden;
+}
+
+.mbar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-btn);
+  transition: width 0.4s ease;
+}
+
+.foot {
+  margin-top: auto;
+  display: flex;
 }
 
 .err {
