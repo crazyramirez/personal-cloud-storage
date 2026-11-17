@@ -7,8 +7,12 @@
 #   1. Instala samba (sin paquetes recomendados) y apaga nmbd: sin NetBIOS.
 #   2. Crea el usuario de sistema pcloud-smb (sin shell ni carpeta personal): es el usuario con el
 #      que se conectan los ordenadores. Lo que escriben queda como pcloud, igual que lo de la web.
-#   3. Crea la carpeta <raíz de datos>/Copias en el disco de la nube (como pcloud). Exige el disco
-#      montado y el StorageGuardian en READY; nunca toca nada más del disco.
+#   3. Crea la carpeta <raíz de datos>/DEV_Backup_Studio en el disco de la nube (como pcloud). Exige
+#      el disco montado y el StorageGuardian en READY; nunca toca nada más del disco.
+#      Cambio de nombre (ADR-0023): si la carpeta compartida se llamaba de otra forma (p. ej. «Copias»)
+#      y la nueva no existe, se RENOMBRA en el mismo disco (no se copia ni se borra nada), se conserva
+#      la contraseña y el nombre antiguo sigue como alias oculto: los ordenadores ya conectados a
+#      \\<host>\Copias siguen funcionando sin tocar nada.
 #   4. Instala /usr/local/lib/pcloud/pcloud-smb-check.sh, que Samba ejecuta antes de aceptar cada
 #      conexión, y /etc/samba/smb.conf desde deploy/linux/samba/smb.conf.tmpl (validado con testparm).
 #   5. Si pcloud-smb aún no tiene contraseña (o con --new-password) genera una aleatoria y la
@@ -26,7 +30,7 @@
 
 set -euo pipefail
 
-EXECUTE=0 REMOVE=0 NEW_PASSWORD=0 SHARE=Copias
+EXECUTE=0 REMOVE=0 NEW_PASSWORD=0 SHARE=DEV_Backup_Studio
 while [ $# -gt 0 ]; do
   case "$1" in
     --execute) EXECUTE=1; shift ;;
@@ -85,6 +89,28 @@ PORT="$(yaml_get server port)"; PORT="${PORT:-3000}"
 if [ "$ROOT_REL" = "." ]; then DATA="$MP"; else DATA="$MP/$ROOT_REL"; fi
 SHARE_PATH="$DATA/$SHARE"
 
+# Configuración anterior (si la hay): nombre de la carpeta, contraseña y alias ya publicados.
+valid_name() { [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$ ]]; }
+OLD_SHARE="$(sed -n 's/^ *"share": *"\([^"]*\)".*/\1/p' "$CREDS" 2>/dev/null | head -n1)"
+valid_name "$OLD_SHARE" || OLD_SHARE=""
+OLD_PASSWORD="$(sed -n 's/^ *"password": *"\([A-Za-z0-9]\{24\}\)".*/\1/p' "$CREDS" 2>/dev/null | head -n1)"
+ALIASES=()
+while IFS= read -r alias; do
+  valid_name "$alias" && [ "$alias" != "$SHARE" ] && ALIASES+=("$alias")
+done < <(sed -n 's/^ *"aliases": *\[\(.*\)\].*/\1/p' "$CREDS" 2>/dev/null | tr ',' '\n' | tr -d ' "')
+RENAME=0
+if [ -n "$OLD_SHARE" ] && [ "$OLD_SHARE" != "$SHARE" ]; then
+  OLD_PATH="$DATA/$OLD_SHARE"
+  if [ -d "$OLD_PATH" ] && [ -e "$SHARE_PATH" ]; then
+    die "existen «$OLD_SHARE» y «$SHARE» a la vez en la nube: junta su contenido a mano (desde la web) y repite"
+  fi
+  [ -d "$OLD_PATH" ] && RENAME=1
+  # El nombre antiguo queda como alias oculto de la carpeta nueva (ordenadores ya conectados).
+  [[ " ${ALIASES[*]} " == *" $OLD_SHARE "* ]] || ALIASES+=("$OLD_SHARE")
+fi
+ALIASES_JSON="$(printf '"%s", ' "${ALIASES[@]}")"; ALIASES_JSON="[${ALIASES_JSON%, }]"
+[ "${#ALIASES[@]}" -eq 0 ] && ALIASES_JSON="[]"
+
 mountpoint -q "$MP" || die "el disco de la nube no está montado en $MP: conéctalo y repite"
 HEALTH="$(curl -fsS --max-time 5 "http://127.0.0.1:$PORT/api/v1/system/health" 2>/dev/null)" || die "el servidor no responde en 127.0.0.1:$PORT"
 [[ "$HEALTH" == *'"volumeState":"READY"'* ]] || die "el disco no está listo (StorageGuardian distinto de READY): revisa la web antes de seguir"
@@ -94,13 +120,31 @@ HEALTH="$(curl -fsS --max-time 5 "http://127.0.0.1:$PORT/api/v1/system/health" 2
 PLAN=()
 command -v smbd >/dev/null || PLAN+=("instalar samba (apt, sin recomendados)")
 getent passwd "$SMB_USER" >/dev/null || PLAN+=("crear el usuario de sistema $SMB_USER (sin shell ni carpeta personal)")
-[ -d "$SHARE_PATH" ] || PLAN+=("crear la carpeta $SHARE_PATH (como pcloud)")
+if [ "$RENAME" -eq 1 ]; then
+  PLAN+=("renombrar la carpeta «$OLD_SHARE» a «$SHARE» en la nube (mismo disco: no se copia ni se borra nada)")
+elif [ ! -d "$SHARE_PATH" ]; then
+  PLAN+=("crear la carpeta $SHARE_PATH (como pcloud)")
+fi
 cmp -s "$CHECK_SRC" "$CHECK_DST" 2>/dev/null || PLAN+=("instalar $CHECK_DST")
 RENDERED="$(sed -e "s|@SHARE@|$SHARE|g" -e "s|@SHARE_PATH@|$SHARE_PATH|g" -e "s|@SMB_USER@|$SMB_USER|g" -e "s|@PORT@|$PORT|g" "$TMPL")"
+# Alias: la misma sección de la carpeta (es la última de la plantilla) con otro nombre y oculta.
+SECTION="$(printf '%s\n' "$RENDERED" | sed -n "/^\[$SHARE\]\$/,\$p")"
+for alias in "${ALIASES[@]}"; do
+  RENDERED="$RENDERED
+
+$(printf '%s\n' "$SECTION" | sed -e "1s|.*|[$alias]|" -e "s|^   comment = .*|   comment = Nombre antiguo de $SHARE (ordenadores ya conectados)|" -e "s|^   browseable = yes|   browseable = no|")"
+done
 [ "$(cat "$SMB_CONF" 2>/dev/null)" = "$RENDERED" ] || PLAN+=("escribir $SMB_CONF (carpeta «$SHARE»)")
 HAS_PASSWORD=0
-if command -v pdbedit >/dev/null && pdbedit -L 2>/dev/null | grep -q "^$SMB_USER:" && grep -q "\"share\": *\"$SHARE\"" "$CREDS" 2>/dev/null; then HAS_PASSWORD=1; fi
-if [ "$HAS_PASSWORD" -eq 0 ] || [ "$NEW_PASSWORD" -eq 1 ]; then PLAN+=("generar una contraseña nueva para $SMB_USER y guardarla en $CREDS (root:pcloud 0640)"); fi
+if command -v pdbedit >/dev/null && pdbedit -L 2>/dev/null | grep -q "^$SMB_USER:" && [ -n "$OLD_PASSWORD" ]; then HAS_PASSWORD=1; fi
+creds_json() {  # creds_json CONTRASEÑA
+  printf '{\n  "share": "%s",\n  "user": "%s",\n  "password": "%s",\n  "aliases": %s\n}\n' "$SHARE" "$SMB_USER" "$1" "$ALIASES_JSON"
+}
+if [ "$HAS_PASSWORD" -eq 0 ] || [ "$NEW_PASSWORD" -eq 1 ]; then
+  PLAN+=("generar una contraseña nueva para $SMB_USER y guardarla en $CREDS (root:pcloud 0640)")
+elif [ "$(cat "$CREDS" 2>/dev/null)" != "$(creds_json "$OLD_PASSWORD")" ]; then
+  PLAN+=("actualizar $CREDS con la carpeta «$SHARE» (misma contraseña: los ordenadores conectados siguen funcionando)")
+fi
 AVAHI_XML="$(cat <<XML
 <?xml version="1.0" standalone="no"?>
 <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
@@ -130,6 +174,10 @@ fi
 systemctl disable --now nmbd 2>/dev/null || true
 
 getent passwd "$SMB_USER" >/dev/null || useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin "$SMB_USER"
+if [ "$RENAME" -eq 1 ]; then
+  # Mismo sistema de archivos: es un cambio de nombre, no una copia. -T: nunca «dentro de» la otra.
+  runuser -u pcloud -- mv -T -- "$OLD_PATH" "$SHARE_PATH"
+fi
 [ -d "$SHARE_PATH" ] || runuser -u pcloud -- mkdir -- "$SHARE_PATH"
 
 install -d -o root -g root -m 0755 "$(dirname "$CHECK_DST")"
@@ -149,7 +197,7 @@ if [ "$HAS_PASSWORD" -eq 0 ] || [ "$NEW_PASSWORD" -eq 1 ]; then
   PASSWORD="$(openssl rand -base64 96 | LC_ALL=C tr -dc 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789' | cut -c1-24)"
   [ "${#PASSWORD}" -eq 24 ] || die "no se pudo generar la contraseña"
   umask 0137
-  printf '{\n  "share": "%s",\n  "user": "%s",\n  "password": "%s"\n}\n' "$SHARE" "$SMB_USER" "$PASSWORD" > "$CREDS.nuevo"
+  creds_json "$PASSWORD" > "$CREDS.nuevo"
   umask 0022
   chown root:pcloud "$CREDS.nuevo"
   chmod 0640 "$CREDS.nuevo"
@@ -158,6 +206,13 @@ if [ "$HAS_PASSWORD" -eq 0 ] || [ "$NEW_PASSWORD" -eq 1 ]; then
   else
     printf '%s\n%s\n' "$PASSWORD" "$PASSWORD" | smbpasswd -s -a "$SMB_USER" >/dev/null
   fi
+  mv -f "$CREDS.nuevo" "$CREDS"
+elif [ "$(cat "$CREDS" 2>/dev/null)" != "$(creds_json "$OLD_PASSWORD")" ]; then
+  umask 0137
+  creds_json "$OLD_PASSWORD" > "$CREDS.nuevo"
+  umask 0022
+  chown root:pcloud "$CREDS.nuevo"
+  chmod 0640 "$CREDS.nuevo"
   mv -f "$CREDS.nuevo" "$CREDS"
 fi
 

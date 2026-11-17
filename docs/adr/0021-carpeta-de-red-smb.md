@@ -1,6 +1,6 @@
 # ADR-0021: Carpeta de red (SMB) para copias desde los ordenadores de casa
 
-Estado: Aceptado (2026-11-17)
+Estado: Aceptado (2026-11-17). El nombre de la carpeta lo sustituye [ADR-0023](0023-carpeta-dev-backup-studio.md): `DEV_Backup_Studio`.
 
 ## Contexto
 

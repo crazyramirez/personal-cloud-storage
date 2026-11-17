@@ -17,7 +17,7 @@ Nube personal autocontenida: un servidor Linux pequeño (una **Raspberry Pi**, u
 - `StorageGuardian`: bloquea las escrituras en cuanto el disco desaparece, se cuelga o cambia, y nunca escribe en el mountpoint vacío.
 - Los ficheros siguen siendo ficheros normales en el disco: lo conectas a Windows o macOS y los lees tal cual.
 - **Copia de seguridad en un disco USB externo**: lo conectas, la nube lo reconoce y sincroniza solo lo nuevo y lo modificado. Lo borrado no se borra de la copia: se aparta con fecha. Al terminar se expulsa solo ([ADR-0017](docs/adr/0017-copia-de-seguridad-disco-externo.md)).
-- **Carpeta de red para las copias de tus ordenadores** (opcional): comparte por SMB solo la carpeta `Copias`, para que Windows o macOS (por ejemplo con [DEV Backup Studio](#juntos-con-dev-backup-studio)) hagan ahí su copia de seguridad. Cada ordenador se conecta con un botón y un código de 6 cifras, sin contraseñas. Si el disco no está, la conexión se rechaza ([ADR-0021](docs/adr/0021-carpeta-de-red-smb.md), [ADR-0022](docs/adr/0022-emparejar-ordenadores-con-codigo.md)).
+- **Carpeta de red para las copias de tus ordenadores** (opcional): comparte por SMB solo la carpeta `DEV_Backup_Studio`, para que Windows o macOS (por ejemplo con [DEV Backup Studio](#juntos-con-dev-backup-studio)) hagan ahí su copia de seguridad. Cada ordenador se conecta con un botón y un código de 6 cifras, sin contraseñas. Si el disco no está, la conexión se rechaza ([ADR-0021](docs/adr/0021-carpeta-de-red-smb.md), [ADR-0022](docs/adr/0022-emparejar-ordenadores-con-codigo.md)).
 
 ## Juntos con DEV Backup Studio
 
@@ -26,8 +26,8 @@ Nube personal autocontenida: un servidor Linux pequeño (una **Raspberry Pi**, u
 Así se suman lo mejor de las dos:
 
 - **Los ordenadores de casa se copian solos en la nube**, sin conectar discos: basta con estar en casa (o en Tailscale). Si la nube está apagada, la app espera y sincroniza en cuanto vuelve.
-- **Ves y descargas esas copias desde la web**, en cualquier dispositivo: cada ordenador tiene su carpeta dentro de `Copias`.
-- **Tres copias sin esfuerzo.** El original en el ordenador, la copia en la nube y, con la copia de seguridad en disco externo, una tercera en otro disco. `Copias` entra en ella como cualquier otra carpeta.
+- **Ves y descargas esas copias desde la web**, en cualquier dispositivo: cada ordenador tiene su carpeta dentro de `DEV_Backup_Studio`, con el icono de DEV Backup Studio.
+- **Tres copias sin esfuerzo.** El original en el ordenador, la copia en la nube y, con la copia de seguridad en disco externo, una tercera en otro disco. `DEV_Backup_Studio` entra en ella como cualquier otra carpeta.
 
 Conectarlas es cosa de un minuto, sin escribir direcciones ni contraseñas:
 

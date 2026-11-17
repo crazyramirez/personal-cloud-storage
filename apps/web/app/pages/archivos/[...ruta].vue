@@ -110,6 +110,11 @@ function asApiError(error: unknown): ApiError {
   return error instanceof ApiError ? error : new ApiError('INTERNAL', () => t('explorer.unexpectedError'), 0, false);
 }
 
+/** La carpeta de las copias de DEV Backup Studio (en la raíz de la nube) lleva su propio icono. */
+function isBackupStudioFolder(entry: FsEntry): boolean {
+  return entry.type === 'dir' && clientPath.value === '/' && entry.name.toLowerCase() === BACKUP_STUDIO_FOLDER.toLowerCase();
+}
+
 function pathOf(name: string, dir = clientPath.value): string {
   return dir === '/' ? `/${name}` : `${dir}/${name}`;
 }
@@ -1341,7 +1346,8 @@ function ghostMenu(item: Transfer): MenuItem[] {
               >
                 <span class="name" role="gridcell">
                   <span v-if="touchSelecting" class="check" :class="{ on: selection.has(entry.name) }" aria-hidden="true"><AppIcon v-if="selection.has(entry.name)" name="check" :size="16" /></span>
-                  <AppIcon :name="fileKind(entry.name, entry.type).icon" :size="22" :class="iconClass(entry)" />
+                  <DbsFolderIcon v-if="isBackupStudioFolder(entry)" :size="22" />
+                  <AppIcon v-else :name="fileKind(entry.name, entry.type).icon" :size="22" :class="iconClass(entry)" />
                   <span class="label">
                     <span class="text">{{ entry.name }}</span>
                     <span v-if="!entry.portable" class="issue"><AppIcon name="alert" :size="13" :stroke="2" />{{ serverText(entry.issue ?? '') }}</span>
@@ -1406,6 +1412,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
                   draggable="false"
                   @error="markBroken(entry.name)"
                 >
+                <DbsFolderIcon v-else-if="isBackupStudioFolder(entry)" :size="48" />
                 <AppIcon v-else :name="fileKind(entry.name, entry.type).icon" :size="44" :stroke="1.4" :class="iconClass(entry)" />
                 <span v-if="viewerKind(entry.name) === 'video' && showThumb(entry)" class="badge-play" aria-hidden="true"><AppIcon name="play" :size="14" /></span>
                 <span v-if="touchSelecting" class="check corner" :class="{ on: selection.has(entry.name) }" aria-hidden="true"><AppIcon v-if="selection.has(entry.name)" name="check" :size="16" /></span>
@@ -1433,6 +1440,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
         <template v-if="single">
           <div class="preview">
             <img v-if="showThumb(single)" :src="thumbSrc(single, 640)" alt="" @error="markBroken(single.name)">
+            <DbsFolderIcon v-else-if="isBackupStudioFolder(single)" :size="56" />
             <AppIcon v-else :name="fileKind(single.name, single.type).icon" :size="48" :stroke="1.4" :class="iconClass(single)" />
           </div>
           <div>

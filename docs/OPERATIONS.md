@@ -237,18 +237,19 @@ Ver [ADR-0020](adr/0020-reiniciar-apagar-desde-la-web.md). Ajustes → «Reinici
 
 ## 8 quinquies. Carpeta de red para copias de los ordenadores (SMB, opcional)
 
-Ver [ADR-0021](adr/0021-carpeta-de-red-smb.md) y [ADR-0022](adr/0022-emparejar-ordenadores-con-codigo.md). Comparte por SMB solo la carpeta `Copias` de la nube para que los ordenadores de casa hagan su copia de seguridad en ella (por ejemplo con DEV Backup Studio). `install.sh` no la activa.
+Ver [ADR-0021](adr/0021-carpeta-de-red-smb.md), [ADR-0022](adr/0022-emparejar-ordenadores-con-codigo.md) y [ADR-0023](adr/0023-carpeta-dev-backup-studio.md). Comparte por SMB solo la carpeta `DEV_Backup_Studio` de la nube para que los ordenadores de casa hagan su copia de seguridad en ella (por ejemplo con DEV Backup Studio). `install.sh` no la activa.
 
 - **Activar:** con el disco conectado y la web funcionando, `sudo bash /opt/pcloud/current/deploy/linux/setup/pcloud-install-smb.sh --execute`. Guarda la credencial en `/etc/pcloud/smb.json` (root:pcloud 0640) y anuncia la nube en la red (`/etc/avahi/services/pcloud.service`).
-- **Conectar un ordenador (lo normal):** en la web, Ajustes → «Copias de tus ordenadores» → «Conectar un ordenador». En DEV Backup Studio, «Conectar con mi nube…» → escribe el código de 6 cifras. La app encuentra la nube sola, guarda la credencial en el sistema y pone el destino `\\<host>.local\Copias\<equipo>`. El código caduca a los 10 minutos y sirve una vez.
-- **A mano, en Windows:** Explorador → *Este equipo* → *Conectar unidad de red* → `\\<host>.local\Copias`, con el usuario `pcloud-smb` y la contraseña de `sudo cat /etc/pcloud/smb.json`.
-- **A mano, en macOS:** Finder → *Ir* → *Conectarse al servidor* → `smb://<host>.local/Copias`.
-- **Fuera de casa:** solo por Tailscale (`\\<host>\Copias`). Nunca se abre el puerto 445 en el router.
+- **Conectar un ordenador (lo normal):** en la web, Ajustes → «Copias de tus ordenadores» → «Conectar un ordenador». En DEV Backup Studio, «Conectar con mi nube…» → escribe el código de 6 cifras. La app encuentra la nube sola, guarda la credencial en el sistema y pone el destino `\\<host>.local\DEV_Backup_Studio\<equipo>`. El código caduca a los 10 minutos y sirve una vez.
+- **A mano, en Windows:** Explorador → *Este equipo* → *Conectar unidad de red* → `\\<host>.local\DEV_Backup_Studio`, con el usuario `pcloud-smb` y la contraseña de `sudo cat /etc/pcloud/smb.json`.
+- **A mano, en macOS:** Finder → *Ir* → *Conectarse al servidor* → `smb://<host>.local/DEV_Backup_Studio`.
+- **Fuera de casa:** solo por Tailscale (`\\<host>\DEV_Backup_Studio`). Nunca se abre el puerto 445 en el router.
 - **Sin disco:** la conexión se rechaza (`pcloud-smb-check.sh` exige `/srv/pcloud` montado y el estado READY). DEV Backup Studio espera a que vuelva.
-- **Si se borra `Copias` desde la web:** se vuelve a crear vacía en la siguiente conexión (con el disco en READY). Lo copiado no vuelve: está en la papelera, si no se ha vaciado.
+- **Si se borra `DEV_Backup_Studio` desde la web:** se vuelve a crear vacía en la siguiente conexión (con el disco en READY). Lo copiado no vuelve: está en la papelera, si no se ha vaciado.
 - **Cambiar la contraseña:** `pcloud-install-smb.sh --new-password --execute`. Después, vuelve a conectar cada ordenador con un código nuevo.
 - **Comprobar:** `systemctl status smbd`, `sudo smbstatus`, `testparm -s`, `tail /var/log/samba/log.*`.
 - **Apagar:** `pcloud-install-smb.sh --remove --execute`. No borra la carpeta ni lo copiado.
+- **Nombre antiguo `Copias`:** al actualizar con `pcloud-install-smb.sh --execute`, la carpeta se renombra (sin copiar nada), la contraseña se conserva y `Copias` queda como alias oculto: los ordenadores ya conectados siguen funcionando.
 
 ## 9. Antes de confiar datos únicos
 

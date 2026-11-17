@@ -135,6 +135,7 @@ const longPress = useLongPress((point) => {
               draggable="false"
               @error="onThumbError(entry)"
             >
+            <DbsFolderIcon v-else-if="entry.type === 'dir' && entry.path.toLowerCase() === `/${BACKUP_STUDIO_FOLDER.toLowerCase()}`" :size="40" />
             <AppIcon v-else :name="fileKind(entry.name, entry.type).icon" :size="38" :stroke="1.4" :class="iconClass(entry)" />
             <span v-if="entry.type === 'file' && viewerKind(entry.name) === 'video' && showThumb(entry)" class="badge" aria-hidden="true"><AppIcon name="play" :size="12" /></span>
           </span>

@@ -24,6 +24,7 @@ Formato: Contexto → Decisión → Consecuencias → Alternativas. Un ADR acept
 | [0020](0020-reiniciar-apagar-desde-la-web.md) | Reiniciar y apagar el equipo desde Ajustes (agente root mínimo) | Aceptado |
 | [0021](0021-carpeta-de-red-smb.md) | Carpeta de red (SMB) opcional para copias desde los ordenadores de casa | Aceptado |
 | [0022](0022-emparejar-ordenadores-con-codigo.md) | Conectar un ordenador a la carpeta de red con un código de un solo uso | Aceptado |
+| [0023](0023-carpeta-dev-backup-studio.md) | La carpeta de red se llama DEV_Backup_Studio (renombrado con alias) y lleva su icono | Aceptado |
 
 ## Pendientes
 

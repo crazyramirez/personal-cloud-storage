@@ -97,3 +97,6 @@ export function fileKind(name: string, type: 'dir' | 'file'): { icon: FileIconNa
 export function explorerLink(segments: readonly string[]): string {
   return segments.length === 0 ? '/archivos' : `/archivos/${segments.map(encodeURIComponent).join('/')}`;
 }
+
+/** Carpeta de la nube donde DEV Backup Studio guarda las copias de los ordenadores (ADR-0023). */
+export const BACKUP_STUDIO_FOLDER = 'DEV_Backup_Studio';

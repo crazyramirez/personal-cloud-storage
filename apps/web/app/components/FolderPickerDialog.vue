@@ -93,7 +93,8 @@ function finish(value: string | null): void {
         <ul v-else>
           <li v-for="folder in folders" :key="folder.name">
             <button type="button" class="row" @click="go(join(current, folder.name))">
-              <AppIcon name="folder" :size="20" class="ico-folder" />
+              <DbsFolderIcon v-if="current === '/' && folder.name.toLowerCase() === BACKUP_STUDIO_FOLDER.toLowerCase()" :size="20" />
+              <AppIcon v-else name="folder" :size="20" class="ico-folder" />
               <span class="name">{{ folder.name }}</span>
               <AppIcon name="chevron" :size="15" class="muted" />
             </button>
