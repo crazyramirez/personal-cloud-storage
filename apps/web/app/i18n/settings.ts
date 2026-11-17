@@ -3,6 +3,12 @@ import type { Message, MessageTable } from '~/utils/i18n';
 const es = {
   pageTitle: 'Ajustes · Personal Cloud',
   title: 'Ajustes',
+  subtitle: 'Tu cuenta, cómo se ve la app, tu nube y el equipo',
+  onThisPage: 'Secciones de Ajustes',
+  groupAccount: 'Cuenta y seguridad',
+  groupPreferences: 'Preferencias',
+  groupCloud: 'Nube',
+  groupDevice: 'Equipo',
 
   // Idioma
   language: 'Idioma',
@@ -148,6 +154,12 @@ export default {
   en: {
     pageTitle: 'Settings · Personal Cloud',
     title: 'Settings',
+    subtitle: 'Your account, how the app looks, your cloud and the device',
+    onThisPage: 'Settings sections',
+    groupAccount: 'Account and security',
+    groupPreferences: 'Preferences',
+    groupCloud: 'Cloud',
+    groupDevice: 'Device',
 
     language: 'Language',
     languageSystem: 'Automatic',

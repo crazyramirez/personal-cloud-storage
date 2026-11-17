@@ -160,6 +160,19 @@ const rows = computed(() => {
   gap: 14px;
 }
 
+/* A todo el ancho (Ajustes en pantalla grande): escritura, lectura y aleatorio en tres columnas. */
+@media (min-width: 900px) {
+  .speed {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px 28px;
+  }
+
+  .speed > p {
+    grid-column: 1 / -1;
+  }
+}
+
 
 .meter {
   display: flex;
