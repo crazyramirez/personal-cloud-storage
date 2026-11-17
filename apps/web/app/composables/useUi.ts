@@ -23,7 +23,8 @@ let toastId = 0;
 
 export function toast(message: string, options: { tone?: Toast['tone']; action?: Toast['action']; timeoutMs?: number; busy?: boolean } = {}): number {
   const id = ++toastId;
-  toasts.value = [...toasts.value.slice(-3), { id, message, tone: options.tone ?? 'info', action: options.action, busy: options.busy }];
+  // Solo se ve el último aviso: uno nuevo sustituye al anterior (no se apilan).
+  toasts.value = [{ id, message, tone: options.tone ?? 'info', action: options.action, busy: options.busy }];
   const timeout = options.timeoutMs ?? (options.busy === true ? 0 : options.action !== undefined ? 8000 : 4500);
   if (timeout > 0) setTimeout(() => dismissToast(id), timeout);
   return id;
