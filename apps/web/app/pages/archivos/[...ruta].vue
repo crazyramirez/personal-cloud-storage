@@ -2029,7 +2029,8 @@ h2 {
 .details {
   position: sticky;
   padding-top: 22px !important;
-  top: 12px;
+  /* Debajo de la cabecera fija del layout. */
+  top: calc(var(--top-h, 0px) + 12px);
   width: 300px;
   flex: none;
   display: flex;

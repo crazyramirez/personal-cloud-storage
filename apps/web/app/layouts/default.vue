@@ -7,8 +7,25 @@ const route = useRoute();
 /** Acceso fuera de casa por Tailscale (nombre *.ts.net o IP 100.64/10). */
 const remote = import.meta.client && /\.ts\.net$|^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(window.location.hostname);
 
-onMounted(() => storage.start());
-onBeforeUnmount(() => storage.stop());
+/** Alto real de la cabecera fija (cambia si sus botones se reparten en dos líneas). Lo usan
+ *  los elementos «sticky» de las páginas para quedarse justo debajo y no tapados por ella. */
+const top = ref<HTMLElement | null>(null);
+const topHeight = ref(0);
+let topObserver: ResizeObserver | null = null;
+
+onMounted(() => {
+  storage.start();
+  if (top.value) {
+    topObserver = new ResizeObserver(() => {
+      topHeight.value = top.value?.offsetHeight ?? 0;
+    });
+    topObserver.observe(top.value);
+  }
+});
+onBeforeUnmount(() => {
+  storage.stop();
+  topObserver?.disconnect();
+});
 
 const NAV = computed<Array<{ to: string; label: string; icon: IconName; mobile: boolean }>>(() => [
   { to: '/panel', label: t('nav.dashboard'), icon: 'gauge', mobile: true },
@@ -31,7 +48,7 @@ const appVersion = useAppVersion();
 </script>
 
 <template>
-  <div class="shell">
+  <div class="shell" :style="{ '--top-h': `${topHeight}px` }">
     <nav :aria-label="t('nav.mainNav')" class="side">
       <div class="brand">
         <span class="logo"><AppIcon name="cloud" :size="20" :stroke="1.9" /></span>
@@ -54,7 +71,7 @@ const appVersion = useAppVersion();
     </nav>
 
     <div class="main">
-      <header class="top">
+      <header ref="top" class="top">
         <StatusPill />
         <div class="tools">
           <BackupIndicator />
@@ -112,6 +129,13 @@ const appVersion = useAppVersion();
   display: flex;
   flex-direction: column;
   gap: 24px;
+  /* Fija al hacer scroll: el menú sigue a la vista aunque la página sea larga. */
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
 }
 
 .version {
@@ -202,6 +226,10 @@ a.link:hover {
   padding: 12px 24px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  /* Fija arriba al hacer scroll, en escritorio y en móvil. */
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 
 .tools {
@@ -293,9 +321,6 @@ a.link:hover {
   }
 
   .top {
-    position: sticky;
-    top: 0;
-    z-index: 20;
     padding: calc(8px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) 8px calc(12px + env(safe-area-inset-left));
   }
 
