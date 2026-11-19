@@ -62,6 +62,7 @@ import { inlineContentType } from '../media/media.ts';
 import { MediaService } from '../media/service.ts';
 import { listDirectory, resolveDownload } from '../storage/files.ts';
 import { FsOperations } from '../storage/operations.ts';
+import { relocatePaths } from '../storage/relocate.ts';
 import { SerialQueue } from '../storage/serial.ts';
 import { volumeSpace } from '../storage/space.ts';
 import { StorageUnavailableError, toPublicStatus } from '../storage/storage-guardian.ts';
@@ -493,6 +494,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         minFreeBytes: config.storage.minFreeBytes,
         trashRetentionDays: config.trash.enabled ? config.trash.retentionDays : null,
         clock,
+        relocated: (from, to) => relocatePaths(db, from, to),
       }),
     media: deps.media ?? new MediaService(guardian),
     clock,

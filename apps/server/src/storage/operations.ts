@@ -55,6 +55,11 @@ export interface FsOperationsOptions {
    * hora fiable no se elimina nada por caducidad.
    */
   readonly clockTrusted?: () => Promise<boolean>;
+  /**
+   * Tras renombrar o mover un elemento (ya hecho en disco, dentro de la cola serie): actualiza las
+   * rutas guardadas que apuntan a él o a algo de dentro (enlaces, subidas en curso; ver relocate.ts).
+   */
+  readonly relocated?: (from: string, to: string) => void;
 }
 
 interface TrashMeta {
@@ -252,6 +257,7 @@ export class FsOperations {
 
       if (foldKey(name) === foldKey(oldName)) {
         await this.#renameInTwoSteps(lease, source.abs, [...parentSegments, name]);
+        this.#relocated(segments, [...parentSegments, name]);
         return result;
       }
 
@@ -259,8 +265,22 @@ export class FsOperations {
       if (await exists(targetAbs)) throw new AppError('CONFLICT', 'Ya existe un elemento con ese nombre');
       await rename(source.abs, targetAbs);
       await syncDirectory(parentAbs);
+      this.#relocated(segments, [...parentSegments, name]);
       return result;
     });
+  }
+
+  /**
+   * Avisa de que un elemento cambió de ruta. El cambio en disco ya está hecho y confirmado: un
+   * fallo aquí no puede convertir la operación en un error (el usuario reintentaría sobre algo que
+   * ya se movió). En el peor caso un enlace queda apuntando a la ruta antigua, como antes.
+   */
+  #relocated(from: readonly string[], to: readonly string[]): void {
+    try {
+      this.#o.relocated?.(formatClientPath(from), formatClientPath(to));
+    } catch {
+      // ver arriba
+    }
   }
 
   async #renameInTwoSteps(lease: VolumeLease, sourceAbs: string, target: string[]): Promise<void> {
@@ -329,6 +349,7 @@ export class FsOperations {
         await rename(source.abs, targetAbs);
         await syncDirectory(dest.abs);
         await syncDirectory(path.dirname(source.abs));
+        this.#relocated(segments, [...destSegments, finalName]);
         return { path: formatClientPath([...destSegments, finalName]), name: finalName };
       });
     });

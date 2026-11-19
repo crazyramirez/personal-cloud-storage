@@ -26,6 +26,7 @@ import { buildGuestApp } from './share/guest-app.ts';
 import { ShareStore } from './share/store.ts';
 import { MediaService } from './media/service.ts';
 import { FsOperations } from './storage/operations.ts';
+import { relocatePaths } from './storage/relocate.ts';
 import { SerialQueue } from './storage/serial.ts';
 import { UploadManager } from './storage/uploads.ts';
 
@@ -69,6 +70,7 @@ async function main(): Promise<void> {
     trashRetentionDays: config.trash.enabled ? config.trash.retentionDays : null,
     // systemd-timesyncd crea este fichero cuando ha sincronizado la hora con la red.
     clockTrusted: () => access('/run/systemd/timesync/synchronized').then(() => true, () => false),
+    relocated: (from, to) => relocatePaths(db, from, to),
   });
   const media = new MediaService(guardian, undefined, { minFreePercent: config.storage.minFreePercent, minFreeBytes: config.storage.minFreeBytes });
   const tools = await media.init();
