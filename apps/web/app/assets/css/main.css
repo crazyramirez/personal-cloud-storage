@@ -25,7 +25,7 @@
   --danger-soft: #fdecea;
   --danger-border: #f3b8b1;
   --track: #e3e6eb;
-  --folder: #b7790f;
+  --folder: #5b7fa6; /* azul acero suave (≥ 3:1 sobre surface, surface-2 y accent-soft) */
   --shadow: 0 12px 32px rgb(20 23 28 / 14%);
   color-scheme: light;
 }
@@ -134,7 +134,7 @@ select {
   outline-offset: 2px;
 }
 
-/* Colores de los iconos de archivo (diseño aprobado): carpetas en ámbar, multimedia en acento. */
+/* Colores de los iconos de archivo: carpetas en azul acero suave (tema claro) o ámbar (oscuro), multimedia en acento. */
 .ico-folder {
   color: var(--folder);
 }
