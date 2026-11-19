@@ -1909,6 +1909,7 @@ h2 {
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
 }
 
 .grid.size-sm {
@@ -1931,7 +1932,6 @@ h2 {
 .grid.size-lg {
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 16px;
-  gap: 12px;
 }
 
 .tile {
@@ -2326,6 +2326,7 @@ h2 {
 
   .grid {
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
   }
 
   .grid.size-sm {
