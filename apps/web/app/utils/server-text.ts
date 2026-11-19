@@ -240,6 +240,9 @@ export const PATTERNS: Array<[RegExp, (match: RegExpMatchArray) => string]> = [
 /** Traducción al idioma activo de un texto del servidor (o el original si no se conoce). */
 export function serverText(message: string): string {
   if (locale.value === 'es' || message === '') return message;
+  // Otros idiomas: su _server.ts; lo que falte (y los patrones), en inglés.
+  const other = serverTranslations(locale.value)?.[message];
+  if (other !== undefined) return other;
   const exact = EXACT[message];
   if (exact !== undefined) return exact;
   for (const [pattern, render] of PATTERNS) {

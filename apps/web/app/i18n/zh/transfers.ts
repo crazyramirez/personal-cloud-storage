@@ -1,0 +1,41 @@
+import type { Translation } from '~/utils/i18n';
+import type source from '../transfers';
+
+export default {
+  title: '上传',
+  openPanel: '上传',
+  openPanelBusy: (p) => `上传：${p.n} 个待处理`,
+  close: '关闭上传',
+  pauseAll: '全部暂停',
+  resumeAll: '全部继续',
+  globalProgress: '总进度',
+  summaryNone: '没有正在进行的上传',
+  summaryAllPaused: '已全部暂停',
+  summaryUploading: (p) => `${p.n} 个上传正在进行`,
+  summaryHint: '在“文件”中点击“上传”按钮或拖放文件即可上传。上传完成后会从这里消失。',
+  progress: '{done} / {total}',
+  keepTabOpen: '上传通过此标签页进行：请保持打开，直到上传完成。',
+  allDone: (p) => `${p.n} 个上传已完成并保存到磁盘`,
+  cancelTitle: '要删除此上传吗？',
+  cancelMessage: '将停止上传“{name}”，并丢弃已发送的部分。该文件不会保存到你的云中。',
+  cancelConfirm: '删除上传',
+  // Fila de transferencia
+  pause: '暂停',
+  resume: '继续',
+  openDestination: '打开目标文件夹',
+  cancelUpload: '删除上传',
+  pauseNamed: '暂停 {name}',
+  resumeNamed: '继续 {name}',
+  cancelNamed: '删除 {name} 的上传',
+  stateUploading: '正在上传',
+  stateQueued: '已排队',
+  statePaused: '已暂停',
+  stateWaiting: '等待中',
+  stateError: '错误',
+  // Avisos de la cola
+  waitDisk: '磁盘不可用。恢复后将自动继续。',
+  waitNetwork: '未连接到服务器。将自动重试。',
+  waitTimeout: '服务器响应缓慢。将自动重试。',
+  waitBusy: '服务器繁忙。将自动重试。',
+  unknownError: '未知错误',
+} satisfies Translation<typeof source>;

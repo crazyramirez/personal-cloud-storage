@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { HealthResponse, MediaCapabilities, PasskeyListResponse, PasskeyView, SessionListResponse, SessionView, UserListResponse, UserView } from '@pcloud/contracts';
-import { localePreference, setLocalePreference, type LocalePreference } from '~/utils/i18n';
+import { LOCALE_NAMES, LOCALES, localePreference, setLocalePreference, type LocalePreference } from '~/utils/i18n';
 
 useHead({ title: () => t('settings.pageTitle') });
 const session = useSession();
@@ -9,12 +9,12 @@ const pwa = usePwa();
 const isOwner = computed(() => session.user.value?.role === 'owner');
 
 // ── Idioma ──────────────────────────────────────────────────────────────────────────────────
-// «Español» y «English» se muestran siempre en su propio idioma.
+// Cada idioma se muestra siempre en su propio idioma («Español», «Deutsch», «日本語»…).
 const languageOptions = computed<Array<{ v: LocalePreference; l: string; lang?: string }>>(() => [
   { v: 'system', l: t('settings.languageSystem') },
-  { v: 'es', l: 'Español', lang: 'es' },
-  { v: 'en', l: 'English', lang: 'en' },
+  ...LOCALES.map((lang) => ({ v: lang, l: LOCALE_NAMES[lang], lang })),
 ]);
+const languageModel = computed<LocalePreference>({ get: () => localePreference.value, set: (value) => setLocalePreference(value) });
 
 // ── Contraseña ──────────────────────────────────────────────────────────────────────────────
 const current = ref('');
@@ -315,9 +315,9 @@ async function installApp(): Promise<void> {
         <div class="grid three">
           <section id="cfg-language" class="card sec cell" aria-labelledby="s-lang">
             <header><AppIcon name="globe" /><h2 id="s-lang">{{ t('settings.language') }}</h2></header>
-            <div class="seg" role="radiogroup" aria-labelledby="s-lang">
-              <button v-for="option in languageOptions" :key="option.v" type="button" role="radio" :aria-checked="localePreference === option.v" :lang="option.lang" @click="setLocalePreference(option.v)">{{ option.l }}</button>
-            </div>
+            <select v-model="languageModel" class="input" aria-labelledby="s-lang">
+              <option v-for="option in languageOptions" :key="option.v" :value="option.v" :lang="option.lang">{{ option.l }}</option>
+            </select>
             <p v-if="localePreference === 'system'" class="muted small" aria-live="polite">{{ t('settings.languageNow', { name: t('common.languageName') }) }}</p>
           </section>
 

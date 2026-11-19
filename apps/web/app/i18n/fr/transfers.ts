@@ -1,0 +1,41 @@
+import type { Translation } from '~/utils/i18n';
+import type source from '../transfers';
+
+export default {
+  title: 'Importations',
+  openPanel: 'Importations',
+  openPanelBusy: (p) => `Importations : ${p.n} en attente`,
+  close: 'Fermer les importations',
+  pauseAll: 'Tout suspendre',
+  resumeAll: 'Tout reprendre',
+  globalProgress: 'Progression globale',
+  summaryNone: 'Aucune importation en cours',
+  summaryAllPaused: 'Tout est en pause',
+  summaryUploading: (p) => (Number(p.n) <= 1 ? `${p.n} importation en cours` : `${p.n} importations en cours`),
+  summaryHint: 'Importez des fichiers depuis « Fichiers » avec le bouton « Importer » ou en les faisant glisser. Une fois terminée, une importation disparaît d’ici.',
+  progress: '{done} sur {total}',
+  keepTabOpen: 'Les importations passent par cet onglet : laissez-le ouvert jusqu’à ce qu’elles soient terminées.',
+  allDone: (p) => (Number(p.n) <= 1 ? `${p.n} importation terminée et enregistrée sur le disque` : `${p.n} importations terminées et enregistrées sur le disque`),
+  cancelTitle: 'Supprimer cette importation ?',
+  cancelMessage: 'L’importation de « {name} » est arrêtée et ce qui a déjà été envoyé est abandonné. Le fichier ne sera pas enregistré dans votre cloud.',
+  cancelConfirm: 'Supprimer l’importation',
+  // Ligne de transfert
+  pause: 'Suspendre',
+  resume: 'Reprendre',
+  openDestination: 'Ouvrir le dossier de destination',
+  cancelUpload: 'Supprimer l’importation',
+  pauseNamed: 'Suspendre {name}',
+  resumeNamed: 'Reprendre {name}',
+  cancelNamed: 'Supprimer l’importation de {name}',
+  stateUploading: 'Importation',
+  stateQueued: 'En file d’attente',
+  statePaused: 'En pause',
+  stateWaiting: 'En attente',
+  stateError: 'Erreur',
+  // Avis de la file d’attente
+  waitDisk: 'Le disque n’est pas disponible. L’importation reprendra d’elle-même à son retour.',
+  waitNetwork: 'Pas de connexion au serveur. Nouvelle tentative automatique.',
+  waitTimeout: 'Le serveur met du temps à répondre. Nouvelle tentative automatique.',
+  waitBusy: 'Le serveur est occupé. Nouvelle tentative automatique.',
+  unknownError: 'Erreur inconnue',
+} satisfies Translation<typeof source>;

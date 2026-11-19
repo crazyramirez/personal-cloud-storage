@@ -1,0 +1,41 @@
+import type { Translation } from '~/utils/i18n';
+import type source from '../transfers';
+
+export default {
+  title: 'Uploads',
+  openPanel: 'Uploads',
+  openPanelBusy: (p) => (Number(p.n) === 1 ? 'Uploads: 1 ausstehend' : `Uploads: ${p.n} ausstehend`),
+  close: 'Uploads schließen',
+  pauseAll: 'Alle pausieren',
+  resumeAll: 'Alle fortsetzen',
+  globalProgress: 'Gesamtfortschritt',
+  summaryNone: 'Keine laufenden Uploads',
+  summaryAllPaused: 'Alle pausiert',
+  summaryUploading: (p) => (Number(p.n) === 1 ? '1 Upload läuft' : `${p.n} Uploads laufen`),
+  summaryHint: 'Laden Sie Dateien unter „Dateien“ mit „Hochladen“ oder per Drag-and-drop hoch. Abgeschlossene Uploads verschwinden von hier.',
+  progress: '{done} von {total}',
+  keepTabOpen: 'Die Uploads laufen in diesem Tab: Lassen Sie ihn geöffnet, bis sie abgeschlossen sind.',
+  allDone: (p) => (Number(p.n) === 1 ? 'Upload abgeschlossen und auf der Festplatte gespeichert' : `${p.n} Uploads abgeschlossen und auf der Festplatte gespeichert`),
+  cancelTitle: 'Diesen Upload entfernen?',
+  cancelMessage: 'Der Upload von „{name}“ wird gestoppt und das bisher Gesendete verworfen. Die Datei wird nicht in Ihrer Cloud gespeichert.',
+  cancelConfirm: 'Upload entfernen',
+  // Fila de transferencia
+  pause: 'Pausieren',
+  resume: 'Fortsetzen',
+  openDestination: 'Zielordner öffnen',
+  cancelUpload: 'Upload entfernen',
+  pauseNamed: '{name} pausieren',
+  resumeNamed: '{name} fortsetzen',
+  cancelNamed: 'Upload von {name} entfernen',
+  stateUploading: 'Wird hochgeladen',
+  stateQueued: 'In Warteschlange',
+  statePaused: 'Pausiert',
+  stateWaiting: 'Wartet',
+  stateError: 'Fehler',
+  // Avisos de la cola
+  waitDisk: 'Die Festplatte ist nicht verfügbar. Der Upload wird automatisch fortgesetzt, sobald sie wieder da ist.',
+  waitNetwork: 'Keine Verbindung zum Server. Wird automatisch erneut versucht.',
+  waitTimeout: 'Der Server antwortet langsam. Wird automatisch erneut versucht.',
+  waitBusy: 'Der Server ist ausgelastet. Wird automatisch erneut versucht.',
+  unknownError: 'Unbekannter Fehler',
+} satisfies Translation<typeof source>;

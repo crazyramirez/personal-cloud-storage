@@ -1,0 +1,41 @@
+import type { Translation } from '~/utils/i18n';
+import type source from '../transfers';
+
+export default {
+  title: 'Caricamenti',
+  openPanel: 'Caricamenti',
+  openPanelBusy: (p) => (Number(p.n) === 1 ? 'Caricamenti: 1 in sospeso' : `Caricamenti: ${p.n} in sospeso`),
+  close: 'Chiudi caricamenti',
+  pauseAll: 'Metti tutto in pausa',
+  resumeAll: 'Riprendi tutto',
+  globalProgress: 'Avanzamento complessivo',
+  summaryNone: 'Nessun caricamento in corso',
+  summaryAllPaused: 'Tutto in pausa',
+  summaryUploading: (p) => (Number(p.n) === 1 ? '1 caricamento in corso' : `${p.n} caricamenti in corso`),
+  summaryHint: 'Carica file da «File» con il pulsante «Carica» o trascinandoli. Quando un caricamento termina, scompare da qui.',
+  progress: '{done} di {total}',
+  keepTabOpen: 'I caricamenti avvengono da questa scheda: tienila aperta finché non terminano.',
+  allDone: (p) => (Number(p.n) === 1 ? 'Caricamento completato e salvato sul disco' : `${p.n} caricamenti completati e salvati sul disco`),
+  cancelTitle: 'Eliminare questo caricamento?',
+  cancelMessage: 'Il caricamento di «{name}» viene interrotto e ciò che è stato inviato finora viene scartato. Il file non verrà salvato nel tuo cloud.',
+  cancelConfirm: 'Elimina caricamento',
+  // Fila de transferencia
+  pause: 'Metti in pausa',
+  resume: 'Riprendi',
+  openDestination: 'Apri cartella di destinazione',
+  cancelUpload: 'Elimina caricamento',
+  pauseNamed: 'Metti in pausa {name}',
+  resumeNamed: 'Riprendi {name}',
+  cancelNamed: 'Elimina il caricamento di {name}',
+  stateUploading: 'Caricamento',
+  stateQueued: 'In coda',
+  statePaused: 'In pausa',
+  stateWaiting: 'In attesa',
+  stateError: 'Errore',
+  // Avisos de la cola
+  waitDisk: 'Il disco non è disponibile. Riprenderà da solo quando tornerà.',
+  waitNetwork: 'Nessuna connessione con il server. Verrà ritentato automaticamente.',
+  waitTimeout: 'Il server tarda a rispondere. Verrà ritentato automaticamente.',
+  waitBusy: 'Il server è occupato. Verrà ritentato automaticamente.',
+  unknownError: 'Errore sconosciuto',
+} satisfies Translation<typeof source>;

@@ -1,0 +1,41 @@
+import type { Translation } from '~/utils/i18n';
+import type source from '../transfers';
+
+export default {
+  title: 'アップロード',
+  openPanel: 'アップロード',
+  openPanelBusy: (p) => `アップロード: ${p.n} 件保留中`,
+  close: 'アップロードを閉じる',
+  pauseAll: 'すべて一時停止',
+  resumeAll: 'すべて再開',
+  globalProgress: '全体の進行状況',
+  summaryNone: '実行中のアップロードはありません',
+  summaryAllPaused: 'すべて一時停止中',
+  summaryUploading: (p) => `${p.n} 件のアップロードを実行中`,
+  summaryHint: '「ファイル」から「アップロード」ボタンを使うか、ドラッグしてファイルをアップロードします。完了したアップロードはここから消えます。',
+  progress: '{done} / {total}',
+  keepTabOpen: 'アップロードはこのタブから行われます。完了するまでタブを開いたままにしてください。',
+  allDone: (p) => `${p.n} 件のアップロードが完了し、ディスクに保存されました`,
+  cancelTitle: 'このアップロードを削除しますか？',
+  cancelMessage: '「{name}」のアップロードを停止し、ここまで送信した分を破棄します。ファイルはクラウドに保存されません。',
+  cancelConfirm: 'アップロードを削除',
+  // Fila de transferencia
+  pause: '一時停止',
+  resume: '再開',
+  openDestination: '保存先フォルダを開く',
+  cancelUpload: 'アップロードを削除',
+  pauseNamed: '{name} を一時停止',
+  resumeNamed: '{name} を再開',
+  cancelNamed: '{name} のアップロードを削除',
+  stateUploading: 'アップロード中',
+  stateQueued: '待機中',
+  statePaused: '一時停止中',
+  stateWaiting: '保留中',
+  stateError: 'エラー',
+  // Avisos de la cola
+  waitDisk: 'ディスクを使用できません。復帰すると自動で再開します。',
+  waitNetwork: 'サーバーに接続できません。自動で再試行します。',
+  waitTimeout: 'サーバーの応答に時間がかかっています。自動で再試行します。',
+  waitBusy: 'サーバーがビジー状態です。自動で再試行します。',
+  unknownError: '不明なエラー',
+} satisfies Translation<typeof source>;
