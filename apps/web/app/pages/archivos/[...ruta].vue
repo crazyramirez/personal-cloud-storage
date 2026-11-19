@@ -1952,6 +1952,13 @@ h2 {
   padding: 6px 6px 8px;
 }
 
+/* Icono de tipo (carpeta, documento…) más pequeño, acorde a la tarjeta. Solo el hijo directo:
+ * el distintivo de vídeo y la marca de selección conservan su tamaño. */
+.grid.size-sm .thumb > svg {
+  width: 32px;
+  height: 32px;
+}
+
 .grid.size-sm .tile-name {
   font-size: 12px;
 }
