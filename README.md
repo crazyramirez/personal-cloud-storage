@@ -12,6 +12,7 @@ Nube personal autocontenida: un servidor Linux pequeño (una **Raspberry Pi**, u
 
 - Explorador web (SPA, móvil y escritorio): navegar, crear carpetas, subir (reanudable, sin sobrescribir), descargar, mover, copiar, renombrar, ZIP, papelera y recientes.
 - Visores de imagen, vídeo, audio, PDF y documentos de Office (con ffmpeg y LibreOffice, opcionales).
+- **Interfaz en 7 idiomas:** español, inglés, francés, alemán, italiano, chino simplificado y japonés. Por defecto, el del navegador (si no es ninguno de ellos, inglés); se cambia en Ajustes → Idioma.
 - Cuentas con contraseña (Argon2id) y llaves de acceso; sesiones revocables; registro de auditoría.
 - HTTPS en la LAN con CA propia (Caddy). Acceso remoto solo por VPN (Tailscale), **nunca** abierto a Internet.
 - `StorageGuardian`: bloquea las escrituras en cuanto el disco desaparece, se cuelga o cambia, y nunca escribe en el mountpoint vacío.
