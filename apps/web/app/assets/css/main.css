@@ -51,7 +51,7 @@
   --danger-soft: #3a1714;
   --danger-border: #6b2a24;
   --track: #2a303b;
-  --folder: #e3a94a;
+  --folder: #8aa8cb;
   --shadow: 0 12px 32px rgb(0 0 0 / 50%);
   color-scheme: dark;
 }
@@ -78,7 +78,7 @@
     --danger-soft: #3a1714;
     --danger-border: #6b2a24;
     --track: #2a303b;
-    --folder: #e3a94a;
+    --folder: #8aa8cb;
     --shadow: 0 12px 32px rgb(0 0 0 / 50%);
     color-scheme: dark;
   }
@@ -134,7 +134,7 @@ select {
   outline-offset: 2px;
 }
 
-/* Colores de los iconos de archivo: carpetas en azul acero suave (tema claro) o ámbar (oscuro), multimedia en acento. */
+/* Colores de los iconos de archivo: carpetas en azul acero suave (más claro en el tema oscuro), multimedia en acento. */
 .ico-folder {
   color: var(--folder);
 }
