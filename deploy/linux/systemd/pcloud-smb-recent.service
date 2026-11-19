@@ -1,0 +1,55 @@
+# /etc/systemd/system/pcloud-smb-recent.service — Recientes de la carpeta de red (ADR-0024).
+# Instalado por pcloud-install-smb.sh. No editar a mano.
+#
+# Sigue en el diario del sistema lo que Samba anota con full_audit (smbd_audit) y lo guarda en la
+# base de datos de la nube (tabla smb_recent) para «Recientes» del Panel. Corre como pcloud con el
+# grupo systemd-journal para que el servidor web (pcloud.service) no necesite leer el diario.
+# Nunca toca el disco de datos: solo lee el diario y escribe en /var/lib/pcloud.
+
+[Unit]
+Description=Personal Cloud Storage: recientes de la carpeta de red
+After=systemd-journald.service smbd.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=pcloud
+Group=pcloud
+SupplementaryGroups=systemd-journal
+WorkingDirectory=/opt/pcloud/current
+ExecStart=/usr/local/bin/node /opt/pcloud/current/apps/server/src/cli/smb-recent.ts --config /etc/pcloud/config.yaml
+Environment=NODE_ENV=production
+Restart=always
+RestartSec=10
+# 64 = configuración inválida: reintentar no lo arregla.
+RestartPreventExitStatus=64
+UMask=0077
+MemoryMax=256M
+TasksMax=32
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ReadWritePaths=/var/lib/pcloud
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+
+[Install]
+WantedBy=multi-user.target

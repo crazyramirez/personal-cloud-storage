@@ -8,6 +8,7 @@ import type { ApiErrorBody, BatchResponse, PasskeyLoginOptions, PasskeyRegisterO
 import { hashPassword } from '../../src/auth/passwords.ts';
 import { createUser } from '../../src/auth/sessions.ts';
 import { buildApp } from '../../src/http/app.ts';
+import { SmbRecentStore } from '../../src/smb/recent.ts';
 import { createHarness, type Harness } from '../support/harness.ts';
 
 const CSRF = { 'x-pcloud-request': '1' };
@@ -185,6 +186,23 @@ describe('API del explorador, papelera, cuenta y passkeys', () => {
     assert.ok(!after.entries.some((entry) => entry.path === '/Reciente'), 'lo eliminado no aparece');
     const id = trashed.results[0]?.ok === true ? trashed.results[0].path.slice('trash:'.length) : '';
     await call('POST', '/trash/delete', { ids: [id] }); // no deja nada en la papelera para otros tests
+  });
+
+  it('recientes: incluye lo copiado por la carpeta de red (ADR-0024), por fecha y solo si existe', async () => {
+    await mkdir(path.join(h.dataRoot, 'DEV_Backup_Studio', 'PC'), { recursive: true });
+    await writeFile(path.join(h.dataRoot, 'DEV_Backup_Studio', 'PC', 'informe.pdf'), 'pdf');
+    const future = new Date(Date.now() + 60_000).toISOString();
+    new SmbRecentStore(h.db).record(
+      [
+        { event: { kind: 'write', path: '/DEV_Backup_Studio/PC/informe.pdf' }, at: future },
+        { event: { kind: 'write', path: '/DEV_Backup_Studio/PC/borrado.txt' }, at: future },
+      ],
+      null,
+    );
+    const recent = (await call('GET', '/fs/recent')).json() as { entries: Array<{ path: string; type: string; at: string }> };
+    assert.equal(recent.entries[0]?.path, '/DEV_Backup_Studio/PC/informe.pdf', 'lo más nuevo primero, venga de donde venga');
+    assert.equal(recent.entries[0]?.type, 'file');
+    assert.ok(!recent.entries.some((entry) => entry.path.endsWith('borrado.txt')), 'lo que ya no existe no aparece');
   });
 
   it('validación estricta: campos desconocidos, lotes vacíos e ids de papelera mal formados → 400', async () => {

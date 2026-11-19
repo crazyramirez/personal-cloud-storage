@@ -21,6 +21,7 @@ import {
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { audit } from '../auth/sessions.ts';
 import { AppError } from '../errors.ts';
+import { SmbRecentStore } from '../smb/recent.ts';
 import { measureDiskSpeed } from '../storage/speedtest.ts';
 import { formatClientPath, parseClientPath, resolveInside } from '../storage/paths.ts';
 import { planZip, streamZip } from '../storage/zip.ts';
@@ -129,20 +130,23 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
   });
 
   // ── Recientes (Panel) ───────────────────────────────────────────────────────────────────────
-  // A partir del registro de actividad (subidas, carpetas y archivos creados), solo lo que SIGUE
-  // existiendo en esa ruta: lo eliminado, movido o renombrado no aparece.
+  // A partir del registro de actividad (subidas, carpetas y archivos creados) y de lo que los
+  // ordenadores escriben por la carpeta de red (smb_recent, ADR-0024), lo más nuevo primero y solo
+  // lo que SIGUE existiendo en esa ruta: lo eliminado, movido o renombrado no aparece.
   app.get(`${API}/fs/recent`, { schema: { querystring: RecentQuery } }, async (request): Promise<RecentResponse> => {
     ctx.user(request);
     const limit = (request.query as RecentQuery).limit ?? 12;
     const lease = await guardian.assertReadableVolume();
-    const rows = db
+    const fromWeb = db
       .prepare("SELECT path, at FROM audit_log WHERE result = 'ok' AND path IS NOT NULL AND action IN ('fs.upload', 'fs.mkdir', 'fs.create') ORDER BY id DESC LIMIT 400")
-      .all();
+      .all()
+      .map((row) => ({ path: String(row['path']), at: String(row['at']) }));
+    const rows = [...fromWeb, ...new SmbRecentStore(db).list(400)].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
     const seen = new Set<string>();
     const entries: RecentResponse['entries'] = [];
     for (const row of rows) {
       if (entries.length >= limit) break;
-      const clientPath = String(row['path']);
+      const clientPath = row.path;
       if (seen.has(clientPath)) continue;
       seen.add(clientPath);
       try {
@@ -157,7 +161,7 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
           type: found.stats.isDirectory() ? 'dir' : 'file',
           size: found.stats.isDirectory() ? 0 : found.stats.size,
           mtime: found.stats.mtime.toISOString(),
-          at: String(row['at']),
+          at: row.at,
         });
       } catch {
         // Ya no existe (o la ruta dejó de ser válida): no se muestra.

@@ -20,6 +20,10 @@
 #      que escribe el código de un solo uso de Ajustes → «Conectar un ordenador» (ADR-0022).
 #   6. Anuncia la nube en la red con avahi (_pcloud._tcp y _smb._tcp) para que DEV Backup Studio
 #      la encuentre sola, y macOS la vea en el Finder.
+#   7. Instala pcloud-smb-recent.service (ADR-0024): recoge del diario lo que Samba registra con
+#      full_audit para que lo copiado por la carpeta de red salga en «Recientes» del Panel.
+#
+# Con smbd ya en marcha la configuración se RECARGA (no se reinicia): una copia en curso no se corta.
 #
 # Uso:
 #   sudo bash pcloud-install-smb.sh                    # muestra el plan
@@ -52,12 +56,16 @@ ORIGINAL=/etc/samba/smb.conf.pcloud-original
 CHECK_DST=/usr/local/lib/pcloud/pcloud-smb-check.sh
 CREDS=/etc/pcloud/smb.json
 AVAHI=/etc/avahi/services/pcloud.service
+RECENT_UNIT=pcloud-smb-recent.service
 
 if [ "$REMOVE" -eq 1 ]; then
   echo "Plan: parar y deshabilitar smbd, quitar $SMB_USER de Samba y restaurar el smb.conf original."
   echo "      No se borra la carpeta compartida ni nada de lo copiado."
   [ "$EXECUTE" -eq 1 ] || { echo "DRY-RUN: repite con --execute."; exit 0; }
   systemctl disable --now smbd 2>/dev/null || true
+  systemctl disable --now "$RECENT_UNIT" 2>/dev/null || true
+  rm -f "/etc/systemd/system/$RECENT_UNIT"
+  systemctl daemon-reload
   if command -v pdbedit >/dev/null && pdbedit -L 2>/dev/null | grep -q "^$SMB_USER:"; then pdbedit -x -u "$SMB_USER" >/dev/null; fi
   if [ -f "$ORIGINAL" ]; then mv -f "$ORIGINAL" "$SMB_CONF"; fi
   rm -f "$CHECK_DST" "$CREDS" "$AVAHI"
@@ -70,6 +78,8 @@ fi
 TMPL="$CURRENT/deploy/linux/samba/smb.conf.tmpl"
 CHECK_SRC="$CURRENT/deploy/linux/samba/pcloud-smb-check.sh"
 [ -f "$TMPL" ] && [ -f "$CHECK_SRC" ] || die "la release activa no trae la carpeta de red (deploy/linux/samba)"
+RECENT_SRC="$CURRENT/deploy/linux/systemd/$RECENT_UNIT"
+[ -f "$RECENT_SRC" ] || die "la release activa no trae $RECENT_UNIT"
 getent passwd pcloud >/dev/null || die "falta el usuario pcloud: ejecuta antes pcloud-bootstrap.sh --execute"
 [ -f "$CONFIG" ] || die "falta $CONFIG"
 
@@ -158,6 +168,9 @@ XML
 )"
 [ -d "$(dirname "$AVAHI")" ] && [ "$(cat "$AVAHI" 2>/dev/null)" != "$AVAHI_XML" ] && PLAN+=("anunciar la nube en la red ($AVAHI)")
 systemctl is-enabled --quiet smbd 2>/dev/null && systemctl is-active --quiet smbd 2>/dev/null || PLAN+=("habilitar y arrancar smbd")
+RECENT_CHANGED=0
+cmp -s "$RECENT_SRC" "/etc/systemd/system/$RECENT_UNIT" || { RECENT_CHANGED=1; PLAN+=("instalar /etc/systemd/system/$RECENT_UNIT (Recientes de la carpeta de red)"); }
+systemctl is-enabled --quiet "$RECENT_UNIT" 2>/dev/null && systemctl is-active --quiet "$RECENT_UNIT" 2>/dev/null || PLAN+=("habilitar y arrancar $RECENT_UNIT")
 systemctl is-enabled --quiet nmbd 2>/dev/null && PLAN+=("deshabilitar nmbd (sin NetBIOS)")
 
 if [ "${#PLAN[@]}" -eq 0 ]; then echo "Nada que hacer: carpeta de red preparada (\\\\$(hostname -s).local\\$SHARE)."; exit 0; fi
@@ -223,7 +236,20 @@ if [ -d "$(dirname "$AVAHI")" ] && [ "$(cat "$AVAHI" 2>/dev/null)" != "$AVAHI_XM
 fi
 
 systemctl enable smbd >/dev/null 2>&1
-systemctl restart smbd
+if systemctl is-active --quiet smbd; then
+  # Recargar en vez de reiniciar: no corta las conexiones abiertas (una copia en curso sigue).
+  # Las conexiones nuevas a la carpeta usan ya la configuración nueva.
+  systemctl reload smbd
+else
+  systemctl start smbd
+fi
+
+if [ "$RECENT_CHANGED" -eq 1 ]; then
+  install -o root -g root -m 0644 "$RECENT_SRC" "/etc/systemd/system/$RECENT_UNIT"
+  systemctl daemon-reload
+fi
+systemctl enable "$RECENT_UNIT" >/dev/null 2>&1
+if [ "$RECENT_CHANGED" -eq 1 ]; then systemctl restart "$RECENT_UNIT"; else systemctl start "$RECENT_UNIT"; fi
 
 HOST="$(hostname -s)"
 echo

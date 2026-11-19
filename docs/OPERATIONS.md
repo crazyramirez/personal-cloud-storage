@@ -237,7 +237,7 @@ Ver [ADR-0020](adr/0020-reiniciar-apagar-desde-la-web.md). Ajustes → «Reinici
 
 ## 8 quinquies. Carpeta de red para copias de los ordenadores (SMB, opcional)
 
-Ver [ADR-0021](adr/0021-carpeta-de-red-smb.md), [ADR-0022](adr/0022-emparejar-ordenadores-con-codigo.md) y [ADR-0023](adr/0023-carpeta-dev-backup-studio.md). Comparte por SMB solo la carpeta `DEV_Backup_Studio` de la nube para que los ordenadores de casa hagan su copia de seguridad en ella (por ejemplo con DEV Backup Studio). `install.sh` no la activa.
+Ver [ADR-0021](adr/0021-carpeta-de-red-smb.md), [ADR-0022](adr/0022-emparejar-ordenadores-con-codigo.md), [ADR-0023](adr/0023-carpeta-dev-backup-studio.md) y [ADR-0024](adr/0024-recientes-de-la-carpeta-de-red.md). Comparte por SMB solo la carpeta `DEV_Backup_Studio` de la nube para que los ordenadores de casa hagan su copia de seguridad en ella (por ejemplo con DEV Backup Studio). `install.sh` no la activa.
 
 - **Activar:** con el disco conectado y la web funcionando, `sudo bash /opt/pcloud/current/deploy/linux/setup/pcloud-install-smb.sh --execute`. Guarda la credencial en `/etc/pcloud/smb.json` (root:pcloud 0640) y anuncia la nube en la red (`/etc/avahi/services/pcloud.service`).
 - **Conectar un ordenador (lo normal):** en la web, Ajustes → «Copias de tus ordenadores» → «Conectar un ordenador». En DEV Backup Studio, «Conectar con mi nube…» → escribe el código de 6 cifras. La app encuentra la nube sola, guarda la credencial en el sistema y pone el destino `\\<host>.local\DEV_Backup_Studio\<equipo>`. El código caduca a los 10 minutos y sirve una vez.
@@ -248,6 +248,7 @@ Ver [ADR-0021](adr/0021-carpeta-de-red-smb.md), [ADR-0022](adr/0022-emparejar-or
 - **Si se borra `DEV_Backup_Studio` desde la web:** se vuelve a crear vacía en la siguiente conexión (con el disco en READY). Lo copiado no vuelve: está en la papelera, si no se ha vaciado.
 - **Cambiar la contraseña:** `pcloud-install-smb.sh --new-password --execute`. Después, vuelve a conectar cada ordenador con un código nuevo.
 - **Comprobar:** `systemctl status smbd`, `sudo smbstatus`, `testparm -s`, `tail /var/log/samba/log.*`.
+- **Recientes del Panel:** lo copiado aparece gracias a `pcloud-smb-recent.service` (lo instala `pcloud-install-smb.sh`). Comprobar: `systemctl status pcloud-smb-recent`, `journalctl -t smbd_audit -n 20`.
 - **Apagar:** `pcloud-install-smb.sh --remove --execute`. No borra la carpeta ni lo copiado.
 - **Nombre antiguo `Copias`:** al actualizar con `pcloud-install-smb.sh --execute`, la carpeta se renombra (sin copiar nada), la contraseña se conserva y `Copias` queda como alias oculto: los ordenadores ya conectados siguen funcionando.
 

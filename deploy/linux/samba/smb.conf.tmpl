@@ -53,3 +53,12 @@
    root preexec close = yes
    # Un volcado del cliente («flush») llega al disco antes de responder.
    strict sync = yes
+   # Registro de lo que se crea o renombra, para «Recientes» del Panel (ADR-0024). Va al diario del
+   # sistema (smbd_audit) y lo recoge pcloud-smb-recent. Solo operaciones correctas; ni lecturas
+   # ni borrados.
+   vfs objects = full_audit
+   full_audit:prefix = %P
+   full_audit:success = mkdirat renameat create_file
+   full_audit:failure = none
+   full_audit:facility = LOCAL5
+   full_audit:priority = NOTICE

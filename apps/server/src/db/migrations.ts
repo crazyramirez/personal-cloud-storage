@@ -162,4 +162,23 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX shares_expires ON shares(expires_at);
     `,
   },
+  {
+    version: 5,
+    name: 'recientes de la carpeta de red',
+    sql: `
+      -- Lo último que escriben los ordenadores por la carpeta de red (ADR-0024). Lo rellena
+      -- pcloud-smb-recent a partir del registro de Samba; Recientes lo mezcla con audit_log.
+      -- Tabla aparte para no llenar Actividad con miles de líneas por copia; acotada (~500 filas).
+      CREATE TABLE smb_recent (
+        path TEXT PRIMARY KEY,
+        at   TEXT NOT NULL
+      );
+      CREATE INDEX smb_recent_at ON smb_recent(at);
+      -- Posición en el diario del sistema (cursor de journalctl) para no perder ni repetir líneas.
+      CREATE TABLE smb_audit_state (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `,
+  },
 ];

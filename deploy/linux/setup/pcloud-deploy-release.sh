@@ -78,6 +78,8 @@ restart_and_check() {
   for _ in $(seq 1 30); do
     if runuser -u pcloud -- "$NODE" "$CURRENT/apps/server/src/cli/health.ts"         --config /etc/pcloud/config.yaml --expect-release "$expected" >/dev/null 2>&1; then
       echo "Servicio en marcha con la release $expected"
+      # Recientes de la carpeta de red (ADR-0024): si está en marcha, pasa a la release nueva.
+      systemctl try-restart pcloud-smb-recent.service 2>/dev/null || true
       return 0
     fi
     sleep 1
