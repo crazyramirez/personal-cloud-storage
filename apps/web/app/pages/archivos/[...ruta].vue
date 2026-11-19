@@ -67,6 +67,18 @@ const dropTarget = ref<string | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const folderInput = ref<HTMLInputElement | null>(null);
 const listing = ref<HTMLElement | null>(null);
+/** Barra de herramientas fija bajo la cabecera: su alto sitúa el panel de detalles justo debajo. */
+const toolbarEl = ref<HTMLElement | null>(null);
+const toolbarHeight = ref(0);
+let toolbarObserver: ResizeObserver | null = null;
+onMounted(() => {
+  if (toolbarEl.value === null) return;
+  toolbarObserver = new ResizeObserver(() => {
+    toolbarHeight.value = toolbarEl.value?.offsetHeight ?? 0;
+  });
+  toolbarObserver.observe(toolbarEl.value);
+});
+onBeforeUnmount(() => toolbarObserver?.disconnect());
 const brokenThumbs = ref<Set<string>>(new Set());
 /** Miniaturas que se sirven con la propia imagen (el servidor no pudo generarlas). */
 const directThumbs = ref<Set<string>>(new Set());
@@ -1132,6 +1144,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
 <template>
   <div
     class="explorer"
+    :style="{ '--toolbar-h': `${toolbarHeight}px` }"
     @dragenter.prevent="onDragEnter"
     @dragover.prevent
     @dragleave.prevent="onDragLeave"
@@ -1171,7 +1184,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
       </ol>
     </nav>
 
-    <div class="toolbar">
+    <div ref="toolbarEl" class="toolbar">
       <div class="heading">
         <h1>{{ folderName }}</h1>
         <span v-if="!loading && !failure && !unavailable" class="muted count">{{ countLabel }}</span>
@@ -1537,6 +1550,14 @@ function ghostMenu(item: Transfer): MenuItem[] {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  /* Fija bajo la cabecera del layout al hacer scroll. El relleno vertical (compensado con margen)
+   * deja un borde de fondo para que la lista no asome pegada a los botones al pasar por debajo. */
+  position: sticky;
+  top: var(--top-h, 0px);
+  z-index: 10;
+  margin: -8px 0;
+  padding: 8px 0;
+  background: var(--bg);
 }
 
 .heading {
@@ -2029,8 +2050,8 @@ h2 {
 .details {
   position: sticky;
   padding-top: 22px !important;
-  /* Debajo de la cabecera fija del layout. */
-  top: calc(var(--top-h, 0px) + 12px);
+  /* Debajo de la cabecera del layout y de la barra de herramientas, ambas fijas. */
+  top: calc(var(--top-h, 0px) + var(--toolbar-h, 0px) + 12px);
   width: 300px;
   flex: none;
   display: flex;
