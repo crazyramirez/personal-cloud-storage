@@ -67,7 +67,7 @@ const dropTarget = ref<string | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const folderInput = ref<HTMLInputElement | null>(null);
 const listing = ref<HTMLElement | null>(null);
-/** Barra de herramientas fija bajo la cabecera: su alto sitúa el panel de detalles justo debajo. */
+/** Ruta y barra de herramientas fijas bajo la cabecera: su alto sitúa el panel de detalles justo debajo. */
 const toolbarEl = ref<HTMLElement | null>(null);
 const toolbarHeight = ref(0);
 let toolbarObserver: ResizeObserver | null = null;
@@ -1152,90 +1152,93 @@ function ghostMenu(item: Transfer): MenuItem[] {
     @pointerdown.capture="onPointerDown"
     @contextmenu="onBackgroundContext"
   >
-    <nav :aria-label="t('explorer.breadcrumb')" class="crumbs muted">
-      <ol>
-        <li>
-          <NuxtLink
-            to="/archivos"
-            class="crumb"
-            :class="{ here: segments.length === 0, drop: dropTarget === '/' }"
-            :aria-current="segments.length === 0 ? 'page' : undefined"
-            @contextmenu.prevent="openMenuFor($event, crumbMenu('/', '/archivos'), t('common.files'))"
-            @dragover="onFolderDragOver($event, '/')"
-            @dragleave="dropTarget = null"
-            @drop="onFolderDrop($event, '/')"
-          ><AppIcon name="home" :size="15" />{{ t('common.files') }}</NuxtLink>
-        </li>
-        <template v-for="(crumb, index) in crumbs" :key="crumb.to">
-          <li aria-hidden="true" class="sep"><AppIcon name="chevron" :size="14" :stroke="2" /></li>
+    <!-- Ruta y barra de herramientas: fijas bajo la cabecera del layout al hacer scroll. -->
+    <div ref="toolbarEl" class="explorer-head">
+      <nav :aria-label="t('explorer.breadcrumb')" class="crumbs muted">
+        <ol>
           <li>
             <NuxtLink
-              :to="crumb.to"
+              to="/archivos"
               class="crumb"
-              :class="{ here: index === crumbs.length - 1, drop: dropTarget === crumb.path }"
-              :aria-current="index === crumbs.length - 1 ? 'page' : undefined"
-              @contextmenu.prevent="openMenuFor($event, crumbMenu(crumb.path, crumb.to), crumb.name)"
-              @dragover="onFolderDragOver($event, crumb.path)"
+              :class="{ here: segments.length === 0, drop: dropTarget === '/' }"
+              :aria-current="segments.length === 0 ? 'page' : undefined"
+              @contextmenu.prevent="openMenuFor($event, crumbMenu('/', '/archivos'), t('common.files'))"
+              @dragover="onFolderDragOver($event, '/')"
               @dragleave="dropTarget = null"
-              @drop="onFolderDrop($event, crumb.path)"
-            >{{ crumb.name }}</NuxtLink>
+              @drop="onFolderDrop($event, '/')"
+            ><AppIcon name="home" :size="15" />{{ t('common.files') }}</NuxtLink>
           </li>
-        </template>
-      </ol>
-    </nav>
+          <template v-for="(crumb, index) in crumbs" :key="crumb.to">
+            <li aria-hidden="true" class="sep"><AppIcon name="chevron" :size="14" :stroke="2" /></li>
+            <li>
+              <NuxtLink
+                :to="crumb.to"
+                class="crumb"
+                :class="{ here: index === crumbs.length - 1, drop: dropTarget === crumb.path }"
+                :aria-current="index === crumbs.length - 1 ? 'page' : undefined"
+                @contextmenu.prevent="openMenuFor($event, crumbMenu(crumb.path, crumb.to), crumb.name)"
+                @dragover="onFolderDragOver($event, crumb.path)"
+                @dragleave="dropTarget = null"
+                @drop="onFolderDrop($event, crumb.path)"
+              >{{ crumb.name }}</NuxtLink>
+            </li>
+          </template>
+        </ol>
+      </nav>
 
-    <div ref="toolbarEl" class="toolbar">
-      <div class="heading">
-        <h1>{{ folderName }}</h1>
-        <span v-if="!loading && !failure && !unavailable" class="muted count">{{ countLabel }}</span>
-      </div>
-      <label class="search" :class="{ active: filter !== '' }">
-        <AppIcon name="search" :size="17" class="muted" />
-        <span class="sr-only">{{ t('explorer.filterLabel') }}</span>
-        <input
-          ref="filterInput"
-          v-model="filter"
-          type="search"
-          :placeholder="t('explorer.filterPlaceholder')"
-          autocomplete="off"
-          autocapitalize="off"
-          spellcheck="false"
-          enterkeyhint="search"
-          @keydown.escape.stop="filter = ''; ($event.target as HTMLInputElement).blur()"
-        >
-        <button v-if="filter !== ''" type="button" class="clear" :aria-label="t('explorer.clearFilter')" @click="filter = ''"><AppIcon name="close" :size="14" /></button>
-      </label>
-      <button type="button" class="btn hide-sm" :disabled="!canWrite" :title="canWrite ? t('explorer.newFolder') : noWrite()" @click="newFolder">
-        <AppIcon name="folder-plus" />{{ t('explorer.newFolder') }}
-      </button>
-      <button v-if="clipboard" type="button" class="btn" :disabled="!canWrite" :title="canWrite ? t('explorer.pasteShortcut') : noWrite()" @click="paste()">
-        <AppIcon name="paste" />{{ t('explorer.pasteCount', { n: clipboard.paths.length }) }}
-      </button>
-      <div class="sorter hide-sm">
-        <label for="orden" class="sr-only">{{ t('explorer.sortBy') }}</label>
-        <select id="orden" v-model="sortKey" class="input select">
-          <option value="name">{{ t('explorer.colName') }}</option>
-          <option value="date">{{ t('explorer.colDate') }}</option>
-          <option value="size">{{ t('explorer.colSize') }}</option>
-          <option value="type">{{ t('explorer.colType') }}</option>
-        </select>
-        <button type="button" class="btn btn-icon" :aria-label="sortDesc ? t('explorer.sortDescending') : t('explorer.sortAscending')" :title="sortDesc ? t('explorer.descending') : t('explorer.ascending')" @click="sortDesc = !sortDesc">
-          <AppIcon :name="sortDesc ? 'chevron-down' : 'chevron-up'" />
+      <div class="toolbar">
+        <div class="heading">
+          <h1>{{ folderName }}</h1>
+          <span v-if="!loading && !failure && !unavailable" class="muted count">{{ countLabel }}</span>
+        </div>
+        <label class="search" :class="{ active: filter !== '' }">
+          <AppIcon name="search" :size="17" class="muted" />
+          <span class="sr-only">{{ t('explorer.filterLabel') }}</span>
+          <input
+            ref="filterInput"
+            v-model="filter"
+            type="search"
+            :placeholder="t('explorer.filterPlaceholder')"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            enterkeyhint="search"
+            @keydown.escape.stop="filter = ''; ($event.target as HTMLInputElement).blur()"
+          >
+          <button v-if="filter !== ''" type="button" class="clear" :aria-label="t('explorer.clearFilter')" @click="filter = ''"><AppIcon name="close" :size="14" /></button>
+        </label>
+        <button type="button" class="btn hide-sm" :disabled="!canWrite" :title="canWrite ? t('explorer.newFolder') : noWrite()" @click="newFolder">
+          <AppIcon name="folder-plus" />{{ t('explorer.newFolder') }}
         </button>
+        <button v-if="clipboard" type="button" class="btn" :disabled="!canWrite" :title="canWrite ? t('explorer.pasteShortcut') : noWrite()" @click="paste()">
+          <AppIcon name="paste" />{{ t('explorer.pasteCount', { n: clipboard.paths.length }) }}
+        </button>
+        <div class="sorter hide-sm">
+          <label for="orden" class="sr-only">{{ t('explorer.sortBy') }}</label>
+          <select id="orden" v-model="sortKey" class="input select">
+            <option value="name">{{ t('explorer.colName') }}</option>
+            <option value="date">{{ t('explorer.colDate') }}</option>
+            <option value="size">{{ t('explorer.colSize') }}</option>
+            <option value="type">{{ t('explorer.colType') }}</option>
+          </select>
+          <button type="button" class="btn btn-icon" :aria-label="sortDesc ? t('explorer.sortDescending') : t('explorer.sortAscending')" :title="sortDesc ? t('explorer.descending') : t('explorer.ascending')" @click="sortDesc = !sortDesc">
+            <AppIcon :name="sortDesc ? 'chevron-down' : 'chevron-up'" />
+          </button>
+        </div>
+        <div class="views">
+          <button type="button" :aria-pressed="view === 'list'" :aria-label="t('explorer.viewList')" :title="t('explorer.viewList')" :class="{ on: view === 'list' }" @click="view = 'list'"><AppIcon name="list" /></button>
+          <button type="button" :aria-pressed="view === 'grid' && gridSize === 'sm'" :aria-label="t('explorer.iconsSmall')" :title="t('explorer.iconsSmall')" :class="{ on: view === 'grid' && gridSize === 'sm' }" @click="setGrid('sm')"><AppIcon name="grid-sm" /></button>
+          <button type="button" :aria-pressed="view === 'grid' && gridSize === 'md'" :aria-label="t('explorer.iconsMedium')" :title="t('explorer.iconsMedium')" :class="{ on: view === 'grid' && gridSize === 'md' }" @click="setGrid('md')"><AppIcon name="grid" /></button>
+          <button type="button" :aria-pressed="view === 'grid' && gridSize === 'lg'" :aria-label="t('explorer.iconsLarge')" :title="t('explorer.iconsLarge')" :class="{ on: view === 'grid' && gridSize === 'lg' }" @click="setGrid('lg')"><AppIcon name="grid-lg" /></button>
+        </div>
+        <button v-if="!detailsOpen" type="button" class="btn btn-icon details-toggle" :aria-label="t('explorer.showDetails')" :title="t('explorer.showDetailsPanel')" @click="detailsOpen = true"><AppIcon name="info" /></button>
+        <button type="button" class="btn btn-icon" :aria-label="t('explorer.moreActions')" :title="t('explorer.moreActions')" @click="openMenuFor($event, backgroundMenu(), folderName)"><AppIcon name="more" /></button>
+        <button type="button" class="btn btn-primary upload-btn" :class="{ 'fab-hidden': selection.size > 0 }" :disabled="!canWrite" :title="canWrite ? t('explorer.uploadFiles') : noWrite()" :aria-label="t('explorer.uploadFiles')" @click="fileInput?.click()">
+          <AppIcon name="upload" :stroke="1.9" /><span class="hide-xs">{{ t('explorer.upload') }}</span>
+        </button>
+        <input ref="fileInput" type="file" multiple class="sr-only" tabindex="-1" aria-hidden="true" @change="onPicked">
+        <input ref="folderInput" type="file" webkitdirectory multiple class="sr-only" tabindex="-1" aria-hidden="true" @change="onPicked">
       </div>
-      <div class="views">
-        <button type="button" :aria-pressed="view === 'list'" :aria-label="t('explorer.viewList')" :title="t('explorer.viewList')" :class="{ on: view === 'list' }" @click="view = 'list'"><AppIcon name="list" /></button>
-        <button type="button" :aria-pressed="view === 'grid' && gridSize === 'sm'" :aria-label="t('explorer.iconsSmall')" :title="t('explorer.iconsSmall')" :class="{ on: view === 'grid' && gridSize === 'sm' }" @click="setGrid('sm')"><AppIcon name="grid-sm" /></button>
-        <button type="button" :aria-pressed="view === 'grid' && gridSize === 'md'" :aria-label="t('explorer.iconsMedium')" :title="t('explorer.iconsMedium')" :class="{ on: view === 'grid' && gridSize === 'md' }" @click="setGrid('md')"><AppIcon name="grid" /></button>
-        <button type="button" :aria-pressed="view === 'grid' && gridSize === 'lg'" :aria-label="t('explorer.iconsLarge')" :title="t('explorer.iconsLarge')" :class="{ on: view === 'grid' && gridSize === 'lg' }" @click="setGrid('lg')"><AppIcon name="grid-lg" /></button>
-      </div>
-      <button v-if="!detailsOpen" type="button" class="btn btn-icon details-toggle" :aria-label="t('explorer.showDetails')" :title="t('explorer.showDetailsPanel')" @click="detailsOpen = true"><AppIcon name="info" /></button>
-      <button type="button" class="btn btn-icon" :aria-label="t('explorer.moreActions')" :title="t('explorer.moreActions')" @click="openMenuFor($event, backgroundMenu(), folderName)"><AppIcon name="more" /></button>
-      <button type="button" class="btn btn-primary upload-btn" :class="{ 'fab-hidden': selection.size > 0 }" :disabled="!canWrite" :title="canWrite ? t('explorer.uploadFiles') : noWrite()" :aria-label="t('explorer.uploadFiles')" @click="fileInput?.click()">
-        <AppIcon name="upload" :stroke="1.9" /><span class="hide-xs">{{ t('explorer.upload') }}</span>
-      </button>
-      <input ref="fileInput" type="file" multiple class="sr-only" tabindex="-1" aria-hidden="true" @change="onPicked">
-      <input ref="folderInput" type="file" webkitdirectory multiple class="sr-only" tabindex="-1" aria-hidden="true" @change="onPicked">
     </div>
 
     <div v-if="selection.size > 0 && !unavailable" class="selbar" role="toolbar" :aria-label="t('explorer.selectionActions')">
@@ -1510,6 +1513,21 @@ function ghostMenu(item: Transfer): MenuItem[] {
   flex: 1;
 }
 
+/* Ruta + barra de herramientas, fijas bajo la cabecera del layout. El relleno vertical (compensado
+ * con margen) deja un borde de fondo para que la lista no asome pegada a los botones al pasar por
+ * debajo. */
+.explorer-head {
+  position: sticky;
+  top: var(--top-h, 0px);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: -8px 0;
+  padding: 8px 0;
+  background: var(--bg);
+}
+
 .crumbs {
   font-size: 13px;
 }
@@ -1550,14 +1568,6 @@ function ghostMenu(item: Transfer): MenuItem[] {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  /* Fija bajo la cabecera del layout al hacer scroll. El relleno vertical (compensado con margen)
-   * deja un borde de fondo para que la lista no asome pegada a los botones al pasar por debajo. */
-  position: sticky;
-  top: var(--top-h, 0px);
-  z-index: 10;
-  margin: -8px 0;
-  padding: 8px 0;
-  background: var(--bg);
 }
 
 .heading {
@@ -2050,7 +2060,7 @@ h2 {
 .details {
   position: sticky;
   padding-top: 22px !important;
-  /* Debajo de la cabecera del layout y de la barra de herramientas, ambas fijas. */
+  /* Debajo de la cabecera del layout y de la ruta + barra de herramientas, todas fijas. */
   top: calc(var(--top-h, 0px) + var(--toolbar-h, 0px) + 12px);
   width: 300px;
   flex: none;
