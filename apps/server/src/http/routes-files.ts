@@ -21,7 +21,7 @@ import {
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { audit } from '../auth/sessions.ts';
 import { AppError } from '../errors.ts';
-import { SmbRecentStore } from '../smb/recent.ts';
+import { SMB_RECENT_KEEP, SmbRecentStore, smbRecentGroup } from '../smb/recent.ts';
 import { measureDiskSpeed } from '../storage/speedtest.ts';
 import { formatClientPath, parseClientPath, resolveInside } from '../storage/paths.ts';
 import { planZip, streamZip } from '../storage/zip.ts';
@@ -132,7 +132,8 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
   // ── Recientes (Panel) ───────────────────────────────────────────────────────────────────────
   // A partir del registro de actividad (subidas, carpetas y archivos creados) y de lo que los
   // ordenadores escriben por la carpeta de red (smb_recent, ADR-0024), lo más nuevo primero y solo
-  // lo que SIGUE existiendo en esa ruta: lo eliminado, movido o renombrado no aparece.
+  // lo que SIGUE existiendo en esa ruta: lo eliminado, movido o renombrado no aparece. Lo de la
+  // carpeta de red se agrupa en la carpeta copiada y se omite lo oculto (ADR-0025).
   app.get(`${API}/fs/recent`, { schema: { querystring: RecentQuery } }, async (request): Promise<RecentResponse> => {
     ctx.user(request);
     const limit = (request.query as RecentQuery).limit ?? 12;
@@ -141,7 +142,13 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
       .prepare("SELECT path, at FROM audit_log WHERE result = 'ok' AND path IS NOT NULL AND action IN ('fs.upload', 'fs.mkdir', 'fs.create') ORDER BY id DESC LIMIT 400")
       .all()
       .map((row) => ({ path: String(row['path']), at: String(row['at']) }));
-    const rows = [...fromWeb, ...new SmbRecentStore(db).list(400)].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+    const fromSmb = new SmbRecentStore(db)
+      .list(SMB_RECENT_KEEP)
+      .flatMap((row) => {
+        const group = smbRecentGroup(row.path);
+        return group === null ? [] : [{ path: group, at: row.at }];
+      });
+    const rows = [...fromWeb, ...fromSmb].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
     const seen = new Set<string>();
     const entries: RecentResponse['entries'] = [];
     for (const row of rows) {

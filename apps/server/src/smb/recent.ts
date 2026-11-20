@@ -19,8 +19,11 @@ import path from 'node:path';
 import { transaction, type Db } from '../db/database.ts';
 import { formatClientPath, parseClientPath } from '../storage/paths.ts';
 
-/** Filas que se conservan: de sobra para las 12 de Recientes aunque muchas ya no existan. */
-export const SMB_RECENT_KEEP = 500;
+/**
+ * Filas que se conservan. Recientes agrupa por carpeta copiada (ADR-0025): una sola copia escribe
+ * cientos de archivos, así que hacen falta miles de filas para que se vean varias copias.
+ */
+export const SMB_RECENT_KEEP = 5000;
 
 /** Disposiciones de create_file que crean o reescriben un archivo. */
 const WRITE_DISPOSITIONS = new Set(['create', 'overwrite', 'overwrite_if', 'supersede']);
@@ -79,6 +82,25 @@ function clientPathOf(raw: string | undefined, prefix: string, dataRoot: string)
   } catch {
     return null; // ruta reservada (.pcloud…) o inválida
   }
+}
+
+/** Profundidad a la que se agrupa: <carpeta compartida>/<ordenador>/<carpeta copiada> (ADR-0025). */
+const GROUP_DEPTH = 3;
+
+/**
+ * Elemento que Recientes muestra por una ruta escrita por la carpeta de red (ADR-0025).
+ *
+ * Una copia de DEV Backup Studio escribe cientos de archivos dentro de la misma carpeta de
+ * proyecto; en Recientes se ve esa carpeta, no cada archivo:
+ *   /DEV_Backup_Studio/PC/Proyecto/src/a.ts → /DEV_Backup_Studio/PC/Proyecto
+ *   /DEV_Backup_Studio/PC/informe.pdf       → /DEV_Backup_Studio/PC/informe.pdf (ya es de ese nivel)
+ * Devuelve null para lo que está bajo una carpeta o archivo oculto (empieza por «.»): son datos
+ * internos de la herramienta de copia (p. ej. `.devbackup/versiones`, su historial de versiones).
+ */
+export function smbRecentGroup(clientPath: string): string | null {
+  const segments = clientPath.split('/').filter((segment) => segment !== '');
+  if (segments.length === 0 || segments.some((segment) => segment.startsWith('.'))) return null;
+  return `/${segments.slice(0, GROUP_DEPTH).join('/')}`;
 }
 
 export interface SmbRecentRow {

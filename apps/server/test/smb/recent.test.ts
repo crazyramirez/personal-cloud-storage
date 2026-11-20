@@ -1,11 +1,30 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
-import { parseAuditMessage, SMB_RECENT_KEEP, SmbRecentStore } from '../../src/smb/recent.ts';
+import { parseAuditMessage, SMB_RECENT_KEEP, SmbRecentStore, smbRecentGroup } from '../../src/smb/recent.ts';
 import { createHarness, type Harness } from '../support/harness.ts';
 
 const ROOT = '/srv/pcloud/data';
 const SHARE = `${ROOT}/DEV_Backup_Studio`;
 const line = (...fields: string[]): string => [SHARE, ...fields].join('|');
+
+describe('agrupación en Recientes (ADR-0025)', () => {
+  it('lo de dentro de una carpeta copiada → la carpeta (compartida/ordenador/carpeta)', () => {
+    assert.equal(smbRecentGroup('/DEV_Backup_Studio/PC/Proyecto/src/deep/a.ts'), '/DEV_Backup_Studio/PC/Proyecto');
+    assert.equal(smbRecentGroup('/DEV_Backup_Studio/PC/Proyecto'), '/DEV_Backup_Studio/PC/Proyecto');
+  });
+
+  it('lo que está por encima de ese nivel se queda como está', () => {
+    assert.equal(smbRecentGroup('/DEV_Backup_Studio/PC/informe.pdf'), '/DEV_Backup_Studio/PC/informe.pdf');
+    assert.equal(smbRecentGroup('/DEV_Backup_Studio/PC'), '/DEV_Backup_Studio/PC');
+  });
+
+  it('lo oculto (datos internos de la herramienta de copia) no se muestra', () => {
+    assert.equal(smbRecentGroup('/DEV_Backup_Studio/.devbackup/historial.jsonl'), null);
+    assert.equal(smbRecentGroup('/DEV_Backup_Studio/.devbackup/versiones/2026-11-20 011237/PC/Proyecto/a.ts'), null);
+    assert.equal(smbRecentGroup('/DEV_Backup_Studio/PC/Proyecto/.git/HEAD'), null);
+    assert.equal(smbRecentGroup('/'), null);
+  });
+});
 
 describe('líneas de full_audit de la carpeta de red (ADR-0024)', () => {
   it('carpeta creada → su ruta en la nube', () => {

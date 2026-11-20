@@ -26,6 +26,7 @@ Formato: Contexto → Decisión → Consecuencias → Alternativas. Un ADR acept
 | [0022](0022-emparejar-ordenadores-con-codigo.md) | Conectar un ordenador a la carpeta de red con un código de un solo uso | Aceptado |
 | [0023](0023-carpeta-dev-backup-studio.md) | La carpeta de red se llama DEV_Backup_Studio (renombrado con alias) y lleva su icono | Aceptado |
 | [0024](0024-recientes-de-la-carpeta-de-red.md) | Recientes incluye lo copiado por la carpeta de red (Samba full_audit + pcloud-smb-recent) | Aceptado |
+| [0025](0025-recientes-agrupa-la-carpeta-de-red.md) | Recientes agrupa lo copiado por la carpeta de red en la carpeta copiada y omite lo oculto | Aceptado |
 
 ## Pendientes
 

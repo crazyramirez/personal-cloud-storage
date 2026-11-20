@@ -205,6 +205,31 @@ describe('API del explorador, papelera, cuenta y passkeys', () => {
     assert.ok(!recent.entries.some((entry) => entry.path.endsWith('borrado.txt')), 'lo que ya no existe no aparece');
   });
 
+  it('recientes: una copia por la carpeta de red se ve como su carpeta, sin lo oculto (ADR-0025)', async () => {
+    const project = path.join(h.dataRoot, 'DEV_Backup_Studio', 'PC', 'Proyecto');
+    await mkdir(path.join(project, 'src'), { recursive: true });
+    await writeFile(path.join(project, 'src', 'a.ts'), 'a');
+    await writeFile(path.join(project, 'README.md'), 'r');
+    await mkdir(path.join(h.dataRoot, 'DEV_Backup_Studio', '.devbackup'), { recursive: true });
+    await writeFile(path.join(h.dataRoot, 'DEV_Backup_Studio', '.devbackup', 'historial.jsonl'), '{}');
+    const base = Date.now() + 120_000;
+    const at = (s: number): string => new Date(base + s * 1000).toISOString();
+    new SmbRecentStore(h.db).record(
+      [
+        { event: { kind: 'write', path: '/DEV_Backup_Studio/PC/Proyecto/src/a.ts' }, at: at(1) },
+        { event: { kind: 'write', path: '/DEV_Backup_Studio/PC/Proyecto/README.md' }, at: at(2) },
+        { event: { kind: 'write', path: '/DEV_Backup_Studio/.devbackup/historial.jsonl' }, at: at(3) },
+      ],
+      null,
+    );
+    const recent = (await call('GET', '/fs/recent')).json() as { entries: Array<{ path: string; type: string; at: string }> };
+    assert.equal(recent.entries[0]?.path, '/DEV_Backup_Studio/PC/Proyecto', 'la carpeta copiada, con la fecha de lo último que entró');
+    assert.equal(recent.entries[0]?.type, 'dir');
+    assert.equal(recent.entries[0]?.at, at(2));
+    assert.equal(recent.entries.filter((entry) => entry.path.startsWith('/DEV_Backup_Studio/PC/Proyecto')).length, 1, 'una sola entrada por copia');
+    assert.ok(!recent.entries.some((entry) => entry.path.includes('/.devbackup')), 'lo oculto no aparece');
+  });
+
   it('validación estricta: campos desconocidos, lotes vacíos e ids de papelera mal formados → 400', async () => {
     assert.equal((await call('POST', '/fs/rename', { path: '/nota.txt', name: 'x.txt', extra: 1 })).statusCode, 400);
     assert.equal((await call('POST', '/fs/trash', { paths: [] })).statusCode, 400);
