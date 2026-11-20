@@ -94,11 +94,18 @@ const GROUP_DEPTH = 3;
  * proyecto; en Recientes se ve esa carpeta, no cada archivo:
  *   /DEV_Backup_Studio/PC/Proyecto/src/a.ts → /DEV_Backup_Studio/PC/Proyecto
  *   /DEV_Backup_Studio/PC/informe.pdf       → /DEV_Backup_Studio/PC/informe.pdf (ya es de ese nivel)
- * Devuelve null para lo que está bajo una carpeta o archivo oculto (empieza por «.»): son datos
- * internos de la herramienta de copia (p. ej. `.devbackup/versiones`, su historial de versiones).
+ * DEV Backup Studio (ADR-0026) aparta lo que se modifica o se borra en
+ * `<compartida>/.devbackup/versiones/<fecha>/<ordenador>/<carpeta>/…`: eso también es un cambio de
+ * la carpeta del ordenador, así que cuenta como `<compartida>/<ordenador>/<carpeta>`.
+ * Devuelve null para el resto de lo oculto (algún nombre empieza por «.»): datos internos de la
+ * herramienta de copia (`.devbackup/historial.jsonl`) o del proyecto (`.git`).
  */
 export function smbRecentGroup(clientPath: string): string | null {
-  const segments = clientPath.split('/').filter((segment) => segment !== '');
+  let segments = clientPath.split('/').filter((segment) => segment !== '');
+  if (segments[1] === '.devbackup' && segments[2] === 'versiones') {
+    if (segments.length < 6) return null; // la carpeta de la fecha o del ordenador, sin más
+    segments = [segments[0] ?? '', ...segments.slice(4)];
+  }
   if (segments.length === 0 || segments.some((segment) => segment.startsWith('.'))) return null;
   return `/${segments.slice(0, GROUP_DEPTH).join('/')}`;
 }

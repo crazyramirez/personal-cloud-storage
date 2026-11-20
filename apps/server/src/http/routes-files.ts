@@ -133,7 +133,7 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
   // A partir del registro de actividad (subidas, carpetas y archivos creados) y de lo que los
   // ordenadores escriben por la carpeta de red (smb_recent, ADR-0024), lo más nuevo primero y solo
   // lo que SIGUE existiendo en esa ruta: lo eliminado, movido o renombrado no aparece. Lo de la
-  // carpeta de red se agrupa en la carpeta copiada y se omite lo oculto (ADR-0025).
+  // carpeta de red se agrupa en la carpeta copiada y se omite lo oculto (ADR-0025, ADR-0026).
   app.get(`${API}/fs/recent`, { schema: { querystring: RecentQuery } }, async (request): Promise<RecentResponse> => {
     ctx.user(request);
     const limit = (request.query as RecentQuery).limit ?? 12;

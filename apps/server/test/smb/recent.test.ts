@@ -18,9 +18,16 @@ describe('agrupación en Recientes (ADR-0025)', () => {
     assert.equal(smbRecentGroup('/DEV_Backup_Studio/PC'), '/DEV_Backup_Studio/PC');
   });
 
+  it('una versión apartada por DEV Backup Studio cuenta como cambio de la carpeta del ordenador', () => {
+    assert.equal(smbRecentGroup('/DEV_Backup_Studio/.devbackup/versiones/2026-11-20 011237/PC/Proyecto/src/a.ts'), '/DEV_Backup_Studio/PC/Proyecto');
+    assert.equal(smbRecentGroup('/DEV_Backup_Studio/.devbackup/versiones/2026-11-20 011237/PC/Proyecto'), '/DEV_Backup_Studio/PC/Proyecto');
+    assert.equal(smbRecentGroup('/DEV_Backup_Studio/.devbackup/versiones/2026-11-20 011237/PC/Proyecto/.git/HEAD'), null);
+  });
+
   it('lo oculto (datos internos de la herramienta de copia) no se muestra', () => {
     assert.equal(smbRecentGroup('/DEV_Backup_Studio/.devbackup/historial.jsonl'), null);
-    assert.equal(smbRecentGroup('/DEV_Backup_Studio/.devbackup/versiones/2026-11-20 011237/PC/Proyecto/a.ts'), null);
+    assert.equal(smbRecentGroup('/DEV_Backup_Studio/.devbackup/versiones/2026-11-20 011237'), null);
+    assert.equal(smbRecentGroup('/DEV_Backup_Studio/.devbackup/versiones/2026-11-20 011237/PC'), null);
     assert.equal(smbRecentGroup('/DEV_Backup_Studio/PC/Proyecto/.git/HEAD'), null);
     assert.equal(smbRecentGroup('/'), null);
   });
