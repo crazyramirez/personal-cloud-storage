@@ -80,6 +80,13 @@
 		header X-Content-Type-Options nosniff
 		header Cache-Control no-cache
 		try_files {path} {path}/index.html /200.html
+		# og:image necesita una URL absoluta con el nombre por el que se ha entrado: solo en el HTML,
+		# y con delimitadores que no aparecen en nada más (%%PCS{.Host}%%). El Host ya está limitado
+		# a los nombres de este fichero, así que no se puede inyectar otro.
+		templates {
+			mime text/html
+			between "%%PCS{" "}%%"
+		}
 		file_server
 	}
 }

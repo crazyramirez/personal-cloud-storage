@@ -1,5 +1,9 @@
 // Panel web de Personal Cloud Storage: SPA estática (spec §4). Sin SSR, sin telemetría y sin
 // recursos de terceros en tiempo de ejecución (las fuentes van empaquetadas).
+
+// Marcador que Caddy cambia por el Host de la petición (ver «templates» en Caddyfile.tmpl).
+const OG_HOST = '%%PCS{.Host}%%';
+
 export default defineNuxtConfig({
   compatibilityDate: '2026-11-01',
   ssr: false,
@@ -29,6 +33,20 @@ export default defineNuxtConfig({
         { name: 'apple-mobile-web-app-title', content: 'PCS' },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
         { name: 'format-detection', content: 'telephone=no' },
+        // Vista previa al compartir la dirección (WhatsApp, Telegram, iMessage…). og:image tiene
+        // que ser una URL absoluta y el nombre cambia según por dónde se entre (<host>.local, la IP,
+        // Tailscale): Caddy sustituye el marcador por el Host de la petición (directiva templates
+        // del Caddyfile, solo en HTML). Sin Caddy (nuxt dev) queda el marcador, sin más efecto.
+        { property: 'og:type', content: 'website' },
+        { property: 'og:site_name', content: 'Personal Cloud Storage' },
+        { property: 'og:title', content: 'Personal Cloud Storage' },
+        { property: 'og:description', content: 'Tu nube personal en casa: un servidor pequeño, un disco USB y nada más.' },
+        { property: 'og:image', content: `https://${OG_HOST}/og-image.jpg` },
+        { property: 'og:image:type', content: 'image/jpeg' },
+        { property: 'og:image:width', content: '1200' },
+        { property: 'og:image:height', content: '630' },
+        { property: 'og:image:alt', content: 'Personal Cloud Storage' },
+        { name: 'twitter:card', content: 'summary_large_image' },
       ],
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
