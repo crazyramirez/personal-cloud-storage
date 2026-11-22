@@ -6,6 +6,7 @@ import { Readable } from 'node:stream';
 import {
   BatchResponse,
   CreateFileRequest,
+  FsSizeRequest,
   RenameRequest,
   TransferItemsRequest,
   TrashIdsRequest,
@@ -13,6 +14,7 @@ import {
   ZipQuery,
   RecentQuery,
   type DiskSpeedResponse,
+  type FsSizeResponse,
   type RecentResponse,
   type ItemResult,
   type TrashListResponse,
@@ -22,6 +24,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { audit } from '../auth/sessions.ts';
 import { AppError } from '../errors.ts';
 import { SMB_RECENT_KEEP, SmbRecentStore, smbRecentGroup } from '../smb/recent.ts';
+import { measureSize } from '../storage/size.ts';
 import { measureDiskSpeed } from '../storage/speedtest.ts';
 import { formatClientPath, parseClientPath, resolveInside } from '../storage/paths.ts';
 import { planZip, streamZip } from '../storage/zip.ts';
@@ -109,6 +112,18 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
     const results = await operations.trash(body.paths, session.userId);
     logBatch(request, session.userId, 'fs.trash', results);
     return { results };
+  });
+
+  // Tamaño con todo su contenido (panel de detalles). Solo lectura; se corta por tiempo y si el
+  // navegador abandona la petición (p. ej. al cambiar de selección).
+  app.post(`${API}/fs/size`, { schema: { body: FsSizeRequest } }, async (request, reply): Promise<FsSizeResponse> => {
+    ctx.user(request);
+    const lease = await guardian.assertReadableVolume();
+    const gone = new AbortController();
+    reply.raw.once('close', () => {
+      if (!reply.raw.writableFinished) gone.abort();
+    });
+    return measureSize(lease.dataRoot, (request.body as FsSizeRequest).paths, { signal: gone.signal });
   });
 
   app.get(`${API}/fs/zip`, { schema: { querystring: ZipQuery } }, async (request, reply) => {

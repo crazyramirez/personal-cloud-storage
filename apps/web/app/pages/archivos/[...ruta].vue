@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { BatchResponse, FsEntry, FsListResponse } from '@pcloud/contracts';
+import type { BatchResponse, FsEntry, FsListResponse, FsSizeResponse } from '@pcloud/contracts';
 
 // La misma instancia para todas las carpetas: cambiar de carpeta NO vuelve a montar la página
 // (si no, la lista se vacía y aparece el esqueleto en cada clic). watch(clientPath) reinicia lo
@@ -248,6 +248,68 @@ const files = computed(() => sorted.value.filter((entry) => entry.type === 'file
 const selected = computed(() => sorted.value.filter((entry) => selection.value.has(entry.name)));
 const single = computed(() => (selected.value.length === 1 ? (selected.value[0] as FsEntry) : null));
 const selectedBytes = computed(() => selected.value.reduce((sum, entry) => sum + (entry.type === 'file' ? entry.size : 0), 0));
+
+// ── Tamaño de carpetas ────────────────────────────────────────────────────────────────────────
+// El listado no trae el tamaño de las carpetas (sería recorrer todo el disco): se pide al
+// seleccionarlas, con una pausa para no lanzar una petición por cada clic de una selección
+// múltiple. Cambiar de selección cancela la anterior, también en el servidor.
+const SIZE_DELAY_MS = 300;
+const sizeKey = computed(() => (selected.value.some((entry) => entry.type === 'dir') ? JSON.stringify(selected.value.map((entry) => pathOf(entry.name)).sort()) : ''));
+const measured = ref<(FsSizeResponse & { key: string }) | null>(null);
+const measuring = ref(false);
+const measureFailed = ref(false);
+let sizeTimer: ReturnType<typeof setTimeout> | null = null;
+let sizeAbort: AbortController | null = null;
+
+function measureSelection(): void {
+  if (sizeTimer !== null) clearTimeout(sizeTimer);
+  sizeTimer = null;
+  sizeAbort?.abort();
+  sizeAbort = null;
+  const key = sizeKey.value;
+  if (measured.value?.key !== key) measured.value = null;
+  measureFailed.value = false;
+  measuring.value = key !== '' && !unavailable.value;
+  if (!measuring.value) return;
+  sizeTimer = setTimeout(() => {
+    sizeTimer = null;
+    const controller = new AbortController();
+    sizeAbort = controller;
+    api<FsSizeResponse>('/fs/size', { method: 'POST', body: { paths: JSON.parse(key) as string[] }, signal: controller.signal })
+      .then((result) => {
+        if (sizeKey.value === key) measured.value = { ...result, key };
+      })
+      .catch(() => {
+        if (sizeKey.value === key && !controller.signal.aborted) measureFailed.value = true;
+      })
+      .finally(() => {
+        if (sizeAbort === controller) {
+          sizeAbort = null;
+          measuring.value = false;
+        }
+      });
+  }, SIZE_DELAY_MS);
+}
+watch(sizeKey, measureSelection);
+// Al recargar la carpeta (subidas, copias, papelera…) el contenido puede haber cambiado.
+watch(entries, () => {
+  if (sizeKey.value !== '') measureSelection();
+});
+onBeforeUnmount(() => {
+  if (sizeTimer !== null) clearTimeout(sizeTimer);
+  sizeAbort?.abort();
+});
+/** Tamaño de la selección para mostrar: con carpetas, el medido; sin carpetas, la suma directa. */
+const selectionSize = computed<{ text: string; partial: boolean } | null>(() => {
+  if (sizeKey.value === '') return selectedBytes.value > 0 ? { text: formatBytes(selectedBytes.value), partial: false } : null;
+  const result = measured.value?.key === sizeKey.value ? measured.value : null;
+  if (result !== null) return { text: result.complete ? formatBytes(result.bytes) : t('explorer.sizeAtLeast', { size: formatBytes(result.bytes) }), partial: !result.complete };
+  return null;
+});
+const selectionContents = computed(() => {
+  const result = measured.value?.key === sizeKey.value ? measured.value : null;
+  return result === null ? '' : [t('explorer.countFiles', { n: result.files }), t('explorer.countFolders', { n: result.folders })].join(' · ');
+});
 const countLabel = computed(() => {
   const folders = entries.value.filter((entry) => entry.type === 'dir').length;
   const fileCount = entries.value.length - folders;
@@ -1244,7 +1306,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
     <div v-if="selection.size > 0 && !unavailable" class="selbar" role="toolbar" :aria-label="t('explorer.selectionActions')">
       <button type="button" class="btn btn-icon" :aria-label="t('explorer.clearSelection')" @click="clearSelection"><AppIcon name="close" /></button>
       <strong>{{ t('explorer.selectedCount', { n: selection.size }) }}</strong>
-      <span v-if="selectedBytes > 0" class="muted hide-xs">{{ formatBytes(selectedBytes) }}</span>
+      <span v-if="selectionSize !== null" class="muted hide-xs" :title="selectionSize.partial ? t('explorer.sizePartialHint') : undefined">{{ selectionSize.text }}</span>
       <span class="grow" />
       <button type="button" class="btn btn-icon" :aria-label="t('explorer.download')" :title="t('explorer.download')" @click="download(selected)"><AppIcon name="download" /></button>
       <button type="button" class="btn btn-icon" :aria-label="t('explorer.moveTo')" :title="t('explorer.moveTo')" :disabled="!canWrite" @click="moveOrCopyTo('move', selected)"><AppIcon name="move" /></button>
@@ -1465,10 +1527,12 @@ function ghostMenu(item: Transfer): MenuItem[] {
           </div>
           <p v-if="!single.portable" class="notice notice-warn">{{ t('explorer.notPortableNotice', { issue: serverText(single.issue ?? '') }) }}</p>
           <dl class="kv">
-            <template v-if="single.type === 'file'">
-              <dt>{{ t('explorer.colSize') }}</dt>
-              <dd>{{ formatBytes(single.size) }}</dd>
-            </template>
+            <dt>{{ t('explorer.colSize') }}</dt>
+            <dd v-if="single.type === 'file'">{{ formatBytes(single.size) }}</dd>
+            <dd v-else-if="selectionSize !== null" :title="selectionSize.partial ? t('explorer.sizePartialHint') : undefined">
+              {{ selectionSize.text }}<span class="muted d-sub">{{ selectionContents }}</span>
+            </dd>
+            <dd v-else class="muted">{{ measureFailed ? t('explorer.sizeUnknown') : measuring ? t('explorer.sizeCalculating') : '—' }}</dd>
             <dt>{{ t('explorer.colModified') }}</dt>
             <dd>{{ formatDate(single.mtime) }}</dd>
             <dt>{{ t('explorer.location') }}</dt>
@@ -1483,7 +1547,9 @@ function ghostMenu(item: Transfer): MenuItem[] {
         <template v-else-if="selected.length > 1">
           <div class="preview"><AppIcon name="copy" :size="44" :stroke="1.4" class="muted" /></div>
           <h2 class="d-name">{{ t('explorer.items', { n: selected.length }) }}</h2>
-          <p class="muted">{{ t('explorer.selectionBytes', { size: formatBytes(selectedBytes), dirs: selected.some((e) => e.type === 'dir') ? 1 : 0 }) }}</p>
+          <p v-if="sizeKey === ''" class="muted">{{ t('explorer.selectionBytes', { size: formatBytes(selectedBytes), dirs: 0 }) }}</p>
+          <p v-else-if="selectionSize !== null" class="muted" :title="selectionSize.partial ? t('explorer.sizePartialHint') : undefined">{{ t('explorer.selectionTotal', { size: selectionSize.text }) }} · {{ selectionContents }}</p>
+          <p v-else class="muted">{{ measureFailed ? t('explorer.sizeUnknown') : t('explorer.sizeCalculating') }}</p>
           <div class="d-actions">
             <button type="button" class="btn" @click="download(selected)"><AppIcon name="archive" />{{ t('explorer.downloadZip') }}</button>
             <button type="button" class="btn btn-danger" :disabled="!canWrite" @click="trash(selected)"><AppIcon name="trash" />{{ t('explorer.trash') }}</button>
@@ -2095,6 +2161,11 @@ h2 {
 
 .d-name {
   overflow-wrap: anywhere;
+}
+
+.d-sub {
+  display: block;
+  font-size: 12px;
 }
 
 .d-actions {

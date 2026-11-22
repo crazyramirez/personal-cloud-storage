@@ -230,6 +230,17 @@ describe('API del explorador, papelera, cuenta y passkeys', () => {
     assert.ok(!recent.entries.some((entry) => entry.path.includes('/.devbackup')), 'lo oculto no aparece');
   });
 
+  it('tamaño: suma el contenido de carpetas con varios niveles', async () => {
+    await mkdir(path.join(h.dataRoot, 'Medida', 'a', 'b'), { recursive: true });
+    await writeFile(path.join(h.dataRoot, 'Medida', 'a', 'b', 'x.bin'), '1234');
+    await writeFile(path.join(h.dataRoot, 'Medida', 'y.bin'), '12');
+    const size = await call('POST', '/fs/size', { paths: ['/Medida'] });
+    assert.equal(size.statusCode, 200);
+    assert.deepEqual(size.json(), { bytes: 6, files: 2, folders: 2, complete: true });
+    assert.equal((await call('POST', '/fs/size', { paths: [] })).statusCode, 400);
+    assert.equal((await call('POST', '/fs/size', { paths: ['/no-existe'] })).statusCode, 404);
+  });
+
   it('validación estricta: campos desconocidos, lotes vacíos e ids de papelera mal formados → 400', async () => {
     assert.equal((await call('POST', '/fs/rename', { path: '/nota.txt', name: 'x.txt', extra: 1 })).statusCode, 400);
     assert.equal((await call('POST', '/fs/trash', { paths: [] })).statusCode, 400);

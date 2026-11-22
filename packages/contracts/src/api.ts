@@ -154,6 +154,21 @@ export type RenameRequest = Static<typeof RenameRequest>;
 export const TransferItemsRequest = Type.Object({ paths: PathList, destination: ClientPath }, { additionalProperties: false });
 export type TransferItemsRequest = Static<typeof TransferItemsRequest>;
 
+/** Tamaño total de carpetas y archivos (panel de detalles), contando todo su contenido. */
+export const FsSizeRequest = Type.Object({ paths: PathList }, { additionalProperties: false });
+export type FsSizeRequest = Static<typeof FsSizeRequest>;
+
+export const FsSizeResponse = Type.Object({
+  /** Suma de los archivos encontrados. */
+  bytes: Type.Number(),
+  files: Type.Integer(),
+  /** Subcarpetas encontradas (sin contar las pedidas). */
+  folders: Type.Integer(),
+  /** false si se cortó por tiempo o por número de elementos: los totales son un mínimo. */
+  complete: Type.Boolean(),
+});
+export type FsSizeResponse = Static<typeof FsSizeResponse>;
+
 /** Enviar a la papelera (recuperable). */
 export const TrashItemsRequest = Type.Object({ paths: PathList }, { additionalProperties: false });
 export type TrashItemsRequest = Static<typeof TrashItemsRequest>;
