@@ -3,7 +3,7 @@ import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { AppError } from '../../src/errors.ts';
-import { measureSize } from '../../src/storage/size.ts';
+import { measureEach, measureSize } from '../../src/storage/size.ts';
 import { createHarness, type Harness } from '../support/harness.ts';
 
 describe('tamaño de carpetas (panel de detalles)', () => {
@@ -64,5 +64,21 @@ describe('tamaño de carpetas (panel de detalles)', () => {
     assert.ok(capped.files + capped.folders <= 2);
     const cancelled = await measureSize(h.dataRoot, ['/Fotos'], { signal: AbortSignal.abort() });
     assert.deepEqual(cancelled, { bytes: 0, files: 0, folders: 0, complete: false });
+  });
+
+  it('por carpeta: una medida por ruta, sin las que ya no existen', async () => {
+    const result = await measureEach(h.dataRoot, ['/Fotos/2026', '/no-existe', '/Fotos/vacía', '/Fotos/2026']);
+    assert.deepEqual(result.sizes, [
+      { path: '/Fotos/2026', bytes: 8, files: 2, folders: 1, complete: true },
+      { path: '/Fotos/vacía', bytes: 0, files: 0, folders: 0, complete: true },
+    ]);
+  });
+
+  it('por carpeta: el límite de tiempo es para todas juntas; las que no empiezan se omiten', async () => {
+    let clock = 0;
+    const result = await measureEach(h.dataRoot, ['/Fotos', '/Fotos/2026'], { budgetMs: 3, now: () => clock++ });
+    assert.equal(result.sizes.length, 1);
+    assert.equal(result.sizes[0]?.path, '/Fotos');
+    assert.equal(result.sizes[0]?.complete, false);
   });
 });

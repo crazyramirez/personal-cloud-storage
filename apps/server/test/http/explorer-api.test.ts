@@ -239,6 +239,14 @@ describe('API del explorador, papelera, cuenta y passkeys', () => {
     assert.deepEqual(size.json(), { bytes: 6, files: 2, folders: 2, complete: true });
     assert.equal((await call('POST', '/fs/size', { paths: [] })).statusCode, 400);
     assert.equal((await call('POST', '/fs/size', { paths: ['/no-existe'] })).statusCode, 404);
+    const sizes = await call('POST', '/fs/sizes', { paths: ['/Medida/a', '/no-existe', '/Medida'] });
+    assert.equal(sizes.statusCode, 200);
+    assert.deepEqual(sizes.json(), {
+      sizes: [
+        { path: '/Medida/a', bytes: 4, files: 1, folders: 1, complete: true },
+        { path: '/Medida', bytes: 6, files: 2, folders: 2, complete: true },
+      ],
+    });
   });
 
   it('validación estricta: campos desconocidos, lotes vacíos e ids de papelera mal formados → 400', async () => {

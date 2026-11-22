@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { BatchResponse, FsEntry, FsListResponse, FsSizeResponse } from '@pcloud/contracts';
+import type { BatchResponse, FsEntry, FsListResponse, FsSizeResponse, FsSizesResponse } from '@pcloud/contracts';
 
 // La misma instancia para todas las carpetas: cambiar de carpeta NO vuelve a montar la página
 // (si no, la lista se vacía y aparece el esqueleto en cada clic). watch(clientPath) reinicia lo
@@ -141,6 +141,8 @@ async function load(options: { keepSelection?: boolean; select?: string[] } = {}
     if (current !== requestId) return;
     settle();
     remember(clientPath.value, page);
+    // Recarga tras una operación (subida, copia, papelera…): los tamaños de aquí pueden haber cambiado.
+    if (options.keepSelection === true || options.select !== undefined) forgetDirSizes(clientPath.value);
     entries.value = page.entries;
     total.value = page.total;
     nextCursor.value = page.nextCursor;
@@ -239,7 +241,7 @@ const sorted = computed(() => {
     if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
     let result = 0;
     if (sortKey.value === 'date') result = a.mtime.localeCompare(b.mtime);
-    else if (sortKey.value === 'size') result = a.size - b.size;
+    else if (sortKey.value === 'size') result = sizeOf(a) - sizeOf(b);
     else if (sortKey.value === 'type') result = names.compare(extensionOf(a.name), extensionOf(b.name));
     return (result || names.compare(a.name, b.name)) * dir;
   });
@@ -271,12 +273,21 @@ function measureSelection(): void {
   measureFailed.value = false;
   measuring.value = key !== '' && !unavailable.value;
   if (!measuring.value) return;
+  // Una sola carpeta ya medida en el listado: no hace falta volver a recorrerla.
+  const paths = JSON.parse(key) as string[];
+  const known = paths.length === 1 ? freshDirSize(paths[0] as string) : null;
+  if (known !== null && known.complete) {
+    measured.value = { bytes: known.bytes, files: known.files, folders: known.folders, complete: true, key };
+    measuring.value = false;
+    return;
+  }
   sizeTimer = setTimeout(() => {
     sizeTimer = null;
     const controller = new AbortController();
     sizeAbort = controller;
-    api<FsSizeResponse>('/fs/size', { method: 'POST', body: { paths: JSON.parse(key) as string[] }, signal: controller.signal })
+    api<FsSizeResponse>('/fs/size', { method: 'POST', body: { paths }, signal: controller.signal })
       .then((result) => {
+        if (paths.length === 1) storeDirSizes([{ ...result, path: paths[0] as string }]);
         if (sizeKey.value === key) measured.value = { ...result, key };
       })
       .catch(() => {
@@ -290,6 +301,77 @@ function measureSelection(): void {
       });
   }, SIZE_DELAY_MS);
 }
+// Columna «Tamaño» del listado: se mide cada carpeta visible por separado, en lotes y por
+// detrás. Lo medido se recuerda unos minutos para no recorrer el disco en cada visita.
+const DIR_SIZE_TTL_MS = 2 * 60_000;
+const DIR_SIZE_BATCH = 100;
+const dirSizes = shallowRef(new Map<string, FsSizeResponse & { at: number }>());
+let dirSizesTimer: ReturnType<typeof setTimeout> | null = null;
+let dirSizesAbort: AbortController | null = null;
+
+function freshDirSize(clientPathOfDir: string): (FsSizeResponse & { at: number }) | null {
+  const cached = dirSizes.value.get(clientPathOfDir);
+  return cached !== undefined && Date.now() - cached.at < DIR_SIZE_TTL_MS ? cached : null;
+}
+function storeDirSizes(list: ReadonlyArray<FsSizeResponse & { path: string }>): void {
+  if (list.length === 0) return;
+  const next = new Map(dirSizes.value);
+  const at = Date.now();
+  for (const { path, ...size } of list) next.set(path, { ...size, at });
+  dirSizes.value = next;
+}
+/** Olvida lo medido dentro de `dir` (y la propia carpeta y las que la contienen). */
+function forgetDirSizes(dir: string): void {
+  const prefix = dir === '/' ? '/' : `${dir}/`;
+  const next = new Map([...dirSizes.value].filter(([key]) => !key.startsWith(prefix) && !(dir === key || dir.startsWith(`${key}/`))));
+  if (next.size !== dirSizes.value.size) dirSizes.value = next;
+}
+function sizeOf(entry: FsEntry): number {
+  return entry.type === 'file' ? entry.size : (dirSizes.value.get(pathOf(entry.name))?.bytes ?? -1);
+}
+function dirSizeLabel(entry: FsEntry): { text: string; partial: boolean } {
+  const size = dirSizes.value.get(pathOf(entry.name));
+  if (size === undefined) return { text: '—', partial: false };
+  return size.complete ? { text: formatBytes(size.bytes), partial: false } : { text: t('explorer.sizeAtLeast', { size: formatBytes(size.bytes) }), partial: true };
+}
+
+async function measureListedDirs(): Promise<void> {
+  dirSizesAbort?.abort();
+  dirSizesAbort = null;
+  if (view.value !== 'list' || unavailable.value) return;
+  let pendingPaths = entries.value.filter((entry) => entry.type === 'dir').map((entry) => pathOf(entry.name)).filter((p) => freshDirSize(p) === null);
+  const controller = new AbortController();
+  dirSizesAbort = controller;
+  while (pendingPaths.length > 0 && !controller.signal.aborted) {
+    const chunk = pendingPaths.slice(0, DIR_SIZE_BATCH);
+    let result: FsSizesResponse;
+    try {
+      result = await api<FsSizesResponse>('/fs/sizes', { method: 'POST', body: { paths: chunk }, signal: controller.signal });
+    } catch {
+      return; // sin tamaño: la columna sigue con «—»
+    }
+    if (controller.signal.aborted) return;
+    storeDirSizes(result.sizes);
+    // El servidor mide en orden y omite las que ya no existen y las que no le dio tiempo a empezar,
+    // que son siempre las del final: se sigue desde la última medida.
+    const last = result.sizes.at(-1);
+    if (last === undefined) return;
+    pendingPaths = pendingPaths.slice(chunk.indexOf(last.path) + 1);
+  }
+}
+watch([entries, view], () => {
+  if (dirSizesTimer !== null) clearTimeout(dirSizesTimer);
+  dirSizesAbort?.abort();
+  dirSizesTimer = setTimeout(() => {
+    dirSizesTimer = null;
+    void measureListedDirs();
+  }, SIZE_DELAY_MS);
+});
+onBeforeUnmount(() => {
+  if (dirSizesTimer !== null) clearTimeout(dirSizesTimer);
+  dirSizesAbort?.abort();
+});
+
 watch(sizeKey, measureSelection);
 // Al recargar la carpeta (subidas, copias, papelera…) el contenido puede haber cambiado.
 watch(entries, () => {
@@ -1431,7 +1513,8 @@ function ghostMenu(item: Transfer): MenuItem[] {
                     <span v-if="!entry.portable" class="issue"><AppIcon name="alert" :size="13" :stroke="2" />{{ serverText(entry.issue ?? '') }}</span>
                   </span>
                 </span>
-                <span class="muted cell" role="gridcell">{{ entry.type === 'dir' ? '—' : formatBytes(entry.size) }}</span>
+                <span v-if="entry.type === 'dir'" class="muted cell" role="gridcell" :title="dirSizeLabel(entry).partial ? t('explorer.sizePartialHint') : undefined">{{ dirSizeLabel(entry).text }}</span>
+                <span v-else class="muted cell" role="gridcell">{{ formatBytes(entry.size) }}</span>
                 <span class="muted cell col-date" role="gridcell">{{ formatDate(entry.mtime) }}</span>
                 <button type="button" class="dots" :aria-label="t('explorer.itemActions', { name: entry.name })" tabindex="-1" @click.stop="onItemContext($event, entry)"><AppIcon name="more" /></button>
               </li>

@@ -7,7 +7,8 @@
 
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
-import type { FsSizeResponse } from '@pcloud/contracts';
+import type { FsSizeResponse, FsSizesResponse } from '@pcloud/contracts';
+import { AppError } from '../errors.ts';
 import { walkTree } from './operations.ts';
 import { isReservedTopName, parseClientPath, resolveInside } from './paths.ts';
 
@@ -77,4 +78,25 @@ export async function measureSize(dataRoot: string, clientPaths: readonly string
     }
   }
   return { bytes, files, folders, complete: true };
+}
+
+/**
+ * Mide cada ruta por separado con un único presupuesto de tiempo para todas. Las que no llegan a
+ * empezar se omiten (el navegador las deja sin tamaño); las que ya no existen, también.
+ */
+export async function measureEach(dataRoot: string, clientPaths: readonly string[], options: SizeOptions = {}): Promise<FsSizesResponse> {
+  const now = options.now ?? Date.now;
+  const deadline = now() + (options.budgetMs ?? SIZE_TIME_BUDGET_MS);
+  const sizes: FsSizesResponse['sizes'] = [];
+  for (const clientPath of new Set(clientPaths)) {
+    const budgetMs = deadline - now();
+    if (budgetMs <= 0 || options.signal?.aborted === true) break;
+    try {
+      sizes.push({ path: clientPath, ...(await measureSize(dataRoot, [clientPath], { ...options, budgetMs })) });
+    } catch (error) {
+      if (error instanceof AppError && (error.code === 'NOT_FOUND' || error.code === 'INVALID_PATH')) continue;
+      throw error;
+    }
+  }
+  return { sizes };
 }

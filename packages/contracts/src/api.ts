@@ -169,6 +169,13 @@ export const FsSizeResponse = Type.Object({
 });
 export type FsSizeResponse = Static<typeof FsSizeResponse>;
 
+/** Tamaño de cada carpeta por separado (columna «Tamaño» del listado). */
+export const FsSizesResponse = Type.Object({
+  /** Las que dio tiempo a medir, en el orden pedido; las que no, se omiten (y las que ya no existen). */
+  sizes: Type.Array(Type.Intersect([Type.Object({ path: Type.String() }), FsSizeResponse])),
+});
+export type FsSizesResponse = Static<typeof FsSizesResponse>;
+
 /** Enviar a la papelera (recuperable). */
 export const TrashItemsRequest = Type.Object({ paths: PathList }, { additionalProperties: false });
 export type TrashItemsRequest = Static<typeof TrashItemsRequest>;

@@ -15,6 +15,7 @@ import {
   RecentQuery,
   type DiskSpeedResponse,
   type FsSizeResponse,
+  type FsSizesResponse,
   type RecentResponse,
   type ItemResult,
   type TrashListResponse,
@@ -24,7 +25,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { audit } from '../auth/sessions.ts';
 import { AppError } from '../errors.ts';
 import { SMB_RECENT_KEEP, SmbRecentStore, smbRecentGroup } from '../smb/recent.ts';
-import { measureSize } from '../storage/size.ts';
+import { measureEach, measureSize } from '../storage/size.ts';
 import { measureDiskSpeed } from '../storage/speedtest.ts';
 import { formatClientPath, parseClientPath, resolveInside } from '../storage/paths.ts';
 import { planZip, streamZip } from '../storage/zip.ts';
@@ -124,6 +125,17 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
       if (!reply.raw.writableFinished) gone.abort();
     });
     return measureSize(lease.dataRoot, (request.body as FsSizeRequest).paths, { signal: gone.signal });
+  });
+
+  // Lo mismo, pero una medida por ruta (columna «Tamaño» del listado), con un solo límite de tiempo.
+  app.post(`${API}/fs/sizes`, { schema: { body: FsSizeRequest } }, async (request, reply): Promise<FsSizesResponse> => {
+    ctx.user(request);
+    const lease = await guardian.assertReadableVolume();
+    const gone = new AbortController();
+    reply.raw.once('close', () => {
+      if (!reply.raw.writableFinished) gone.abort();
+    });
+    return measureEach(lease.dataRoot, (request.body as FsSizeRequest).paths, { signal: gone.signal });
   });
 
   app.get(`${API}/fs/zip`, { schema: { querystring: ZipQuery } }, async (request, reply) => {
