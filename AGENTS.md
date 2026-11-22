@@ -55,6 +55,7 @@ S: curl -fsSL https://raw.githubusercontent.com/crazyramirez/personal-cloud-stor
 | `system.throttled` | Solo Raspberry Pi. Distinto de `0x0` → **alimentación insuficiente**: avisa (fuente oficial, no power bank; hub con alimentación para discos exigentes) antes de seguir |
 | `pcloud.installed`, `pcloud.release` | Si ya está instalado, reinstalar = actualizar (idempotente) |
 | `pcloud.health`, `pcloud.needs_owner`, `pcloud.mounted`, `pcloud.volume_state` | Estado de una instalación existente |
+| `tailscale.*` | Solo si está instalado: `installed`, `connected` y, conectado, `magicdns`, `cert_domain` (vacío = «HTTPS Certificates» sin activar), `key_expiry` (fecha o `disabled`) y `caddy_site` (§2.7) |
 | `disks.count`, `disk.N.*` | Discos exFAT/NTFS conectados (sin contar el del sistema): `device`, `uuid`, `fs`, `size`, `label`, `model`, `transport`, `mountpoint`, `used_by_pcloud` |
 
 `disks.count=0` → no hay disco compatible: pide que lo conecte (en la Raspberry Pi, a un puerto USB 3 azul) y repite. Si el disco existe pero no sale, probablemente no es exFAT/NTFS (regla 1). También se puede instalar sin disco (`--no-disk`) y añadirlo luego repitiendo la instalación.
@@ -118,10 +119,15 @@ La cuenta la crea la persona en la web; tú no.
 
 ### 2.7 Tailscale (solo si lo quiere)
 
-1. Instalar con `--tailscale` (o después: `sudo bash /opt/pcloud/current/deploy/linux/setup/pcloud-install-tailscale.sh --execute`). La salida trae un enlace `https://login.tailscale.com/…`: dáselo; lo abre ella e inicia sesión.
-2. Que active **MagicDNS** y **HTTPS Certificates** en la consola de Tailscale (DNS).
-3. Entonces: `sudo bash /opt/pcloud/current/deploy/linux/setup/pcloud-install-caddy.sh --execute`.
-4. Comprobar: `tailscale status` y `curl -sS -o /dev/null -w '%{http_code}\n' https://<host>.<tailnet>.ts.net/` → `200`. Fuera de casa entra con la app de Tailscale abierta y la misma cuenta.
+La web trae la misma guía para la persona: enlace «Cómo configurar Tailscale» en las pantallas de entrada y Ajustes → Acceso desde fuera de casa. Puedes remitirla ahí para los pasos de la consola.
+
+1. Instalar con `--tailscale` (o después: `sudo bash /opt/pcloud/current/deploy/linux/setup/pcloud-install-tailscale.sh --execute`). La salida trae un enlace `https://login.tailscale.com/…`: dáselo; lo abre ella e inicia sesión. Tú no entras en su cuenta. Listo cuando `--check` da `tailscale.connected=yes`.
+2. Que active **MagicDNS** y **HTTPS Certificates** en la consola de Tailscale (`https://login.tailscale.com/admin/dns`). Listo cuando `--check` da `tailscale.magicdns=yes` y `tailscale.cert_domain` no vacío. Avísale de que, con los certificados, el nombre del equipo y el de su tailnet quedan en registros públicos (Certificate Transparency).
+3. Que desactive la caducidad de la clave del servidor: en `https://login.tailscale.com/admin/machines`, menú «…» del equipo → **Disable key expiry**. Listo cuando `tailscale.key_expiry=disabled`; si no, a los 180 días se pierde el acceso desde fuera hasta reautorizarlo.
+4. Con `cert_domain` ya presente: `sudo bash /opt/pcloud/current/deploy/linux/setup/pcloud-install-caddy.sh --execute`. Listo cuando `tailscale.caddy_site=yes`.
+5. Comprobar: `curl -sS -o /dev/null -w '%{http_code}\n' https://<cert_domain>/` → `200`. Fuera de casa entra con la app de Tailscale abierta y la misma cuenta, en `https://<cert_domain>/`. Las llaves de acceso (Face ID, Touch ID…) van por dirección: tendrá que añadir otra desde esa dirección (Ajustes → Llaves de acceso).
+
+Repite `--check` entre pasos (no en bucle continuo) para saber cuándo la persona ha terminado lo suyo.
 
 ### 2.8 Problemas frecuentes
 

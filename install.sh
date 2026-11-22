@@ -207,7 +207,19 @@ if [ "$CHECK" -eq 1 ]; then
   fi
   if command -v tailscale >/dev/null; then
     kv tailscale.installed yes
-    kv tailscale.connected "$(yn tailscale status)"
+    TS_CONNECTED="$(yn tailscale status)"
+    kv tailscale.connected "$TS_CONNECTED"
+    # Pasos de la consola de Tailscale (AGENTS.md §2.7), sin root ni jq: «tailscale status --json»
+    # sale indentado con 2 espacios. Sin «KeyExpiry» en Self, la caducidad está desactivada.
+    if [ "$TS_CONNECTED" = yes ]; then
+      TS_JSON="$(tailscale status --json 2>/dev/null || true)"
+      if grep -qE '"MagicDNSEnabled": *true' <<<"$TS_JSON"; then kv tailscale.magicdns yes; else kv tailscale.magicdns no; fi
+      TS_CERT="$(awk '/^  "CertDomains": *\[ *$/ { on = 1; next } on { gsub(/[ \t",]/, ""); if ($0 ~ /\.ts\.net$/) print; exit }' <<<"$TS_JSON")"
+      kv tailscale.cert_domain "$TS_CERT"
+      TS_EXPIRY="$(awk '/^  "Self": *\{/ { on = 1; next } on && /^  \}/ { exit } on && /^    "KeyExpiry":/ { gsub(/^[^:]*: *"|".*$/, ""); print; exit }' <<<"$TS_JSON")"
+      kv tailscale.key_expiry "${TS_EXPIRY:-disabled}"
+      if [ -n "$TS_CERT" ]; then kv tailscale.caddy_site "$(yn grep -qF "$TS_CERT" /etc/caddy/Caddyfile)"; fi
+    fi
   else
     kv tailscale.installed no
   fi
