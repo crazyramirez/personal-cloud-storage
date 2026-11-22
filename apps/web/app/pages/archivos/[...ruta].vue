@@ -12,6 +12,8 @@ const { transfers, enqueue, completedTick, lastCompletedDest, pause, resume, con
 const { clipboard } = useFileClipboard();
 const session = useSession();
 const isOwner = computed(() => session.user.value?.role === 'owner');
+const favorites = useFavorites();
+favorites.ensure();
 
 const segments = computed<string[]>(() => {
   const raw = route.params.ruta;
@@ -85,7 +87,9 @@ const directThumbs = ref<Set<string>>(new Set());
 /** Filtro rápido por nombre (sin distinguir mayúsculas ni acentos). Se limpia al cambiar de carpeta. */
 const filter = ref('');
 const filterInput = ref<HTMLInputElement | null>(null);
-watch(filter, () => {
+/** Solo los favoritos de esta carpeta (ADR-0027). Se quita al cambiar de carpeta, como el filtro. */
+const onlyFavorites = ref(false);
+watch([filter, onlyFavorites], () => {
   const visible = new Set(sorted.value.map((entry) => entry.name));
   if ([...selection.value].some((name) => !visible.has(name))) {
     selection.value = new Set([...selection.value].filter((name) => visible.has(name)));
@@ -130,6 +134,33 @@ function isBackupStudioFolder(entry: FsEntry): boolean {
 function pathOf(name: string, dir = clientPath.value): string {
   return dir === '/' ? `/${name}` : `${dir}/${name}`;
 }
+
+// ── Favoritos (ADR-0027) ──────────────────────────────────────────────────────────────────────
+
+function isFav(entry: FsEntry): boolean {
+  return favorites.isFavorite(pathOf(entry.name));
+}
+const allFav = (list: readonly FsEntry[]): boolean => list.length > 0 && list.every(isFav);
+function toggleFav(list: readonly FsEntry[]): void {
+  void favorites.toggle(list.map((entry) => ({ path: pathOf(entry.name), type: entry.type })));
+}
+/** La carpeta abierta (no la raíz: «Archivos» ya está siempre a mano). */
+const folderIsFav = computed(() => segments.value.length > 0 && favorites.isFavorite(clientPath.value));
+function toggleFolderFav(): void {
+  if (segments.value.length === 0) return;
+  void favorites.toggle([{ path: clientPath.value, type: 'dir' }]);
+}
+function favMenuItem(list: readonly FsEntry[], separator = false): MenuItem {
+  const on = allFav(list);
+  return {
+    label: list.length > 1 ? t(on ? 'favorites.removeMany' : 'favorites.addMany', { n: list.length }) : t(on ? 'favorites.remove' : 'favorites.add'),
+    icon: on ? 'star-off' : 'star',
+    separator,
+    run: () => toggleFav(list),
+  };
+}
+/** Cuántos favoritos hay en esta carpeta (contador del botón «Solo favoritos»). */
+const favoritesHere = computed(() => entries.value.filter(isFav).length);
 
 async function load(options: { keepSelection?: boolean; select?: string[] } = {}): Promise<void> {
   const current = ++requestId;
@@ -192,6 +223,7 @@ async function loadMore(): Promise<void> {
 
 watch(clientPath, (path) => {
   filter.value = '';
+  onlyFavorites.value = false;
   settle();
   const cached = listCache.get(path);
   if (cached !== undefined) {
@@ -235,7 +267,8 @@ const fold = (text: string): string => text.normalize('NFD').replace(/\p{Diacrit
 const sorted = computed(() => {
   const dir = sortDesc.value ? -1 : 1;
   const needle = fold(filter.value.trim());
-  const visible = needle === '' ? entries.value : entries.value.filter((entry) => fold(entry.name).includes(needle));
+  const favs = favorites.paths.value;
+  const visible = entries.value.filter((entry) => (needle === '' || fold(entry.name).includes(needle)) && (!onlyFavorites.value || favs.has(pathOf(entry.name))));
   const names = collator();
   return [...visible].sort((a, b) => {
     if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
@@ -625,7 +658,10 @@ async function rename(entry: FsEntry): Promise<void> {
       newName = renamed.name;
     },
   });
-  if (result !== null && newName !== '') await load({ select: [newName] });
+  if (result !== null && newName !== '') {
+    void favorites.refresh();
+    await load({ select: [newName] });
+  }
 }
 
 function summarize(response: BatchResponse, verb: string): { ok: number; failed: Array<{ from: string; message: string }> } {
@@ -658,6 +694,7 @@ async function trash(list: FsEntry[]): Promise<void> {
       const at = Math.min(Math.max(0, viewerIndex.value), remaining.length - 1);
       viewerName.value = remaining[at]?.name ?? null;
     }
+    if (ok > 0) void favorites.refresh();
     await load();
   } catch (error) {
     dismissToast(busy);
@@ -691,6 +728,7 @@ async function deleteForever(list: FsEntry[]): Promise<void> {
     if (ids.length > 0) await api('/trash/delete', { method: 'POST', body: { ids }, timeoutMs: 0 });
     dismissToast(busy);
     if (ids.length > 0) toast(t('explorer.deletedForever', { n: ids.length }), { tone: 'ok' });
+    void favorites.refresh();
     await load();
   } catch (error) {
     dismissToast(busy);
@@ -703,6 +741,7 @@ async function restore(ids: string[]): Promise<void> {
   try {
     const response = await api<BatchResponse>('/trash/restore', { method: 'POST', body: { ids } });
     const { ok } = summarize(response, t('explorer.verbRestored'));
+    if (ok > 0) void favorites.refresh();
     const restored = response.results.flatMap((item) => (item.ok ? [item.path] : []));
     const here = restored.filter((p) => p.slice(0, p.lastIndexOf('/')) === (clientPath.value === '/' ? '' : clientPath.value));
     const elsewhere = restored.filter((p) => !here.includes(p));
@@ -748,6 +787,7 @@ async function transfer(mode: 'move' | 'copy', paths: string[], destination: str
       const names = response.results.flatMap((item) => (item.ok ? [item.name] : []));
       toast(t('explorer.transferDone', { n: ok, name: names[0] ?? '', mode, dest: destination === '/' ? t('common.files') : (destination.split('/').pop() ?? '') }), { tone: 'ok' });
     }
+    if (mode === 'move' && ok > 0) void favorites.refresh();
     await load({ select: destination === clientPath.value ? response.results.flatMap((item) => (item.ok ? [item.name] : [])) : undefined });
     return ok > 0;
   } catch (error) {
@@ -1030,6 +1070,7 @@ function itemMenu(entry: FsEntry, alone = false): MenuItem[] {
   if (list.length > 1) {
     return [
       { label: t('explorer.downloadItemsZip', { n: list.length }), icon: 'archive', run: () => download(list) },
+      favMenuItem(list),
       { label: t('explorer.cut'), icon: 'cut', shortcut: 'Ctrl+X', disabled: w, hint: noWrite(), separator: true, run: () => setClipboard('cut', list) },
       { label: t('explorer.copy'), icon: 'copy', shortcut: 'Ctrl+C', run: () => setClipboard('copy', list) },
       { label: t('explorer.moveTo'), icon: 'move', disabled: w, hint: noWrite(), run: () => void moveOrCopyTo('move', list) },
@@ -1055,6 +1096,7 @@ function itemMenu(entry: FsEntry, alone = false): MenuItem[] {
     { label: t('explorer.duplicate'), icon: 'copy', disabled: w || !entry.portable, hint: w ? noWrite() : t('explorer.notPortable'), run: () => void duplicate(entry) },
     { label: t('explorer.rename'), icon: 'edit', shortcut: 'F2', disabled: w, hint: noWrite(), separator: true, run: () => void rename(entry) },
     { label: t('explorer.copyLink'), icon: 'link', run: () => void copyLink(entry) },
+    favMenuItem([entry]),
     // Enlace para invitados sin cuenta (ADR-0018): solo el propietario.
     ...(isOwner.value ? [{ label: t('shares.menu'), icon: 'globe' as const, run: () => void shareDialog({ path: pathOf(entry.name), name: entry.name, kind: entry.type }) }] : []),
     // «Detalles» solo cuando el panel lateral no se ve (pantalla estrecha o panel cerrado).
@@ -1077,6 +1119,10 @@ function backgroundMenu(): MenuItem[] {
       : []),
     { label: t('explorer.selectAll'), icon: 'check-all', shortcut: 'Ctrl+A', separator: true, disabled: entries.value.length === 0, run: selectAll },
     { label: t('explorer.refresh'), icon: 'refresh', run: () => void load({ keepSelection: true }) },
+    ...(segments.value.length > 0
+      ? [{ label: folderIsFav.value ? t('favorites.removeFolder') : t('favorites.addFolder'), icon: (folderIsFav.value ? 'star-off' : 'star') as IconName, run: toggleFolderFav }]
+      : []),
+    { label: t('favorites.onlyFavorites'), icon: 'star' as const, checked: onlyFavorites.value, run: () => (onlyFavorites.value = !onlyFavorites.value) },
     { label: t('explorer.sortByName'), checked: sortKey.value === 'name', separator: true, run: () => setSort('name') },
     { label: t('explorer.sortByDate'), checked: sortKey.value === 'date', run: () => setSort('date') },
     { label: t('explorer.sortBySize'), checked: sortKey.value === 'size', run: () => setSort('size') },
@@ -1092,11 +1138,13 @@ function backgroundMenu(): MenuItem[] {
 
 function crumbMenu(path: string, link: string): MenuItem[] {
   const clip = clipboard.value;
+  const fav = path !== '/' && favorites.isFavorite(path);
   return [
     { label: t('explorer.open'), icon: 'folder', run: () => void navigateTo(link) },
     { label: t('explorer.openInNewTab'), icon: 'external', run: () => window.open(link, '_blank', 'noopener') },
     ...(clip !== null ? [{ label: t('explorer.pasteHere', { n: clip.paths.length }), icon: 'paste' as const, disabled: !canWrite.value, hint: noWrite(), run: () => void paste(path) }] : []),
     { label: t('explorer.downloadAsZip'), icon: 'archive', run: () => startDownload(zipUrl(path), zipName(path.split('/').filter(Boolean).at(-1) ?? 'files')) },
+    ...(path !== '/' ? [{ label: fav ? t('favorites.remove') : t('favorites.add'), icon: (fav ? 'star-off' : 'star') as IconName, run: () => void favorites.toggle([{ path, type: 'dir' }]) }] : []),
   ];
 }
 
@@ -1333,6 +1381,16 @@ function ghostMenu(item: Transfer): MenuItem[] {
       <div class="toolbar">
         <div class="heading">
           <h1>{{ folderName }}</h1>
+          <button
+            v-if="segments.length > 0 && !missing"
+            type="button"
+            class="fav-folder"
+            :class="{ on: folderIsFav }"
+            :aria-pressed="folderIsFav"
+            :aria-label="folderIsFav ? t('favorites.removeFolder') : t('favorites.addFolder')"
+            :title="folderIsFav ? t('favorites.removeFolder') : t('favorites.addFolder')"
+            @click="toggleFolderFav"
+          ><AppIcon :name="folderIsFav ? 'star-filled' : 'star'" :size="19" /></button>
           <span v-if="!loading && !failure && !unavailable" class="muted count">{{ countLabel }}</span>
         </div>
         <label class="search" :class="{ active: filter !== '' }">
@@ -1351,6 +1409,15 @@ function ghostMenu(item: Transfer): MenuItem[] {
           >
           <button v-if="filter !== ''" type="button" class="clear" :aria-label="t('explorer.clearFilter')" @click="filter = ''"><AppIcon name="close" :size="14" /></button>
         </label>
+        <button
+          type="button"
+          class="btn btn-icon fav-filter"
+          :class="{ on: onlyFavorites }"
+          :aria-pressed="onlyFavorites"
+          :aria-label="t('favorites.onlyFavorites')"
+          :title="onlyFavorites ? t('favorites.showAllItems') : t('favorites.onlyFavoritesHint')"
+          @click="onlyFavorites = !onlyFavorites"
+        ><AppIcon :name="onlyFavorites ? 'star-filled' : 'star'" /><span v-if="favoritesHere > 0" class="fav-count">{{ favoritesHere }}</span></button>
         <button type="button" class="btn hide-sm" :disabled="!canWrite" :title="canWrite ? t('explorer.newFolder') : noWrite()" @click="newFolder">
           <AppIcon name="folder-plus" />{{ t('explorer.newFolder') }}
         </button>
@@ -1391,6 +1458,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
       <span v-if="selectionSize !== null" class="muted hide-xs" :title="selectionSize.partial ? t('explorer.sizePartialHint') : undefined">{{ selectionSize.text }}</span>
       <span class="grow" />
       <button type="button" class="btn btn-icon" :aria-label="t('explorer.download')" :title="t('explorer.download')" @click="download(selected)"><AppIcon name="download" /></button>
+      <button type="button" class="btn btn-icon" :class="{ 'fav-on': allFav(selected) }" :aria-pressed="allFav(selected)" :aria-label="favMenuItem(selected).label" :title="favMenuItem(selected).label" @click="toggleFav(selected)"><AppIcon :name="allFav(selected) ? 'star-filled' : 'star'" /></button>
       <button type="button" class="btn btn-icon" :aria-label="t('explorer.moveTo')" :title="t('explorer.moveTo')" :disabled="!canWrite" @click="moveOrCopyTo('move', selected)"><AppIcon name="move" /></button>
       <button v-if="single" type="button" class="btn btn-icon" :aria-label="t('explorer.rename')" :title="t('explorer.renameF2')" :disabled="!canWrite" @click="rename(single)"><AppIcon name="edit" /></button>
       <button type="button" class="btn btn-icon danger" :aria-label="t('explorer.moveToTrash')" :title="t('explorer.moveToTrashKey')" :disabled="!canWrite" @click="trash(selected)"><AppIcon name="trash" /></button>
@@ -1445,11 +1513,21 @@ function ghostMenu(item: Transfer): MenuItem[] {
           </div>
         </div>
 
-        <div v-else-if="sorted.length === 0 && filter !== '' && ghosts.length === 0" class="card empty">
+        <div v-else-if="sorted.length === 0 && onlyFavorites && filter === '' && ghosts.length === 0" class="card empty">
+          <AppIcon name="star" :size="40" :stroke="1.4" class="muted" />
+          <h2>{{ t('favorites.noneHere') }}</h2>
+          <p class="muted">{{ t('favorites.noneHereHint') }}</p>
+          <div class="empty-actions">
+            <button type="button" class="btn" @click="onlyFavorites = false">{{ t('favorites.showAllItems') }}</button>
+            <NuxtLink to="/favoritos" class="btn"><AppIcon name="star" />{{ t('favorites.seeAll') }}</NuxtLink>
+          </div>
+        </div>
+
+        <div v-else-if="sorted.length === 0 && (filter !== '' || onlyFavorites) && ghosts.length === 0" class="card empty">
           <AppIcon name="search" :size="40" :stroke="1.4" class="muted" />
           <h2>{{ t('explorer.noMatch', { filter }) }}</h2>
           <p class="muted">{{ t('explorer.noMatchHint') }}</p>
-          <button type="button" class="btn" @click="filter = ''">{{ t('explorer.clearFilter') }}</button>
+          <button type="button" class="btn" @click="filter = ''; onlyFavorites = false">{{ t('explorer.clearFilter') }}</button>
         </div>
 
         <template v-else>
@@ -1509,7 +1587,8 @@ function ghostMenu(item: Transfer): MenuItem[] {
                   <DbsFolderIcon v-if="isBackupStudioFolder(entry)" :size="22" />
                   <AppIcon v-else :name="fileKind(entry.name, entry.type).icon" :size="22" :class="iconClass(entry)" />
                   <span class="label">
-                    <span class="text">{{ entry.name }}</span>
+                    <span class="text">{{ entry.name }}<AppIcon v-if="isFav(entry)" name="star-filled" :size="13" class="fav-badge" /></span>
+                    <span v-if="isFav(entry)" class="sr-only">{{ t('favorites.badge') }}</span>
                     <span v-if="!entry.portable" class="issue"><AppIcon name="alert" :size="13" :stroke="2" />{{ serverText(entry.issue ?? '') }}</span>
                   </span>
                 </span>
@@ -1577,6 +1656,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
                 <AppIcon v-else :name="fileKind(entry.name, entry.type).icon" :size="44" :stroke="1.4" :class="iconClass(entry)" />
                 <span v-if="viewerKind(entry.name) === 'video' && showThumb(entry)" class="badge-play" aria-hidden="true"><AppIcon name="play" :size="14" /></span>
                 <span v-if="touchSelecting" class="check corner" :class="{ on: selection.has(entry.name) }" aria-hidden="true"><AppIcon v-if="selection.has(entry.name)" name="check" :size="16" /></span>
+                <span v-if="isFav(entry) && !touchSelecting" class="fav-corner"><AppIcon name="star-filled" :size="13" /><span class="sr-only">{{ t('favorites.badge') }}</span></span>
               </span>
               <span class="tile-name">{{ entry.name }}</span>
               <span class="muted tile-meta">{{ entry.type === 'dir' ? t('common.folder') : formatBytes(entry.size) }}</span>
@@ -1605,7 +1685,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
             <AppIcon v-else :name="fileKind(single.name, single.type).icon" :size="48" :stroke="1.4" :class="iconClass(single)" />
           </div>
           <div>
-            <h2 class="d-name selectable">{{ single.name }}</h2>
+            <h2 class="d-name selectable">{{ single.name }}<AppIcon v-if="isFav(single)" name="star-filled" :size="15" class="fav-badge" /></h2>
             <p class="muted">{{ fileKind(single.name, single.type).label }}</p>
           </div>
           <p v-if="!single.portable" class="notice notice-warn">{{ t('explorer.notPortableNotice', { issue: serverText(single.issue ?? '') }) }}</p>
@@ -1624,6 +1704,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
           <div class="d-actions">
             <button type="button" class="btn btn-primary" @click="openEntry(single)"><AppIcon :name="single.type === 'dir' ? 'folder' : 'eye'" :size="16" />{{ t('explorer.open') }}</button>
             <button type="button" class="btn" @click="download([single])"><AppIcon :name="single.type === 'dir' ? 'archive' : 'download'" :size="16" />{{ single.type === 'dir' ? 'ZIP' : t('explorer.download') }}</button>
+            <button type="button" class="btn btn-icon" :class="{ 'fav-on': isFav(single) }" :aria-pressed="isFav(single)" :aria-label="favMenuItem([single]).label" :title="favMenuItem([single]).label" @click="toggleFav([single])"><AppIcon :name="isFav(single) ? 'star-filled' : 'star'" /></button>
             <button type="button" class="btn btn-icon" :aria-label="t('explorer.moreActions')" @click="onItemContext($event, single)"><AppIcon name="more" /></button>
           </div>
         </template>
@@ -1635,6 +1716,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
           <p v-else class="muted">{{ measureFailed ? t('explorer.sizeUnknown') : t('explorer.sizeCalculating') }}</p>
           <div class="d-actions">
             <button type="button" class="btn" @click="download(selected)"><AppIcon name="archive" />{{ t('explorer.downloadZip') }}</button>
+            <button type="button" class="btn" :class="{ 'fav-on': allFav(selected) }" @click="toggleFav(selected)"><AppIcon :name="allFav(selected) ? 'star-filled' : 'star'" />{{ allFav(selected) ? t('favorites.remove') : t('favorites.add') }}</button>
             <button type="button" class="btn btn-danger" :disabled="!canWrite" @click="trash(selected)"><AppIcon name="trash" />{{ t('explorer.trash') }}</button>
           </div>
         </template>
@@ -1655,6 +1737,80 @@ function ghostMenu(item: Transfer): MenuItem[] {
 </template>
 
 <style scoped>
+/* Favoritos (ADR-0027): estrella ámbar, igual en tema claro y oscuro. */
+.fav-badge {
+  margin-left: 6px;
+  vertical-align: -1px;
+  color: var(--fav);
+}
+
+.fav-folder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.fav-folder:hover {
+  background: var(--surface-2);
+  color: var(--fav);
+}
+
+.fav-folder.on {
+  color: var(--fav);
+}
+
+.fav-folder:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.fav-filter {
+  position: relative;
+}
+
+.fav-filter.on,
+.btn.fav-on {
+  color: var(--fav);
+  border-color: var(--fav-border);
+  background: var(--fav-soft);
+}
+
+.fav-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--fav);
+  color: #1f1300;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+}
+
+.fav-corner {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 55%);
+  /* Sobre la miniatura (fondo oscuro fijo): el mismo ámbar claro en los dos temas. */
+  color: #ffc23d;
+}
+
 .explorer {
   display: flex;
   flex-direction: column;

@@ -16,6 +16,13 @@ const TEXT_LIMIT = 2 * 1024 * 1024;
 const root = ref<HTMLElement | null>(null);
 const current = computed(() => props.items[props.index] ?? null);
 const path = computed(() => (current.value === null ? '' : props.dir === '/' ? `/${current.value.name}` : `${props.dir}/${current.value.name}`));
+/** Estrella del archivo abierto (ADR-0027). */
+const favorites = useFavorites();
+favorites.ensure();
+const fav = computed(() => path.value !== '' && favorites.isFavorite(path.value));
+function toggleFav(): void {
+  if (path.value !== '') void favorites.toggle([{ path: path.value, type: 'file' }]);
+}
 const kind = computed<ViewerKind>(() => (current.value === null ? 'none' : viewerKind(current.value.name)));
 
 const loading = ref(false);
@@ -342,6 +349,7 @@ onBeforeUnmount(() => {
       <button v-if="kind === 'text'" type="button" class="ib" :aria-pressed="wrap" :aria-label="t('viewer.wrapLines')" :title="t('viewer.wrapLines')" @click="wrap = !wrap"><AppIcon name="wrap" /></button>
       <a v-if="kind === 'image' || kind === 'pdf' || kind === 'text'" class="ib hide-sm" :href="kind === 'image' ? imageSrc : inlineUrl(path)" target="_blank" rel="noopener" :aria-label="t('viewer.openInNewTab')" :title="t('viewer.openInNewTab')"><AppIcon name="external" /></a>
       <button v-if="kind === 'video'" type="button" class="ib hide-sm" :aria-label="t('viewer.fullscreen')" :title="t('viewer.fullscreen')" @click="fullscreen"><AppIcon name="expand" /></button>
+      <button v-if="current" type="button" class="ib" :class="{ fav }" :aria-pressed="fav" :aria-label="fav ? t('favorites.remove') : t('favorites.add')" :title="fav ? t('favorites.remove') : t('favorites.add')" @click="toggleFav"><AppIcon :name="fav ? 'star-filled' : 'star'" /></button>
       <a class="ib" :href="downloadUrl(path)" download @click.prevent="startDownload(downloadUrl(path), current?.name ?? '')" :aria-label="t('viewer.download')" :title="t('viewer.download')"><AppIcon name="download" /></a>
       <button v-if="current" type="button" class="ib" :aria-label="t('viewer.moveToTrash')" :title="t('viewer.moveToTrash')" @click="emit('trash', current)"><AppIcon name="trash" /></button>
     </header>
@@ -452,6 +460,10 @@ onBeforeUnmount(() => {
   color: #e8ebf0;
   outline: none;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.ib.fav {
+  color: #ffc23d;
 }
 
 .bar {

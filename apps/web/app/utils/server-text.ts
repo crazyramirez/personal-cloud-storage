@@ -21,6 +21,8 @@ export const EXACT: Record<string, string> = {
   'Ya existe un elemento con ese nombre': 'An item with that name already exists',
   'No se puede compartir la nube entera: elige un archivo o una carpeta': 'You can’t share the whole cloud: choose a file or a folder',
   'Ese enlace no existe': 'That link doesn’t exist',
+  'Has llegado al máximo de favoritos: quita alguno antes de añadir más': 'You’ve reached the maximum number of favorites: remove some before adding more',
+  'La carpeta principal no se puede marcar como favorita: elige un archivo o una carpeta': 'The main folder can’t be a favorite: choose a file or a folder',
   'Hay una copia de seguridad en curso: espera a que termine o cancélala': 'A backup is in progress: wait for it to finish or cancel it',
   'El reinicio desde la web no está instalado en este equipo': 'Restarting from the web isn’t installed on this device',
   'No se pudo programar la orden': 'The command couldn’t be scheduled',

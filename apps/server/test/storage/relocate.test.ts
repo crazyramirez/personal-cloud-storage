@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
+import { FavoriteStore } from '../../src/favorites/store.ts';
 import { ShareStore } from '../../src/share/store.ts';
 import type { FsOperations } from '../../src/storage/operations.ts';
 import { relocatePaths } from '../../src/storage/relocate.ts';
@@ -64,6 +65,20 @@ describe('rutas guardadas que siguen al renombrar o mover', () => {
     const done = await uploads.complete(userId, id);
     assert.equal(done.path, '/Álbum/Viaje/nueva.jpg');
     assert.deepEqual(await readFile(path.join(h.dataRoot, 'Álbum', 'Viaje', 'nueva.jpg')), data);
+  });
+
+  it('los favoritos siguen al elemento; uno antiguo en la ruta de destino cede su sitio', async () => {
+    const favorites = new FavoriteStore(h.db);
+    const other = insertUser(h.db, 'luis', 'user');
+    favorites.add(userId, [{ path: '/Fotos', kind: 'dir' }, { path: '/Fotos/Viaje/playa.jpg', kind: 'file' }, { path: '/Álbum', kind: 'dir' }, { path: '/FotosViejas', kind: 'dir' }], new Date());
+    favorites.add(other, [{ path: '/Fotos/Viaje', kind: 'dir' }], new Date());
+    // «/Álbum» ya no existe (se eliminó) pero sigue en favoritos: el rename lo ocupa.
+    await ops.rename('/Fotos', 'Álbum');
+    assert.deepEqual(favorites.list(userId).map((row) => row.path).sort(), ['/FotosViejas', '/Álbum', '/Álbum/Viaje/playa.jpg']);
+    assert.equal(favorites.list(userId).find((row) => row.path === '/Álbum')?.kind, 'dir');
+    assert.deepEqual(favorites.list(other).map((row) => row.path), ['/Álbum/Viaje'], 'los de cada usuario');
+    await ops.move(['/Álbum/Viaje/playa.jpg'], '/Destino');
+    assert.ok(favorites.list(userId).some((row) => row.path === '/Destino/playa.jpg'));
   });
 
   it('las subidas ya terminadas no cambian su ruta final', async () => {

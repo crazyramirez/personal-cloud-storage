@@ -14,6 +14,8 @@ export default {
   'Ya existe un elemento con ese nombre': '同じ名前の項目がすでに存在します',
   'No se puede compartir la nube entera: elige un archivo o una carpeta': 'クラウド全体は共有できません。ファイルまたはフォルダを選んでください',
   'Ese enlace no existe': 'そのリンクは存在しません',
+  'Has llegado al máximo de favoritos: quita alguno antes de añadir más': 'お気に入りの上限に達しました。追加する前にいくつか削除してください',
+  'La carpeta principal no se puede marcar como favorita: elige un archivo o una carpeta': 'メインフォルダーはお気に入りにできません。ファイルかフォルダーを選んでください',
   'Hay una copia de seguridad en curso: espera a que termine o cancélala': 'バックアップを実行中です。完了を待つか、キャンセルしてください',
   'El reinicio desde la web no está instalado en este equipo': 'このデバイスには Web からの再起動機能がインストールされていません',
   'No se pudo programar la orden': '命令をスケジュールできませんでした',

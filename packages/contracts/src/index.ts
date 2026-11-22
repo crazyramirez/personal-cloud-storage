@@ -5,3 +5,4 @@ export * from './account.ts';
 export * from './backup.ts';
 export * from './system.ts';
 export * from './shares.ts';
+export * from './favorites.ts';

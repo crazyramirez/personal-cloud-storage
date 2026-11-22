@@ -30,11 +30,37 @@ onBeforeUnmount(() => {
 const NAV = computed<Array<{ to: string; label: string; icon: IconName; mobile: boolean }>>(() => [
   { to: '/panel', label: t('nav.dashboard'), icon: 'gauge', mobile: true },
   { to: '/archivos', label: t('nav.files'), icon: 'folder', mobile: true },
+  { to: '/favoritos', label: t('favorites.title'), icon: 'star', mobile: true },
   { to: '/papelera', label: t('nav.trash'), icon: 'trash', mobile: true },
   { to: '/actividad', label: t('nav.activity'), icon: 'clock', mobile: false },
   { to: '/ajustes', label: t('nav.settings'), icon: 'sliders', mobile: true },
 ]);
 const MOBILE_NAV = computed(() => NAV.value.filter((item) => item.mobile));
+
+/** Acceso rápido (ADR-0027): las carpetas favoritas, a un clic desde cualquier pantalla. */
+const QUICK_MAX = 8;
+const favorites = useFavorites();
+watch(session.user, () => favorites.ensure(), { immediate: true });
+const quick = computed(() =>
+  favorites.entries.value
+    .filter((entry) => entry.type === 'dir' && entry.exists !== false)
+    .slice(0, QUICK_MAX)
+    .map((entry) => ({ path: entry.path, name: entry.name, to: explorerLink(entry.path.split('/').filter(Boolean)) })),
+);
+const decodedPath = computed(() => {
+  try {
+    return decodeURIComponent(route.path);
+  } catch {
+    return route.path;
+  }
+});
+const quickCurrent = (to: string): boolean => {
+  try {
+    return decodedPath.value === decodeURIComponent(to);
+  } catch {
+    return false;
+  }
+};
 
 function isActive(to: string): boolean {
   return route.path === to || route.path.startsWith(`${to}/`);
@@ -65,6 +91,17 @@ const appVersion = useAppVersion();
           </NuxtLink>
         </li>
       </ul>
+
+      <section v-if="quick.length > 0" class="quick" aria-labelledby="t-acceso-rapido">
+        <h2 id="t-acceso-rapido" class="quick-title muted">{{ t('favorites.quickAccess') }}</h2>
+        <ul class="menu">
+          <li v-for="item in quick" :key="item.path">
+            <NuxtLink :to="item.to" class="link quick-link" :class="{ current: quickCurrent(item.to) }" :aria-current="quickCurrent(item.to) ? 'page' : undefined" :title="item.path">
+              <AppIcon name="folder" :size="17" class="ico-folder" /><span class="quick-name">{{ item.name }}</span>
+            </NuxtLink>
+          </li>
+        </ul>
+      </section>
 
       <DiskWidget />
       <p v-if="appVersion?.version" class="version muted" :title="appVersion.release ?? undefined">{{ t('nav.version', { v: appVersion.version }) }}</p>
@@ -204,6 +241,38 @@ a.link:hover {
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 600;
+}
+
+.quick {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: -10px;
+}
+
+.quick-title {
+  padding: 0 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.quick-link {
+  min-height: 38px;
+  gap: 10px;
+  font-size: 13.5px;
+}
+
+.quick-link.current .ico-folder {
+  color: inherit;
+}
+
+.quick-name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .link.soon {

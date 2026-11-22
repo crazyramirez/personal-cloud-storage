@@ -21,6 +21,7 @@
   ],
   "shortcuts": [
     { "name": "Archivos", "url": "/archivos", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Favoritos", "url": "/favoritos", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Papelera", "url": "/papelera", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

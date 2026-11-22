@@ -26,6 +26,9 @@
   --danger-border: #f3b8b1;
   --track: #e3e6eb;
   --folder: #5b7fa6; /* azul acero suave (≥ 3:1 sobre surface, surface-2 y accent-soft) */
+  --fav: #b47500; /* estrella de favoritos (≥ 3:1 sobre surface y surface-2) */
+  --fav-soft: #fdf3e1;
+  --fav-border: #ebc98f;
   --shadow: 0 12px 32px rgb(20 23 28 / 14%);
   color-scheme: light;
 }
@@ -52,6 +55,9 @@
   --danger-border: #6b2a24;
   --track: #2a303b;
   --folder: #8aa8cb;
+  --fav: #f5b942;
+  --fav-soft: #33270f;
+  --fav-border: #6b5220;
   --shadow: 0 12px 32px rgb(0 0 0 / 50%);
   color-scheme: dark;
 }
@@ -79,6 +85,9 @@
     --danger-border: #6b2a24;
     --track: #2a303b;
     --folder: #8aa8cb;
+  --fav: #f5b942;
+  --fav-soft: #33270f;
+  --fav-border: #6b5220;
     --shadow: 0 12px 32px rgb(0 0 0 / 50%);
     color-scheme: dark;
   }

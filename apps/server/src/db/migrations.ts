@@ -181,4 +181,20 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    version: 6,
+    name: 'favoritos',
+    sql: `
+      -- Carpetas y archivos marcados como favoritos, por usuario (ADR-0027). path = ruta del
+      -- cliente; sigue al elemento al renombrarlo o moverlo desde la web (relocate.ts). Una ruta
+      -- que ya no existe no se borra sola: la ausencia del disco nunca es un borrado.
+      CREATE TABLE favorites (
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        path       TEXT NOT NULL,
+        kind       TEXT NOT NULL CHECK (kind IN ('file', 'dir')),
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, path)
+      );
+    `,
+  },
 ];

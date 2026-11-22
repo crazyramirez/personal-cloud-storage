@@ -175,6 +175,7 @@ onBeforeUnmount(() => {
     </div>
 
     <SystemResources />
+    <FavoritesGrid v-if="!unreachable" mode="panel" />
     <RecentGrid v-if="!unreachable && readable" />
   </div>
 </template>

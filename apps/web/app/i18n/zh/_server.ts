@@ -13,6 +13,8 @@ export default {
   'Ya existe un elemento con ese nombre': '已存在同名项目',
   'No se puede compartir la nube entera: elige un archivo o una carpeta': '无法共享整个云：请选择一个文件或文件夹',
   'Ese enlace no existe': '该链接不存在',
+  'Has llegado al máximo de favoritos: quita alguno antes de añadir más': '收藏已达上限：请先移除一些再添加',
+  'La carpeta principal no se puede marcar como favorita: elige un archivo o una carpeta': '主文件夹不能设为收藏：请选择文件或文件夹',
   'Hay una copia de seguridad en curso: espera a que termine o cancélala': '正在进行备份：请等待其完成或取消',
   'El reinicio desde la web no está instalado en este equipo': '此设备未安装网页重启功能',
   'No se pudo programar la orden': '无法安排该指令',

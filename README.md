@@ -11,6 +11,7 @@ Nube personal autocontenida: un servidor Linux pequeño (una **Raspberry Pi**, u
 ## Funciones
 
 - Explorador web (SPA, móvil y escritorio): navegar, crear carpetas, subir (reanudable, sin sobrescribir), descargar, mover, copiar, renombrar, ZIP, papelera y recientes.
+- **Favoritos:** marca carpetas y archivos con la estrella; fíltralos en el explorador y tenlos a mano en el Panel, en su página y en el acceso rápido de la barra lateral. Siguen al elemento al renombrarlo o moverlo y nunca se quitan solos si el disco no está ([ADR-0027](docs/adr/0027-favoritos.md)).
 - Visores de imagen, vídeo, audio, PDF y documentos de Office (con ffmpeg y LibreOffice, opcionales).
 - **Interfaz en 7 idiomas:** español, inglés, francés, alemán, italiano, chino simplificado y japonés. Por defecto, el del navegador (si no es ninguno de ellos, inglés); se cambia en Ajustes → Idioma.
 - Cuentas con contraseña (Argon2id) y llaves de acceso; sesiones revocables; registro de auditoría.

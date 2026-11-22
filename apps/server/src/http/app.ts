@@ -81,6 +81,7 @@ import type { ShareStore } from '../share/store.ts';
 import { registerSystemRoutes } from './routes-system.ts';
 import { registerFileRoutes } from './routes-files.ts';
 import { registerMediaRoutes } from './routes-media.ts';
+import { registerFavoriteRoutes } from './routes-favorites.ts';
 
 export type { GuardianLike } from './context.ts';
 
@@ -509,6 +510,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     startSession,
   };
   registerFileRoutes(app, ctx);
+  registerFavoriteRoutes(app, ctx);
   registerMediaRoutes(app, ctx);
   registerAccountRoutes(app, ctx);
   if (deps.backup !== undefined) registerBackupRoutes(app, ctx, deps.backup);

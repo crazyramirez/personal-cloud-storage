@@ -14,6 +14,8 @@ export default {
   'Ya existe un elemento con ese nombre': 'Es gibt bereits ein Element mit diesem Namen',
   'No se puede compartir la nube entera: elige un archivo o una carpeta': 'Die ganze Cloud kann nicht geteilt werden: Wählen Sie eine Datei oder einen Ordner',
   'Ese enlace no existe': 'Dieser Link existiert nicht',
+  'Has llegado al máximo de favoritos: quita alguno antes de añadir más': 'Sie haben die maximale Anzahl an Favoriten erreicht: Entfernen Sie einige, bevor Sie weitere hinzufügen',
+  'La carpeta principal no se puede marcar como favorita: elige un archivo o una carpeta': 'Der Hauptordner kann kein Favorit sein: Wählen Sie eine Datei oder einen Ordner',
   'Hay una copia de seguridad en curso: espera a que termine o cancélala': 'Ein Backup läuft: Warten Sie, bis es abgeschlossen ist, oder brechen Sie es ab',
   'El reinicio desde la web no está instalado en este equipo': 'Neustart über das Web ist auf diesem Gerät nicht installiert',
   'No se pudo programar la orden': 'Der Befehl konnte nicht geplant werden',

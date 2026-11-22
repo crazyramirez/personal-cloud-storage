@@ -76,6 +76,10 @@ export const ICONS = {
   'folder-upload': '<path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2h8.5A1.5 1.5 0 0 1 21 9.5v8A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/><path d="M12 16v-5M9.5 13.5 12 11l2.5 2.5"/>',
   install: '<rect x="6" y="2.5" width="12" height="19" rx="2"/><path d="M12 7v7M9 11.5l3 3 3-3"/>',
   'trash-x': '<path d="M4 7h16"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/><path d="m10 11 4 5M14 11l-4 5"/>',
+  star: '<path d="m12 3.5 2.6 5.3 5.8.85-4.2 4.1 1 5.8L12 16.8l-5.2 2.75 1-5.8-4.2-4.1 5.8-.85z"/>',
+  /** Estrella rellena (favorito marcado): el relleno va en el trazado, el SVG no lleva relleno. */
+  'star-filled': '<path fill="currentColor" d="m12 3.5 2.6 5.3 5.8.85-4.2 4.1 1 5.8L12 16.8l-5.2 2.75 1-5.8-4.2-4.1 5.8-.85z"/>',
+  'star-off': '<path d="m12 3.5 2.6 5.3 5.8.85-4.2 4.1 1 5.8L12 16.8l-5.2 2.75 1-5.8-4.2-4.1 5.8-.85z"/><path d="m3.5 3.5 17 17"/>',
 } as const;
 
 export type IconName = keyof typeof ICONS;
