@@ -93,10 +93,45 @@ describe('visores con ffmpeg y LibreOffice (si están instalados)', () => {
     }
   });
 
+  it('HEVC en MP4: se ofrece el original al navegador (directType) y, si no, se recodifica a H.264', async (t) => {
+    if (tools.ffmpeg === null || tools.ffprobe === null) return t.skip('ffmpeg no instalado');
+    const hevc = async (name: string, tag: string[]): Promise<string | null> => {
+      const file = path.join(dir, name);
+      const result = await runTool(
+        tools.ffmpeg as string,
+        ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=size=320x240:rate=25:duration=3', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=3',
+          '-c:v', 'libx265', '-pix_fmt', 'yuv420p', '-x265-params', 'log-level=error', ...tag, '-c:a', 'aac', '-shortest', file],
+        { timeoutMs: 120_000 },
+      );
+      return result.code === 0 ? file : null;
+    };
+    const mp4 = await hevc('iphone.mp4', ['-tag:v', 'hvc1']);
+    if (mp4 === null) return t.skip('ffmpeg sin libx265');
+    const info = await probe(tools, mp4, 'iphone.mp4');
+    assert.equal(info.playback, 'transcode');
+    assert.match(info.directType ?? '', /^video\/mp4; codecs="hvc1\.1\.6\.L\d+\.B0"$/);
+
+    const hev1 = await hevc('hev1.mov', ['-tag:v', 'hev1']);
+    assert.match((await probe(tools, hev1 as string, 'hev1.mov')).directType ?? '', /codecs="hev1\.1\.6\./);
+
+    const mkv = await hevc('hevc.mkv', []);
+    assert.equal((await probe(tools, mkv as string, 'hevc.mkv')).directType, null, 'MKV: el navegador no abre el contenedor');
+
+    const child = spawnPlayback(tools, mp4, info, 0);
+    const chunks: Buffer[] = [];
+    for await (const chunk of child.stdout) chunks.push(chunk as Buffer);
+    const saved = path.join(dir, 'iphone.stream.mp4');
+    await writeFile(saved, Buffer.concat(chunks));
+    const check = await runTool(tools.ffprobe as string, ['-v', 'error', '-show_entries', 'stream=codec_name', '-of', 'csv=p=0', saved], { timeoutMs: 30_000 });
+    assert.match(check.stdout.toString(), /h264/, 'el flujo convertido es H.264');
+  });
+
   it('MP4 H.264 + AAC se reproduce directamente; miniatura JPEG de vídeo e imagen', async (t) => {
     if (tools.ffmpeg === null || tools.ffprobe === null) return t.skip('ffmpeg no instalado');
     const mp4 = await makeClip('directo.mp4', 'libx264', 'aac');
-    assert.equal((await probe(tools, mp4, 'directo.mp4')).playback, 'direct');
+    const direct = await probe(tools, mp4, 'directo.mp4');
+    assert.equal(direct.playback, 'direct');
+    assert.equal(direct.directType, null);
     const thumb = await makeThumbnail(tools, mp4, 'video', 160, 3);
     assert.equal(thumb[0], 0xff);
     assert.equal(thumb[1], 0xd8);

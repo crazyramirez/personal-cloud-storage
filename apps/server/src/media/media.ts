@@ -254,6 +254,13 @@ export interface MediaInfo {
   readonly video: { readonly codec: string; readonly width: number; readonly height: number } | null;
   readonly audio: { readonly codec: string; readonly channels: number } | null;
   readonly playback: PlaybackMode;
+  /**
+   * Tipo MIME con códecs (RFC 6381) del vídeo original cuando la Pi lo convertiría pero muchos
+   * navegadores lo reproducen tal cual (HEVC/H.265 en MP4 o MOV: Safari, y Chrome, Edge o Firefox
+   * con aceleración). La web lo prueba con canPlayType/MediaCapabilities y, si puede, sirve el
+   * original sin convertir. null = no hay nada que probar.
+   */
+  readonly directType: string | null;
 }
 
 const BROWSER_VIDEO = new Set(['h264', 'vp8', 'vp9', 'av1']);
@@ -268,7 +275,24 @@ interface ProbeStream {
   width?: number;
   height?: number;
   channels?: number;
+  profile?: string;
+  level?: number;
+  codec_tag_string?: string;
   disposition?: { attached_pic?: number };
+}
+
+/** Contenedores que el navegador abre tal cual si entiende sus códecs. */
+const NATIVE_CANDIDATE_CONTAINERS = new Set(['mp4', 'm4v', 'mov']);
+
+/**
+ * Códec HEVC en formato RFC 6381 («hvc1.1.6.L153.B0»): perfil Main o Main 10, nivel de ffprobe
+ * (30 × nivel: 153 = 5.1) y tier Main (ffprobe no lo informa; es lo habitual en cámaras y móviles).
+ */
+function hevcCodecString(stream: ProbeStream): string | null {
+  const tag = stream.codec_tag_string === 'hev1' ? 'hev1' : 'hvc1';
+  const profile = stream.profile === 'Main' ? '1.6' : stream.profile === 'Main 10' ? '2.4' : null;
+  const level = typeof stream.level === 'number' && stream.level > 0 ? stream.level : null;
+  return profile === null || level === null ? null : `${tag}.${profile}.L${level}.B0`;
 }
 
 export async function probe(tools: MediaTools, abs: string, name: string): Promise<MediaInfo> {
@@ -297,7 +321,13 @@ export async function probe(tools: MediaTools, abs: string, name: string): Promi
   else if (video === null) playback = 'remux'; // solo audio: copiar o convertir a AAC es barato
   else playback = 'transcode';
 
-  return { duration: Number.isFinite(duration) ? duration : null, container: data.format?.format_name ?? null, video, audio, playback };
+  let directType: string | null = null;
+  if ((playback === 'remux' || playback === 'transcode') && v !== undefined && v.codec_name === 'hevc' && audioOk && NATIVE_CANDIDATE_CONTAINERS.has(ext)) {
+    const codec = hevcCodecString(v);
+    if (codec !== null) directType = `video/mp4; codecs="${codec}"`;
+  }
+
+  return { duration: Number.isFinite(duration) ? duration : null, container: data.format?.format_name ?? null, video, audio, playback, directType };
 }
 
 /**
@@ -317,9 +347,12 @@ export function spawnPlayback(tools: MediaTools, abs: string, info: MediaInfo, s
       // libx264 y no el codificador por hardware de la Pi (h264_v4l2m2m): este no entrega las
       // cabeceras (SPS/PPS) que exige el MP4 fragmentado y el vídeo resultante no se puede
       // reproducir (comprobado en la Pi el 2026-11-14). 720p «veryfast» va en tiempo real.
+      // HEVC cuesta mucho más de decodificar: a 720p «veryfast» la Pi 4 va a 0,85× con un 1080p
+      // de 15 Mbit/s y el vídeo se atasca; a 960 px «superfast», a 1,2× (medido el 2026-11-22).
+      const heavy = info.video.codec === 'hevc';
       args.push(
-        '-vf', "scale=w='min(1280,iw)':h=-2,format=yuv420p",
-        '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-crf', '23', '-g', '50',
+        '-vf', `scale=w='min(${heavy ? 960 : 1280},iw)':h=-2,format=yuv420p`,
+        '-c:v', 'libx264', '-preset', heavy ? 'superfast' : 'veryfast', '-tune', 'zerolatency', '-crf', '23', '-g', '50',
         '-profile:v', 'high', '-level', '4.0',
       );
     }

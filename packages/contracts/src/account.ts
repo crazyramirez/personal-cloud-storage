@@ -184,6 +184,11 @@ export const MediaInfoResponse = Type.Object({
   audio: Type.Union([Type.Object({ codec: Type.String(), channels: Type.Integer() }), Type.Null()]),
   /** direct: el navegador lo reproduce tal cual · remux/transcode: flujo convertido por la Pi. */
   playback: Type.Union([Type.Literal('direct'), Type.Literal('remux'), Type.Literal('transcode'), Type.Literal('none')]),
+  /**
+   * Tipo MIME con códecs del original cuando muchos navegadores lo reproducen sin convertir (HEVC
+   * en MP4/MOV). La web lo prueba y, si puede, sirve el original; null = no hay nada que probar.
+   */
+  directType: Type.Union([Type.String(), Type.Null()]),
 });
 export type MediaInfoResponse = Static<typeof MediaInfoResponse>;
 

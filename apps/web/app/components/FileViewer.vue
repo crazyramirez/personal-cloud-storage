@@ -4,6 +4,9 @@
  *  - Imagen: tal cual o convertida por la Pi (HEIC, TIFF…); zoom con rueda, botones o doble toque.
  *  - Vídeo/audio: reproducción directa si el navegador puede; si no, flujo convertido por la Pi
  *    (MKV, AVI, WMV…) con su propia barra de tiempo (saltar = pedir el flujo desde ese punto).
+ *    HEVC/H.265 (vídeos de iPhone y cámaras): si este navegador lo decodifica, el original tal
+ *    cual (la Pi no llega a convertirlo en tiempo real); si la reproducción directa falla, se
+ *    pasa sola al flujo convertido.
  *  - PDF: visor del navegador. Documentos de oficina: convertidos a PDF por LibreOffice.
  *  - Texto y código: primeros 2 MB, con ajuste de línea opcional.
  */
@@ -33,6 +36,10 @@ const textTruncated = ref(false);
 const wrap = ref(true);
 const docUrl = ref('');
 const media = ref<MediaInfoResponse | null>(null);
+/** El navegador reproduce el original aunque la Pi lo convertiría (HEVC con decodificación propia). */
+const nativeOk = ref(false);
+/** La reproducción directa falló: se usa el flujo convertido por la Pi. */
+const forceStream = ref(false);
 const streamOffset = ref(0);
 const playerTime = ref(0);
 const playing = ref(false);
@@ -65,7 +72,35 @@ function measureStage(): void {
 }
 
 const imageSrc = computed(() => (current.value === null ? '' : isNativeImage(current.value.name) ? inlineUrl(path.value) : convertedImageUrl(path.value)));
-const streamed = computed(() => media.value !== null && (media.value.playback === 'remux' || media.value.playback === 'transcode'));
+const streamed = computed(
+  () => media.value !== null && media.value.playback !== 'none' && (forceStream.value || ((media.value.playback === 'remux' || media.value.playback === 'transcode') && !nativeOk.value)),
+);
+
+/** ¿Decodifica este navegador el original? canPlayType y, si duda, MediaCapabilities. */
+async function browserDecodes(info: MediaInfoResponse): Promise<boolean> {
+  const type = info.directType;
+  if (type === null || info.video === null) return false;
+  try {
+    if (document.createElement('video').canPlayType(type) === 'probably') return true;
+    if (!('mediaCapabilities' in navigator)) return false;
+    const result = await navigator.mediaCapabilities.decodingInfo({
+      type: 'file',
+      video: { contentType: type, width: info.video.width, height: info.video.height, bitrate: 20_000_000, framerate: 30 },
+    });
+    return result.supported;
+  } catch {
+    return false;
+  }
+}
+
+/** Error del reproductor: si iba directo y la Pi puede convertirlo, se pasa al flujo convertido. */
+function onPlayerError(fallbackText: string): void {
+  if (!streamed.value && media.value !== null && media.value.playback !== 'none') {
+    forceStream.value = true;
+    return;
+  }
+  error.value = streamed.value ? t('viewer.videoConvertFailed') : fallbackText;
+}
 const mediaSrc = computed(() => (streamed.value ? streamUrl(path.value, streamOffset.value) : inlineUrl(path.value)));
 const duration = computed(() => media.value?.duration ?? 0);
 const isAudioOnly = computed(() => kind.value === 'audio' || (media.value !== null && media.value.video === null));
@@ -85,6 +120,8 @@ async function prepare(): Promise<void> {
   textTruncated.value = false;
   docUrl.value = '';
   media.value = null;
+  nativeOk.value = false;
+  forceStream.value = false;
   streamOffset.value = 0;
   playerTime.value = 0;
   zoom.value = 1;
@@ -121,6 +158,11 @@ async function prepare(): Promise<void> {
       }
       if (run !== generation) return;
       if (media.value?.playback === 'none') throw new Error(t('viewer.noPlayableMedia'));
+      if (media.value !== null && media.value.directType !== null) {
+        const native = await browserDecodes(media.value);
+        if (run !== generation) return;
+        nativeOk.value = native;
+      }
     }
   } catch (failure) {
     if (run === generation) error.value = errorText(failure, 'viewer.openFailed');
@@ -395,7 +437,7 @@ onBeforeUnmount(() => {
             @timeupdate="onTimeUpdate"
             @play="playing = true"
             @pause="playing = false"
-            @error="error = streamed ? t('viewer.videoConvertFailed') : t('viewer.browserCantPlay')"
+            @error="onPlayerError(t('viewer.browserCantPlay'))"
           />
           <audio
             v-else
@@ -408,7 +450,7 @@ onBeforeUnmount(() => {
             @timeupdate="onTimeUpdate"
             @play="playing = true"
             @pause="playing = false"
-            @error="error = t('viewer.audioFailed')"
+            @error="onPlayerError(t('viewer.audioFailed'))"
           />
           <div v-if="streamed" class="controls">
             <button type="button" class="ib" :aria-label="playing ? t('viewer.pause') : t('viewer.play')" @click="togglePlay"><AppIcon :name="playing ? 'pause' : 'play'" /></button>
