@@ -18,8 +18,8 @@ const diskTone = computed(() => (percent.value >= 95 ? 'danger' : percent.value 
 
 /** Se comprueba de verdad: no se afirma «cifrada» si la página se cargó por HTTP. */
 const encrypted = import.meta.client && window.location.protocol === 'https:';
-/** Entrando por Tailscale (nombre *.ts.net o IP 100.64/10): fuera de casa, por VPN privada. */
-const viaTailscale = import.meta.client && /\.ts\.net$|^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(window.location.hostname);
+/** Entrando por Tailscale: fuera de casa, por VPN privada. */
+const remote = viaTailscale();
 const publicCert = import.meta.client && window.location.hostname.endsWith('.ts.net');
 
 const trash = ref<{ entries: unknown[]; totalBytes: number } | null>(null);
@@ -162,7 +162,7 @@ onBeforeUnmount(() => {
         </div>
         <dl class="kv">
           <dt>{{ t('panel.scope') }}</dt>
-          <dd>{{ t('panel.scopeValue') }}<template v-if="viaTailscale">{{ t('panel.viaTailscale') }}</template></dd>
+          <dd>{{ t('panel.scopeValue') }}<template v-if="remote">{{ t('panel.viaTailscale') }}</template></dd>
           <dt>{{ t('panel.connection') }}</dt>
           <dd v-if="encrypted">{{ publicCert ? t('panel.encryptedTailscale') : t('panel.encryptedOwn') }}</dd>
           <dd v-else class="warn-text">{{ t('panel.unencrypted') }}</dd>

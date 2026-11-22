@@ -34,42 +34,50 @@ async function submit(): Promise<void> {
     busy.value = false;
   }
 }
+
+// Enlace discreto a la guía de Tailscale (se oculta si ya se entra por Tailscale).
+const remote = viaTailscale();
+const guideOpen = ref(false);
 </script>
 
 <template>
-  <form class="card form" @submit.prevent="submit">
-    <div>
-      <h1>{{ t('setup.title') }}</h1>
-      <p class="muted">{{ t('setup.lead') }}</p>
-    </div>
+  <div>
+    <form class="card form" @submit.prevent="submit">
+      <div>
+        <h1>{{ t('setup.title') }}</h1>
+        <p class="muted">{{ t('setup.lead') }}</p>
+      </div>
 
-    <div class="field">
-      <label for="codigo">{{ t('setup.code') }}</label>
-      <input id="codigo" v-model="token" class="input mono-input" type="text" inputmode="text" maxlength="23" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" aria-describedby="codigo-ayuda" required>
-      <span id="codigo-ayuda" class="muted help">{{ t('setup.codeHelp') }}</span>
-    </div>
+      <div class="field">
+        <label for="codigo">{{ t('setup.code') }}</label>
+        <input id="codigo" v-model="token" class="input mono-input" type="text" inputmode="text" maxlength="23" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" aria-describedby="codigo-ayuda" required>
+        <span id="codigo-ayuda" class="muted help">{{ t('setup.codeHelp') }}</span>
+      </div>
 
-    <div class="field">
-      <label for="usuario">{{ t('setup.username') }}</label>
-      <input id="usuario" v-model="username" class="input" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" pattern="[A-Za-z0-9._\-]+" maxlength="64" aria-describedby="usuario-ayuda" required>
-      <span id="usuario-ayuda" class="muted help">{{ t('setup.usernameHelp') }}</span>
-    </div>
+      <div class="field">
+        <label for="usuario">{{ t('setup.username') }}</label>
+        <input id="usuario" v-model="username" class="input" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" pattern="[A-Za-z0-9._\-]+" maxlength="64" aria-describedby="usuario-ayuda" required>
+        <span id="usuario-ayuda" class="muted help">{{ t('setup.usernameHelp') }}</span>
+      </div>
 
-    <div class="field">
-      <label for="clave">{{ t('setup.password') }}</label>
-      <input id="clave" v-model="password" class="input" type="password" autocomplete="new-password" aria-describedby="clave-ayuda" required>
-      <span id="clave-ayuda" class="help" :class="tooShort ? 'bad' : 'muted'">{{ t('setup.passwordHelp', { n: MIN_LENGTH }) }}</span>
-    </div>
+      <div class="field">
+        <label for="clave">{{ t('setup.password') }}</label>
+        <input id="clave" v-model="password" class="input" type="password" autocomplete="new-password" aria-describedby="clave-ayuda" required>
+        <span id="clave-ayuda" class="help" :class="tooShort ? 'bad' : 'muted'">{{ t('setup.passwordHelp', { n: MIN_LENGTH }) }}</span>
+      </div>
 
-    <div class="field">
-      <label for="clave2">{{ t('setup.repeat') }}</label>
-      <input id="clave2" v-model="repeat" class="input" type="password" autocomplete="new-password" aria-describedby="clave2-ayuda" required>
-      <span v-if="mismatch" id="clave2-ayuda" class="help bad">{{ t('setup.mismatch') }}</span>
-    </div>
+      <div class="field">
+        <label for="clave2">{{ t('setup.repeat') }}</label>
+        <input id="clave2" v-model="repeat" class="input" type="password" autocomplete="new-password" aria-describedby="clave2-ayuda" required>
+        <span v-if="mismatch" id="clave2-ayuda" class="help bad">{{ t('setup.mismatch') }}</span>
+      </div>
 
-    <p v-if="error" role="alert" class="notice notice-danger">{{ error }}</p>
-    <button type="submit" class="btn btn-primary" :disabled="!ready || busy">{{ busy ? t('setup.creating') : t('setup.submit') }}</button>
-  </form>
+      <p v-if="error" role="alert" class="notice notice-danger">{{ error }}</p>
+      <button type="submit" class="btn btn-primary" :disabled="!ready || busy">{{ busy ? t('setup.creating') : t('setup.submit') }}</button>
+    </form>
+    <p v-if="!remote" class="aside muted">{{ t('tailscale.linkLead') }} <button type="button" class="aside-link" @click="guideOpen = true">{{ t('tailscale.link') }}</button></p>
+    <TailscaleGuide v-if="guideOpen" @close="guideOpen = false" />
+  </div>
 </template>
 
 <style scoped>
@@ -99,5 +107,25 @@ h1 {
 .mono-input {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   letter-spacing: 0.04em;
+}
+.aside {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.aside-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.aside-link:hover {
+  color: var(--accent);
 }
 </style>

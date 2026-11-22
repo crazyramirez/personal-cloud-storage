@@ -4,8 +4,8 @@ const storage = useStorage();
 const { theme, toggle } = useTheme();
 const { pending, totals, panelOpen } = useTransfers();
 const route = useRoute();
-/** Acceso fuera de casa por Tailscale (nombre *.ts.net o IP 100.64/10). */
-const remote = import.meta.client && /\.ts\.net$|^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(window.location.hostname);
+/** Acceso fuera de casa por Tailscale. */
+const remote = viaTailscale();
 
 /** Alto real de la cabecera fija (cambia si sus botones se reparten en dos líneas). Lo usan
  *  los elementos «sticky» de las páginas para quedarse justo debajo y no tapados por ella. */

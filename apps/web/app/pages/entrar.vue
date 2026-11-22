@@ -76,31 +76,39 @@ onMounted(async () => {
   }
 });
 onBeforeUnmount(() => conditional?.abort());
+
+// Enlace discreto a la guía de Tailscale (se oculta si ya se entra por Tailscale).
+const remote = viaTailscale();
+const guideOpen = ref(false);
 </script>
 
 <template>
-  <form class="card form" @submit.prevent="submit">
-    <div>
-      <h1>{{ t('auth.title') }}</h1>
-      <p class="muted">{{ t('auth.subtitle') }}</p>
-    </div>
-    <button v-if="passkeyReady" type="button" class="btn btn-primary big" :disabled="busy" @click="withPasskey">
-      <AppIcon name="fingerprint" :size="20" />{{ t('auth.withPasskey') }}
-    </button>
-    <p v-if="passkeyReady" class="muted small">{{ t('auth.passkeyHint') }}</p>
-    <div v-if="passkeyReady" class="or" aria-hidden="true"><span>{{ t('auth.orPassword') }}</span></div>
-    <div class="field">
-      <label for="usuario">{{ t('auth.username') }}</label>
-      <input id="usuario" v-model="username" class="input" type="text" autocomplete="username webauthn" autocapitalize="none" spellcheck="false" required>
-    </div>
-    <div class="field">
-      <label for="clave">{{ t('auth.password') }}</label>
-      <input id="clave" v-model="password" class="input" type="password" autocomplete="current-password" required>
-    </div>
-    <p v-if="error" role="alert" class="notice notice-danger">{{ error }}</p>
-    <button type="submit" class="btn" :class="passkeyReady ? '' : 'btn-primary'" :disabled="busy">{{ busy ? t('auth.checking') : t('auth.submit') }}</button>
-    <p v-if="!passkeyReady" class="muted small">{{ t('auth.passkeyUnsupportedBefore') }}<strong>https://{{ session.localName.value || t('common.serverLocalName') }}</strong>{{ t('auth.passkeyUnsupportedAfter') }}</p>
-  </form>
+  <div>
+    <form class="card form" @submit.prevent="submit">
+      <div>
+        <h1>{{ t('auth.title') }}</h1>
+        <p class="muted">{{ t('auth.subtitle') }}</p>
+      </div>
+      <button v-if="passkeyReady" type="button" class="btn btn-primary big" :disabled="busy" @click="withPasskey">
+        <AppIcon name="fingerprint" :size="20" />{{ t('auth.withPasskey') }}
+      </button>
+      <p v-if="passkeyReady" class="muted small">{{ t('auth.passkeyHint') }}</p>
+      <div v-if="passkeyReady" class="or" aria-hidden="true"><span>{{ t('auth.orPassword') }}</span></div>
+      <div class="field">
+        <label for="usuario">{{ t('auth.username') }}</label>
+        <input id="usuario" v-model="username" class="input" type="text" autocomplete="username webauthn" autocapitalize="none" spellcheck="false" required>
+      </div>
+      <div class="field">
+        <label for="clave">{{ t('auth.password') }}</label>
+        <input id="clave" v-model="password" class="input" type="password" autocomplete="current-password" required>
+      </div>
+      <p v-if="error" role="alert" class="notice notice-danger">{{ error }}</p>
+      <button type="submit" class="btn" :class="passkeyReady ? '' : 'btn-primary'" :disabled="busy">{{ busy ? t('auth.checking') : t('auth.submit') }}</button>
+      <p v-if="!passkeyReady" class="muted small">{{ t('auth.passkeyUnsupportedBefore') }}<strong>https://{{ session.localName.value || t('common.serverLocalName') }}</strong>{{ t('auth.passkeyUnsupportedAfter') }}</p>
+    </form>
+    <p v-if="!remote" class="aside muted">{{ t('tailscale.linkLead') }} <button type="button" class="aside-link" @click="guideOpen = true">{{ t('tailscale.link') }}</button></p>
+    <TailscaleGuide v-if="guideOpen" @close="guideOpen = false" />
+  </div>
 </template>
 
 <style scoped>
@@ -142,5 +150,25 @@ h1 {
   flex: 1;
   height: 1px;
   background: var(--border);
+}
+.aside {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.aside-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.aside-link:hover {
+  color: var(--accent);
 }
 </style>

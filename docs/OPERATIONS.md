@@ -125,10 +125,12 @@ Estado del servicio: `systemctl status pcloud caddy`, `journalctl -u pcloud -f`,
 
 - Instalar/reautorizar: `sudo bash /opt/pcloud/current/deploy/linux/setup/pcloud-install-tailscale.sh --execute [--hostname <host>]` (enlace de autorización en la salida).
 - En la consola de Tailscale, activar *MagicDNS* y *HTTPS Certificates*. Después: `sudo bash /opt/pcloud/current/deploy/linux/setup/pcloud-install-caddy.sh --execute` (añade el sitio `*.ts.net`).
+- En *Machines*, desactivar la caducidad de la clave del servidor (*Disable key expiry*); si no, cada 180 días deja de ser accesible desde fuera hasta reautorizarlo.
 - URL fuera de casa: `https://<host>.<tailnet>.ts.net/` (certificado válido de Let's Encrypt emitido por Tailscale). Requiere la app Tailscale con la misma cuenta en el dispositivo.
 - Nunca `tailscale funnel`/`serve`: solo dispositivos de la cuenta ([ADR-0016](adr/0016-acceso-remoto-tailscale.md)).
 - Comprobar: `tailscale status`; `curl -sS -o /dev/null -w '%{http_code}\n' https://<host>.<tailnet>.ts.net/` → 200.
 - Cortar el acceso remoto: `sudo tailscale down` (la LAN sigue igual).
+- Guía para la persona: en la web, enlace «Cómo configurar Tailscale» en las pantallas de entrada y Ajustes → Acceso desde fuera de casa (`apps/web/app/components/TailscaleGuide.vue`).
 
 ## 5. Comprobaciones rutinarias
 

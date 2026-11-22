@@ -16,6 +16,10 @@ const languageOptions = computed<Array<{ v: LocalePreference; l: string; lang?: 
 ]);
 const languageModel = computed<LocalePreference>({ get: () => localePreference.value, set: (value) => setLocalePreference(value) });
 
+// ── Acceso desde fuera de casa (guía de Tailscale) ─────────────────────────────────────────
+const remote = viaTailscale();
+const tailscaleGuide = ref(false);
+
 // ── Contraseña ──────────────────────────────────────────────────────────────────────────────
 const current = ref('');
 const next = ref('');
@@ -376,6 +380,13 @@ async function installApp(): Promise<void> {
           <div v-if="isOwner" id="cfg-power" class="cell"><PowerSettings /></div>
           <div id="cfg-net" class="cell" :class="{ 'span-2': !isOwner }"><NetworkTest variant="section" /></div>
           <div v-if="isOwner" id="cfg-speed" class="cell"><DiskSpeedTest /></div>
+          <section id="cfg-remote" class="card sec cell span-2" aria-labelledby="s-remote">
+            <header><AppIcon name="globe" /><h2 id="s-remote">{{ t('tailscale.card') }}</h2></header>
+            <p class="muted">{{ t('tailscale.cardIntro') }}</p>
+            <p class="notice notice-info"><AppIcon :name="remote ? 'check' : 'home'" class="accent" /><span>{{ remote ? t('tailscale.cardRemote') : t('tailscale.cardLocal') }}</span></p>
+            <button type="button" class="btn" @click="tailscaleGuide = true"><AppIcon name="info" />{{ t('tailscale.cardButton') }}</button>
+            <TailscaleGuide v-if="tailscaleGuide" @close="tailscaleGuide = false" />
+          </section>
         </div>
       </div>
     </div>
