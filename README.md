@@ -4,22 +4,63 @@
 
 # Personal Cloud Storage
 
-Nube personal autocontenida: un servidor Linux pequeño (una **Raspberry Pi**, un mini PC o un portátil viejo) con un **HDD USB en exFAT o NTFS**, sin servicios de terceros. Explorador web con subidas reanudables, papelera, visores, llaves de acceso (passkeys) y acceso remoto privado opcional por Tailscale.
+Nube personal autocontenida: un servidor Linux pequeño (una **Raspberry Pi**, un mini PC o un portátil viejo) con un **HDD USB en exFAT o NTFS**, sin servicios de terceros. Explorador web con subidas reanudables, favoritos, papelera, visores, enlaces para compartir, llaves de acceso (passkeys), copia de seguridad en disco externo y acceso remoto privado opcional por Tailscale.
 
 > **Mandato principal:** la ausencia, desconexión o fallo del disco nunca puede interpretarse como un borrado ni producir escrituras en el disco del sistema.
 
 ## Funciones
 
-- Explorador web (SPA, móvil y escritorio): navegar, crear carpetas, subir (reanudable, sin sobrescribir), descargar, mover, copiar, renombrar, ZIP, papelera y recientes.
-- **Favoritos:** marca carpetas y archivos con la estrella; fíltralos en el explorador y tenlos a mano en el Panel, en su página y en el acceso rápido de la barra lateral. Siguen al elemento al renombrarlo o moverlo y nunca se quitan solos si el disco no está ([ADR-0027](docs/adr/0027-favoritos.md)).
-- Visores de imagen, vídeo, audio, PDF y documentos de Office (con ffmpeg y LibreOffice, opcionales).
-- **Interfaz en 7 idiomas:** español, inglés, francés, alemán, italiano, chino simplificado y japonés. Por defecto, el del navegador (si no es ninguno de ellos, inglés); se cambia en Ajustes → Idioma.
-- Cuentas con contraseña (Argon2id) y llaves de acceso; sesiones revocables; registro de auditoría.
-- HTTPS en la LAN con CA propia (Caddy). Acceso remoto solo por VPN (Tailscale), **nunca** abierto a Internet.
+### Archivos
+
+- **Explorador web** para móvil y escritorio: navegar, crear carpetas y archivos de texto, subir, descargar, mover, copiar, duplicar, renombrar y descargar en ZIP (una carpeta entera o una selección).
+- **Subidas reanudables** que nunca sobrescriben: si se corta la conexión, siguen desde donde iban. Arrastra archivos o carpetas enteras (a cualquier profundidad). El progreso se ve en el propio listado y en el panel de subidas de la cabecera, con pausa, reanudación y cancelación.
+- **Como un explorador de escritorio:** vista de lista o iconos en tres tamaños, orden por nombre, fecha, tamaño o tipo, y filtro rápido por nombre (ignora mayúsculas y acentos). Selección múltiple con Mayús/Ctrl y teclado completo (flechas, Intro, Supr, F2, Ctrl+C/X/V, Ctrl+A, escribir para saltar a un nombre). Arrastrar para mover (Ctrl = copiar) y menú contextual con clic derecho o pulsación larga.
+- **Panel de detalles** con vista previa, ubicación y **tamaño real de las carpetas**, que también sale en la columna «Tamaño» de la lista. Se calcula por detrás sin bloquear nada.
+- **Favoritos:** marca carpetas y archivos con la estrella desde el menú, la barra de selección, el panel de detalles, el título de la carpeta o el visor. El botón ★ muestra solo los favoritos de la carpeta. Están en el Panel, en su propia página (búsqueda, tipo y orden) y en el «Acceso rápido» de la barra lateral. Cada cuenta tiene los suyos. Siguen al elemento al renombrarlo o moverlo y nunca se quitan solos si el disco no está ([ADR-0027](docs/adr/0027-favoritos.md)).
+- **Papelera** con restauración (también «Deshacer» justo después de eliminar). Se vacía sola pasados 30 días (configurable). El borrado definitivo es solo del propietario y siempre con confirmación.
+- **Copiar enlace** a una carpeta o archivo para abrirlo en otro dispositivo de tu red; el archivo se abre directamente en el visor.
+
+### Visores
+
+- Imágenes (con zoom y pellizco), PDF, texto y código, vídeo y audio, sin descargar nada.
+- Con ffmpeg y LibreOffice (opcionales), además:
+  - imágenes HEIC, TIFF, RAW y más, convertidas por el servidor;
+  - vídeo y audio en formatos que el navegador no abre (MKV, AVI, WMV, WMA…), convertidos al vuelo;
+  - documentos de Office (Word, Excel, PowerPoint, OpenDocument…), vistos como PDF;
+  - miniaturas de fotos y vídeos.
+- **Vídeos H.265/HEVC** (iPhone, cámaras): si el navegador sabe reproducirlos (Safari; Chrome, Edge o Firefox con aceleración), se sirve el original sin convertir. Si no, el servidor los convierte a un tamaño que puede reproducir sin cortes. Si la reproducción directa de cualquier vídeo falla, el visor pasa solo a la versión convertida.
+
+### Panel
+
+- **Estado del disco de datos:** espacio libre, formato y avisos al 90 y 95 %. Además, un indicador de copia de seguridad y un resumen de transferencias, acceso y papelera.
+- **Recursos del equipo en directo:** CPU, memoria, temperatura, red, disco del sistema y datos del dispositivo. Incluye pruebas de velocidad de la red y del disco.
+- **Favoritos** y **Recientes** (lo último subido o creado que sigue existiendo, también lo que copian los ordenadores por la carpeta de red, agrupado por carpeta: [ADR-0024](docs/adr/0024-recientes-de-la-carpeta-de-red.md), [ADR-0025](docs/adr/0025-recientes-agrupa-la-carpeta-de-red.md), [ADR-0026](docs/adr/0026-recientes-versiones-dev-backup-studio.md)).
+- **Actividad:** registro de lo que se sube, mueve, elimina, comparte… El propietario ve el de todas las cuentas.
+
+### Compartir
+
+- **Enlaces para invitados sin cuenta** (solo el propietario): un archivo o una carpeta de solo lectura, con caducidad obligatoria (1, 7 o 30 días) y, opcionalmente, contraseña y límite de descargas. Se pueden retirar al instante en Ajustes → Enlaces compartidos.
+- Solo se publica una puerta mínima de descarga, en un nodo de Tailscale aparte y **solo mientras hay enlaces activos**. La app nunca queda expuesta a Internet y no se abre ningún puerto del router ([ADR-0018](docs/adr/0018-enlaces-para-invitados.md), [ADR-0019](docs/adr/0019-nodo-tailscale-dedicado-enlaces.md)).
+
+### Cuentas y seguridad
+
+- Cuenta de propietario y cuentas de usuario. El propietario las crea, les cambia la contraseña o las elimina.
+- Contraseñas con Argon2id y **llaves de acceso** (Face ID, Touch ID, Windows Hello…). Las sesiones se ven en Ajustes y se pueden cerrar una a una. Todo queda en el registro de auditoría.
+- HTTPS en la LAN con CA propia (Caddy). Acceso desde fuera de casa **solo por VPN (Tailscale)**, nunca abierto a Internet, con una guía paso a paso en la propia web ([ADR-0016](docs/adr/0016-acceso-remoto-tailscale.md)).
+
+### Disco y servidor
+
 - `StorageGuardian`: bloquea las escrituras en cuanto el disco desaparece, se cuelga o cambia, y nunca escribe en el mountpoint vacío.
 - Los ficheros siguen siendo ficheros normales en el disco: lo conectas a Windows o macOS y los lees tal cual.
 - **Copia de seguridad en un disco USB externo**: lo conectas, la nube lo reconoce y sincroniza solo lo nuevo y lo modificado. Lo borrado no se borra de la copia: se aparta con fecha. Al terminar se expulsa solo ([ADR-0017](docs/adr/0017-copia-de-seguridad-disco-externo.md)).
 - **Carpeta de red para las copias de tus ordenadores** (opcional): comparte por SMB solo la carpeta `DEV_Backup_Studio`, para que Windows o macOS (por ejemplo con [DEV Backup Studio](#juntos-con-dev-backup-studio)) hagan ahí su copia de seguridad. Cada ordenador se conecta con un botón y un código de 6 cifras, sin contraseñas. Si el disco no está, la conexión se rechaza ([ADR-0021](docs/adr/0021-carpeta-de-red-smb.md), [ADR-0022](docs/adr/0022-emparejar-ordenadores-con-codigo.md)).
+- **Reiniciar y apagar el equipo desde Ajustes** (propietario), sin abrir una terminal ([ADR-0020](docs/adr/0020-reiniciar-apagar-desde-la-web.md)).
+
+### App
+
+- **Instalable como app** (PWA) en el móvil y el ordenador, con accesos directos a Archivos, Favoritos y Papelera. En el móvil, barra de pestañas como una app nativa.
+- **Interfaz en 7 idiomas:** español, inglés, francés, alemán, italiano, chino simplificado y japonés. Por defecto, el del navegador (si no es ninguno de ellos, inglés); se cambia en Ajustes → Idioma.
+- Tema claro y oscuro. La versión instalada se ve en la barra lateral y en Ajustes.
 
 ## Juntos con DEV Backup Studio
 
