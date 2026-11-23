@@ -29,6 +29,7 @@ Formato: Contexto → Decisión → Consecuencias → Alternativas. Un ADR acept
 | [0025](0025-recientes-agrupa-la-carpeta-de-red.md) | Recientes agrupa lo copiado por la carpeta de red en la carpeta copiada y omite lo oculto | Aceptado |
 | [0026](0026-recientes-versiones-dev-backup-studio.md) | Las versiones apartadas por DEV Backup Studio cuentan como cambio de su carpeta en Recientes | Aceptado |
 | [0027](0027-favoritos.md) | Favoritos por usuario, en la base de datos y que siguen al elemento al renombrar o mover | Aceptado |
+| [0028](0028-orden-personalizado-favoritos.md) | Orden personalizado de los favoritos (arrastrar; también el del acceso rápido) | Aceptado |
 
 ## Pendientes
 

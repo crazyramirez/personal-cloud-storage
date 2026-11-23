@@ -30,13 +30,13 @@ export const FavoriteEntry = Type.Object({
 export type FavoriteEntry = Static<typeof FavoriteEntry>;
 
 export const FavoriteListResponse = Type.Object({
-  /** Lo último marcado primero. */
+  /** En el orden personalizado (lo nuevo entra al principio). */
   entries: Type.Array(FavoriteEntry),
   max: Type.Integer(),
 });
 export type FavoriteListResponse = Static<typeof FavoriteListResponse>;
 
-/** Añadir o quitar favoritos (selección múltiple del explorador). */
+/** Añadir, quitar o reordenar favoritos (en el orden, la lista en el orden nuevo). */
 export const FavoritePathsRequest = Type.Object(
   { paths: Type.Array(Type.String({ maxLength: 4096 }), { minItems: 1, maxItems: MAX_FAVORITES }) },
   { additionalProperties: false },

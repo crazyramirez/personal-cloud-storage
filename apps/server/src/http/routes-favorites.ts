@@ -90,6 +90,13 @@ export function registerFavoriteRoutes(app: FastifyInstance, ctx: RouteContext):
     return listFor(session.userId);
   });
 
+  // Orden personalizado (arrastrar en Favoritos): la lista en el orden nuevo. No necesita el disco.
+  app.post(`${API}/favorites/order`, { schema: { body: FavoritePathsRequest } }, async (request): Promise<FavoriteListResponse> => {
+    const session = ctx.user(request);
+    store.reorder(session.userId, (request.body as FavoritePathsRequest).paths.map(normalize));
+    return listFor(session.userId);
+  });
+
   // Quitar: no necesita el disco (se puede quitar algo que ya no existe o con el disco desconectado).
   app.post(`${API}/favorites/remove`, { schema: { body: FavoritePathsRequest } }, async (request): Promise<FavoriteListResponse> => {
     const session = ctx.user(request);

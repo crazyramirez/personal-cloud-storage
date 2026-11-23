@@ -4,6 +4,8 @@
  *  - `panel`: tarjeta del Panel con los últimos marcados y enlace a la página.
  *  - `page`: la página Favoritos, con búsqueda, tipo, orden y los que ya no están en su sitio.
  * Un toque abre la carpeta o el archivo en el visor; clic derecho o pulsación larga, más acciones.
+ * Orden personalizado: arrastrar con el ratón, o mantener pulsado y mover el dedo (como en la
+ * pantalla de inicio del móvil: el menú se abre y, al mover, se cierra y empieza el arrastre).
  */
 import type { FavoriteEntry } from '@pcloud/contracts';
 
@@ -24,13 +26,15 @@ watch(storage.readable, (now, before) => {
   if (now && !before) void favorites.refresh();
 });
 
-const SORT_KEY = 'pcloud.favorites.prefs';
+// v2: llegó el orden personalizado, que pasa a ser el de partida.
+const SORT_KEY = 'pcloud.favorites.prefs.v2';
+type SortKey = 'custom' | 'added' | 'name' | 'modified';
 const query = ref('');
 const kind = ref<'all' | 'dir' | 'file'>('all');
-const sortKey = ref<'added' | 'name' | 'modified'>('added');
+const sortKey = ref<SortKey>('custom');
 try {
   const saved = JSON.parse(localStorage.getItem(SORT_KEY) ?? '{}') as Partial<{ sort: string; kind: string }>;
-  if (saved.sort === 'added' || saved.sort === 'name' || saved.sort === 'modified') sortKey.value = saved.sort;
+  if (saved.sort === 'custom' || saved.sort === 'added' || saved.sort === 'name' || saved.sort === 'modified') sortKey.value = saved.sort;
   if (saved.kind === 'all' || saved.kind === 'dir' || saved.kind === 'file') kind.value = saved.kind;
 } catch {
   // Sin almacenamiento: valores por defecto.
@@ -49,15 +53,219 @@ const present = computed(() => favorites.entries.value.filter((entry) => entry.e
 const missing = computed(() => favorites.entries.value.filter((entry) => entry.exists === false));
 const diskUnknown = computed(() => favorites.entries.value.some((entry) => entry.exists === null));
 
+/** Ordena según el criterio elegido; «custom» es el orden en que llegan (el guardado). */
+function sortList(list: readonly FavoriteEntry[], key: SortKey): FavoriteEntry[] {
+  const names = collator();
+  if (key === 'name') return [...list].sort((a, b) => (a.type !== b.type ? (a.type === 'dir' ? -1 : 1) : names.compare(a.name, b.name)));
+  if (key === 'modified') return [...list].sort((a, b) => (b.mtime ?? '').localeCompare(a.mtime ?? ''));
+  if (key === 'added') return [...list].sort((a, b) => b.addedAt.localeCompare(a.addedAt));
+  return [...list];
+}
+const activeSort = computed<SortKey>(() => (props.mode === 'panel' ? 'custom' : sortKey.value));
+
 const visible = computed(() => {
   if (props.mode === 'panel') return present.value.slice(0, props.limit);
   const needle = fold(query.value.trim());
-  const names = collator();
   const list = present.value.filter((entry) => (kind.value === 'all' || entry.type === kind.value) && (needle === '' || fold(entry.name).includes(needle) || fold(entry.dir).includes(needle)));
-  if (sortKey.value === 'name') return [...list].sort((a, b) => (a.type !== b.type ? (a.type === 'dir' ? -1 : 1) : names.compare(a.name, b.name)));
-  if (sortKey.value === 'modified') return [...list].sort((a, b) => (b.mtime ?? '').localeCompare(a.mtime ?? ''));
-  return list;
+  return sortList(list, sortKey.value);
 });
+
+// ── Orden personalizado ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Guarda el orden nuevo de lo que se ve. Lo que no se ve (filtrado, no disponible o fuera del
+ * Panel) conserva su hueco: los visibles se reparten en los huecos que ya ocupaban. Si estaba
+ * ordenado por otro criterio, ese orden pasa a ser el personalizado y se selecciona.
+ */
+function commitOrder(newVisible: readonly string[]): void {
+  const base = sortList(favorites.entries.value, activeSort.value).map((entry) => entry.path);
+  const shownSet = new Set(newVisible);
+  const slots = base.flatMap((p, index) => (shownSet.has(p) ? [index] : []));
+  const result = [...base];
+  slots.forEach((slot, index) => {
+    result[slot] = newVisible[index] as string;
+  });
+  if (props.mode === 'page') sortKey.value = 'custom';
+  void favorites.reorder(result);
+}
+
+/** «Mover antes» / «Mover después» (menú y teclado). */
+function moveBy(entry: FavoriteEntry, step: -1 | 1): void {
+  const order = visible.value.map((item) => item.path);
+  const from = order.indexOf(entry.path);
+  const to = from + step;
+  if (from === -1 || to < 0 || to >= order.length) return;
+  order.splice(from, 1);
+  order.splice(to, 0, entry.path);
+  commitOrder(order);
+}
+
+const HOLD_MS = 450;
+interface Gesture {
+  readonly path: string;
+  readonly pointerId: number;
+  readonly touch: boolean;
+  readonly x0: number;
+  readonly y0: number;
+  readonly el: HTMLElement;
+  armed: boolean;
+}
+let gesture: Gesture | null = null;
+let holdTimer: ReturnType<typeof setTimeout> | null = null;
+/** El clic que sigue a un arrastre o a una pulsación larga no abre el elemento. */
+let suppressClick = false;
+/** Elemento «levantado» al mantener pulsado (antes de empezar a moverlo). */
+const lifted = ref<string | null>(null);
+/** Arrastre en curso: orden provisional y posición del dedo o el puntero. */
+const drag = ref<{ path: string; order: string[]; x: number; y: number; dx: number; dy: number; w: number } | null>(null);
+let scrollFrame = 0;
+
+const byPath = computed(() => new Map(favorites.entries.value.map((entry) => [entry.path, entry])));
+const shown = computed(() =>
+  drag.value === null ? visible.value : drag.value.order.flatMap((p) => byPath.value.get(p) ?? []),
+);
+const dragEntry = computed(() => (drag.value === null ? null : (byPath.value.get(drag.value.path) ?? null)));
+
+// Android abre su propio menú al mantener pulsado: mientras dura el gesto, se anula.
+const swallowNative = (event: Event): void => {
+  event.preventDefault();
+  event.stopPropagation();
+};
+// Con el elemento levantado o en movimiento, el dedo no desplaza la página.
+const blockScroll = (event: TouchEvent): void => {
+  if ((gesture?.armed === true && gesture.touch) || drag.value !== null) event.preventDefault();
+};
+onMounted(() => document.addEventListener('touchmove', blockScroll, { passive: false }));
+onBeforeUnmount(() => {
+  document.removeEventListener('touchmove', blockScroll);
+  endGesture();
+});
+
+function onPointerDown(event: PointerEvent, entry: FavoriteEntry): void {
+  suppressClick = false;
+  if (event.pointerType === 'mouse' && event.button !== 0) return;
+  endGesture();
+  const touch = event.pointerType !== 'mouse';
+  gesture = { path: entry.path, pointerId: event.pointerId, touch, x0: event.clientX, y0: event.clientY, el: event.currentTarget as HTMLElement, armed: !touch };
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('pointercancel', onPointerCancel);
+  if (!touch) return;
+  window.addEventListener('contextmenu', swallowNative, true);
+  holdTimer = setTimeout(() => {
+    holdTimer = null;
+    if (gesture === null) return;
+    gesture.armed = true;
+    lifted.value = gesture.path;
+    holdFinger();
+    navigator.vibrate?.(12);
+    openMenuFor({ x: gesture.x0, y: gesture.y0 }, menu(entry), entry.name);
+  }, HOLD_MS);
+}
+
+function onPointerMove(event: PointerEvent): void {
+  if (gesture === null || event.pointerId !== gesture.pointerId) return;
+  if (drag.value !== null) {
+    updateDrag(event.clientX, event.clientY);
+    return;
+  }
+  const distance = Math.hypot(event.clientX - gesture.x0, event.clientY - gesture.y0);
+  if (gesture.touch && !gesture.armed) {
+    if (distance > 10) endGesture(); // desplazando la página
+    return;
+  }
+  if (distance > (gesture.touch ? 8 : 6) && visible.value.length > 1) startDrag(event);
+}
+
+function onPointerUp(event: PointerEvent): void {
+  if (gesture === null || event.pointerId !== gesture.pointerId) return;
+  if (drag.value !== null) finishDrag();
+  else if (gesture.touch && gesture.armed) suppressClick = true; // pulsación larga: el menú ya está abierto
+  endGesture();
+}
+
+function onPointerCancel(): void {
+  if (drag.value !== null) {
+    drag.value = null;
+    document.documentElement.classList.remove('fav-dragging');
+  }
+  endGesture();
+}
+
+function endGesture(): void {
+  if (holdTimer !== null) clearTimeout(holdTimer);
+  holdTimer = null;
+  window.removeEventListener('pointermove', onPointerMove);
+  window.removeEventListener('pointerup', onPointerUp);
+  window.removeEventListener('pointercancel', onPointerCancel);
+  setTimeout(() => window.removeEventListener('contextmenu', swallowNative, true), 80);
+  if (gesture?.touch === true && gesture.armed) releaseFinger();
+  gesture = null;
+  lifted.value = null;
+  cancelAnimationFrame(scrollFrame);
+}
+
+function startDrag(event: PointerEvent): void {
+  if (gesture === null) return;
+  closeMenu();
+  const rect = gesture.el.getBoundingClientRect();
+  drag.value = {
+    path: gesture.path,
+    order: visible.value.map((entry) => entry.path),
+    x: event.clientX,
+    y: event.clientY,
+    dx: event.clientX - rect.left,
+    dy: event.clientY - rect.top,
+    w: rect.width,
+  };
+  lifted.value = null;
+  suppressClick = true;
+  document.documentElement.classList.add('fav-dragging');
+  const scroll = (): void => {
+    if (drag.value === null) return;
+    const edge = 72;
+    const y = drag.value.y;
+    const speed = y < edge ? -(edge - y) / 3 : y > window.innerHeight - edge ? (y - (window.innerHeight - edge)) / 3 : 0;
+    if (speed !== 0) {
+      window.scrollBy(0, speed);
+      updateDrag(drag.value.x, drag.value.y);
+    }
+    scrollFrame = requestAnimationFrame(scroll);
+  };
+  scrollFrame = requestAnimationFrame(scroll);
+}
+
+/** Sigue al puntero y, al pasar sobre otro favorito, el arrastrado ocupa su sitio. */
+function updateDrag(x: number, y: number): void {
+  const current = drag.value;
+  if (current === null) return;
+  current.x = x;
+  current.y = y;
+  const over = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-fav-cell]')?.dataset['favCell'];
+  if (over === undefined || over === current.path) return;
+  const from = current.order.indexOf(current.path);
+  const to = current.order.indexOf(over);
+  if (from === -1 || to === -1) return;
+  current.order.splice(from, 1);
+  current.order.splice(to, 0, current.path);
+}
+
+function finishDrag(): void {
+  const current = drag.value;
+  drag.value = null;
+  document.documentElement.classList.remove('fav-dragging');
+  if (current === null) return;
+  const before = visible.value.map((entry) => entry.path);
+  if (current.order.some((p, index) => p !== before[index])) commitOrder(current.order);
+}
+
+function onTileClick(entry: FavoriteEntry): void {
+  if (suppressClick) {
+    suppressClick = false;
+    return;
+  }
+  open(entry);
+}
 
 const segmentsOf = (clientPath: string): string[] => clientPath.split('/').filter(Boolean);
 
@@ -130,15 +338,16 @@ function menu(entry: FavoriteEntry): MenuItem[] {
       run: () => startDownload(entry.type === 'dir' ? zipUrl(entry.dir, [entry.name]) : downloadUrl(entry.path), entry.type === 'dir' ? zipName(entry.name) : entry.name),
     },
     { label: t('explorer.copyLink'), icon: 'link', run: () => void copyLink(entry) },
+    ...(visible.value.length > 1
+      ? [
+          { label: t('favorites.moveEarlier'), icon: 'chevron-left' as const, separator: true, disabled: visible.value[0]?.path === entry.path, run: () => moveBy(entry, -1) },
+          { label: t('favorites.moveLater'), icon: 'chevron' as const, disabled: visible.value.at(-1)?.path === entry.path, run: () => moveBy(entry, 1) },
+        ]
+      : []),
     { label: t('favorites.remove'), icon: 'star-off', separator: true, run: () => unfavorite([entry]) },
   ];
 }
 
-const longPress = useLongPress((point) => {
-  const target = document.elementFromPoint(point.x, point.y)?.closest<HTMLElement>('[data-fav]');
-  const entry = favorites.entries.value.find((item) => item.path === target?.dataset['fav']);
-  if (entry !== undefined) openMenuFor(point, menu(entry), entry.name);
-});
 
 const titleId = `t-favoritos-${props.mode}`;
 </script>
@@ -165,6 +374,7 @@ const titleId = `t-favoritos-${props.mode}`;
       </div>
       <label for="orden-favoritos" class="sr-only">{{ t('favorites.sortLabel') }}</label>
       <select id="orden-favoritos" v-model="sortKey" class="input select">
+        <option value="custom">{{ t('favorites.sortCustom') }}</option>
         <option value="added">{{ t('favorites.sortAdded') }}</option>
         <option value="name">{{ t('favorites.sortName') }}</option>
         <option value="modified">{{ t('favorites.sortModified') }}</option>
@@ -186,23 +396,27 @@ const titleId = `t-favoritos-${props.mode}`;
     <template v-else>
       <p v-if="present.length === 0" class="muted">{{ t('favorites.allUnavailable') }}</p>
       <p v-else-if="visible.length === 0" class="muted">{{ t('favorites.noMatch') }}</p>
-      <ul
-        v-else
-        class="grid"
-        @touchstart.passive="longPress.onTouchstart"
-        @touchmove.passive="longPress.onTouchmove"
-        @touchend="longPress.onTouchend"
-        @touchcancel="longPress.onTouchcancel"
-      >
-        <li v-for="entry in visible" :key="entry.path" class="cell">
+      <TransitionGroup v-else tag="ul" name="fav-move" class="grid" :class="{ sorting: drag !== null }">
+        <li
+          v-for="entry in shown"
+          :key="entry.path"
+          class="cell"
+          :class="{ placeholder: drag?.path === entry.path, lifted: lifted === entry.path }"
+          :data-fav-cell="entry.path"
+        >
           <button
             type="button"
             class="tile"
             :class="{ unknown: entry.exists === null }"
             :data-fav="entry.path"
             :title="entry.path"
-            @click="longPress.wasLong() || open(entry)"
+            @pointerdown="onPointerDown($event, entry)"
+            @click="onTileClick(entry)"
             @contextmenu.prevent="openMenuFor($event, menu(entry), entry.name)"
+            @keydown.alt.up.prevent="moveBy(entry, -1)"
+            @keydown.alt.left.prevent="moveBy(entry, -1)"
+            @keydown.alt.down.prevent="moveBy(entry, 1)"
+            @keydown.alt.right.prevent="moveBy(entry, 1)"
           >
             <span class="thumb">
               <img v-if="showThumb(entry)" :src="thumbFor(entry)" alt="" loading="lazy" decoding="async" draggable="false" @error="onThumbError(entry)">
@@ -217,9 +431,27 @@ const titleId = `t-favoritos-${props.mode}`;
             <AppIcon name="star-filled" :size="15" />
           </button>
         </li>
-      </ul>
+      </TransitionGroup>
 
-      <p v-if="mode === 'page' && present.length > 0" class="muted foot">{{ t('favorites.count', { n: favorites.entries.value.length, max: favorites.max.value }) }}</p>
+      <!-- Lo que se arrastra sigue al dedo o al puntero; en la cuadrícula queda su hueco. -->
+      <Teleport to="body">
+        <div
+          v-if="drag !== null && dragEntry !== null"
+          class="drag-ghost"
+          :style="{ left: `${drag.x - drag.dx}px`, top: `${drag.y - drag.dy}px`, width: `${drag.w}px` }"
+          aria-hidden="true"
+        >
+          <span class="thumb">
+            <img v-if="showThumb(dragEntry)" :src="thumbFor(dragEntry)" alt="" draggable="false">
+            <AppIcon v-else :name="fileKind(dragEntry.name, dragEntry.type).icon" :size="38" :stroke="1.4" :class="iconClass(dragEntry)" />
+          </span>
+          <span class="name">{{ dragEntry.name }}</span>
+        </div>
+      </Teleport>
+
+      <p v-if="mode === 'page' && present.length > 0" class="muted foot">
+        {{ t('favorites.count', { n: favorites.entries.value.length, max: favorites.max.value }) }}<template v-if="visible.length > 1"> · {{ t('favorites.reorderHint') }}</template>
+      </p>
       <NuxtLink v-if="mode === 'panel' && missing.length > 0" to="/favoritos#no-disponibles" class="missing-link">{{ t('favorites.unavailableCount', { n: missing.length }) }}</NuxtLink>
 
       <section v-if="mode === 'page' && missing.length > 0" id="no-disponibles" aria-labelledby="t-no-disponibles" class="card gone">
@@ -380,6 +612,59 @@ const titleId = `t-favoritos-${props.mode}`;
 .tile:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
+}
+
+/* Mantener pulsado no selecciona texto ni abre el menú de imagen del sistema (iOS). */
+.tile {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Al mantener pulsado, el elemento se «levanta» antes de moverlo. */
+.cell.lifted .thumb {
+  transform: scale(1.05);
+  box-shadow: var(--shadow);
+}
+
+/* Hueco que deja lo que se arrastra. */
+.cell.placeholder .tile {
+  opacity: 0.35;
+}
+
+.cell.placeholder .thumb {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+.grid.sorting .tile:hover .thumb {
+  transform: none;
+  box-shadow: none;
+}
+
+.fav-move-move {
+  transition: transform 0.22s ease;
+}
+
+.drag-ghost {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+  transform: rotate(-2deg) scale(1.06);
+  opacity: 0.95;
+}
+
+.drag-ghost .thumb {
+  box-shadow: var(--shadow);
+  border-color: var(--accent);
+}
+
+.drag-ghost .name {
+  padding: 0 2px;
+  text-shadow: 0 1px 2px var(--bg);
 }
 
 .tile.unknown {
@@ -614,8 +899,21 @@ const titleId = `t-favoritos-${props.mode}`;
 
 @media (prefers-reduced-motion: reduce) {
   .thumb,
-  .unstar {
+  .unstar,
+  .fav-move-move {
     transition: none;
   }
+
+  .drag-ghost {
+    transform: none;
+  }
+}
+
+/* Durante un arrastre: sin selección de texto en toda la página y cursor de agarre. */
+:global(html.fav-dragging),
+:global(html.fav-dragging *) {
+  cursor: grabbing !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
 }
 </style>

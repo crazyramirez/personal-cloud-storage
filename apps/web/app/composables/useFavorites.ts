@@ -76,15 +76,12 @@ export function useFavorites() {
 
   const isFavorite = (path: string): boolean => paths.value.has(path);
 
-  async function mutate(kind: 'add' | 'remove', targets: readonly FavoriteTarget[], optimistic: FavoriteEntry[]): Promise<boolean> {
+  async function mutate(endpoint: '/favorites' | '/favorites/remove' | '/favorites/order', paths: readonly string[], optimistic: FavoriteEntry[]): Promise<boolean> {
     const before = entries.value;
     const at = ++version;
     entries.value = optimistic;
     try {
-      const response = await api<FavoriteListResponse>(kind === 'add' ? '/favorites' : '/favorites/remove', {
-        method: 'POST',
-        body: { paths: targets.map((target) => target.path) },
-      });
+      const response = await api<FavoriteListResponse>(endpoint, { method: 'POST', body: { paths } });
       apply(response, at);
       return true;
     } catch (error) {
@@ -109,7 +106,7 @@ export function useFavorites() {
       addedAt: now,
       exists: true,
     }));
-    const ok = await mutate('add', fresh, [...placeholders.reverse(), ...entries.value]);
+    const ok = await mutate('/favorites', fresh.map((target) => target.path), [...placeholders.reverse(), ...entries.value]);
     if (ok && options.quiet !== true) {
       toast(t('favorites.added', { n: fresh.length, name: nameOf((fresh[0] as FavoriteTarget).path) }), {
         tone: 'ok',
@@ -125,7 +122,7 @@ export function useFavorites() {
     const removing = new Set(gone.map((target) => target.path));
     // Para «Deshacer»: vuelve a añadir los que se pueden añadir (los que siguen existiendo).
     const restorable = entries.value.filter((entry) => removing.has(entry.path) && entry.exists !== false).map((entry) => ({ path: entry.path, type: entry.type }));
-    const ok = await mutate('remove', gone, entries.value.filter((entry) => !removing.has(entry.path)));
+    const ok = await mutate('/favorites/remove', gone.map((target) => target.path), entries.value.filter((entry) => !removing.has(entry.path)));
     if (ok && options.quiet !== true) {
       toast(t('favorites.removed', { n: gone.length, name: nameOf((gone[0] as FavoriteTarget).path) }), {
         tone: 'ok',
@@ -135,11 +132,20 @@ export function useFavorites() {
     return ok;
   }
 
+  /** Orden personalizado: la lista completa de rutas en el orden nuevo (se ve al instante). */
+  function reorder(order: readonly string[]): Promise<boolean> {
+    const index = new Map(order.map((p, i) => [p, i]));
+    const rank = (p: string): number => index.get(p) ?? Number.MAX_SAFE_INTEGER;
+    const optimistic = [...entries.value].sort((a, b) => rank(a.path) - rank(b.path));
+    if (optimistic.every((entry, i) => entry === entries.value[i])) return Promise.resolve(true);
+    return mutate('/favorites/order', order, optimistic);
+  }
+
   /** Estrella de una selección: si todos son favoritos, los quita; si no, añade los que falten. */
   function toggle(targets: readonly FavoriteTarget[]): Promise<boolean> {
     if (targets.length === 0) return Promise.resolve(true);
     return targets.every((target) => isFavorite(target.path)) ? remove(targets) : add(targets);
   }
 
-  return { entries, loaded, failed, max, paths, ensure, refresh, isFavorite, add, remove, toggle };
+  return { entries, loaded, failed, max, paths, ensure, refresh, isFavorite, add, remove, toggle, reorder };
 }

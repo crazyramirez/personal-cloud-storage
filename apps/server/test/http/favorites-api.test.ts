@@ -7,6 +7,8 @@ import { MAX_FAVORITES, type ApiErrorBody, type BatchResponse, type FavoriteList
 import { hashPassword } from '../../src/auth/passwords.ts';
 import { createUser } from '../../src/auth/sessions.ts';
 import { FavoriteStore } from '../../src/favorites/store.ts';
+import { openDatabase } from '../../src/db/database.ts';
+import { MIGRATIONS } from '../../src/db/migrations.ts';
 import { buildApp } from '../../src/http/app.ts';
 import { createHarness, type Harness } from '../support/harness.ts';
 
@@ -134,6 +136,26 @@ describe('favoritos (ADR-0027)', () => {
     assert.equal(response.statusCode, 200);
   });
 
+  it('orden personalizado: se guarda, lo nuevo entra al principio y sigue al renombrar', async () => {
+    const before = await paths();
+    const reversed = [...before].reverse();
+    const response = await call(ana, 'POST', '/favorites/order', { paths: reversed });
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual((response.json() as FavoriteListResponse).entries.map((entry) => entry.path), reversed);
+    assert.deepEqual(await paths(), reversed, 'persistido');
+    // Una lista parcial pone esas primero y deja el resto detrás, en su orden.
+    await call(ana, 'POST', '/favorites/order', { paths: [reversed[1] as string] });
+    assert.deepEqual(await paths(), [reversed[1], reversed[0]]);
+    // Rutas desconocidas o de otro usuario se ignoran.
+    assert.equal((await call(ana, 'POST', '/favorites/order', { paths: ['/no-es-favorito'] })).statusCode, 200);
+    await call(ana, 'POST', '/favorites', { paths: ['/Destino'] });
+    assert.equal((await paths())[0], '/Destino', 'lo nuevo, al principio');
+    await call(ana, 'POST', '/favorites/order', { paths: [...(await paths()).slice(1), '/Destino'] });
+    await call(ana, 'POST', '/fs/rename', { path: '/Destino', name: 'Destino2' });
+    assert.equal((await paths()).at(-1), '/Destino2', 'renombrar conserva la posición');
+    await call(ana, 'POST', '/fs/rename', { path: '/Destino2', name: 'Destino' }); // como estaba, para los tests siguientes
+  });
+
   it('límite por usuario: todo o nada', async () => {
     const store = new FavoriteStore(h.db);
     const userId = Number(h.db.prepare("SELECT id FROM users WHERE username = 'luis'").get()?.['id']);
@@ -143,5 +165,22 @@ describe('favoritos (ADR-0027)', () => {
     assert.equal((await paths(luis)).length, MAX_FAVORITES - 1);
     assert.equal((await call(luis, 'POST', '/favorites', { paths: ['/nota.txt'] })).statusCode, 200);
     assert.equal((await paths(luis)).length, MAX_FAVORITES);
+  });
+});
+
+describe('migración del orden de favoritos (7)', () => {
+  it('parte del orden que se veía: lo último marcado primero, por usuario', async () => {
+    const before = await openDatabase(':memory:', { migrations: MIGRATIONS.filter((m) => m.version <= 6) });
+    const ana = Number(before.prepare("INSERT INTO users (username, password_hash, role, created_at) VALUES ('ana', 'x', 'owner', '2026-01-01')").run().lastInsertRowid);
+    const add = before.prepare('INSERT INTO favorites (user_id, path, kind, created_at) VALUES (?, ?, ?, ?)');
+    add.run(ana, '/viejo', 'dir', '2026-01-01T00:00:00.000Z');
+    add.run(ana, '/nuevo', 'file', '2026-03-01T00:00:00.000Z');
+    add.run(ana, '/medio', 'dir', '2026-02-01T00:00:00.000Z');
+    // Aplica la 7 sobre esa misma base.
+    const migration = MIGRATIONS.find((m) => m.version === 7);
+    assert.ok(migration !== undefined);
+    before.exec(migration.sql);
+    assert.deepEqual(new FavoriteStore(before).list(ana).map((row) => row.path), ['/nuevo', '/medio', '/viejo']);
+    before.close();
   });
 });

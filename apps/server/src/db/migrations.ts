@@ -197,4 +197,20 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    version: 7,
+    name: 'orden personalizado de favoritos',
+    sql: `
+      -- Orden elegido por la persona (arrastrar en Favoritos). Se parte del orden que ya veía:
+      -- lo último marcado primero.
+      ALTER TABLE favorites ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
+      UPDATE favorites SET position = (
+        SELECT ranked.rank FROM (
+          SELECT user_id, path, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at DESC, rowid DESC) - 1 AS rank
+          FROM favorites
+        ) AS ranked
+        WHERE ranked.user_id = favorites.user_id AND ranked.path = favorites.path
+      );
+    `,
+  },
 ];

@@ -206,6 +206,14 @@ export function useFileClipboard() {
 let holdingFinger = false;
 let fingerReleasedAt = 0;
 export const menuTouchGuard = (): boolean => holdingFinger || Date.now() - fingerReleasedAt < 450;
+/** Para gestos táctiles propios (mantener y arrastrar en Favoritos) que también abren el menú. */
+export function holdFinger(): void {
+  holdingFinger = true;
+}
+export function releaseFinger(): void {
+  holdingFinger = false;
+  fingerReleasedAt = Date.now();
+}
 
 /**
  * Devuelve manejadores táctiles que llaman a `onLong` tras ~500 ms sin mover el dedo.

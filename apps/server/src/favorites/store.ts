@@ -29,10 +29,10 @@ export class FavoriteStore {
     this.#db = db;
   }
 
-  /** Lo último marcado primero. */
+  /** En el orden personalizado (lo nuevo entra al principio). */
   list(userId: number): FavoriteRow[] {
     return this.#db
-      .prepare('SELECT path, kind, created_at FROM favorites WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?')
+      .prepare('SELECT path, kind, created_at FROM favorites WHERE user_id = ? ORDER BY position, created_at DESC, rowid DESC LIMIT ?')
       .all(userId, MAX_FAVORITES)
       .map((row) => ({ path: String(row['path']), kind: row['kind'] === 'dir' ? 'dir' : 'file', createdAt: String(row['created_at']) }));
   }
@@ -49,13 +49,28 @@ export class FavoriteStore {
         throw new AppError('CONFLICT', 'Has llegado al máximo de favoritos: quita alguno antes de añadir más');
       }
       const insert = this.#db.prepare(
-        `INSERT INTO favorites (user_id, path, kind, created_at) VALUES (?, ?, ?, ?)
+        `INSERT INTO favorites (user_id, path, kind, created_at, position) VALUES (?, ?, ?, ?, ?)
          ON CONFLICT (user_id, path) DO UPDATE SET kind = excluded.kind`,
       );
-      // Misma marca de tiempo para todo el lote: se ordena por rowid dentro de él.
+      // Lo nuevo entra al principio del orden personalizado; dentro de un lote, el último primero
+      // (como se ve en la web nada más añadirlo).
+      const first = Number(this.#db.prepare('SELECT COALESCE(MIN(position), 0) AS first FROM favorites WHERE user_id = ?').get(userId)?.['first'] ?? 0);
       const at = now.toISOString();
-      for (const item of items) insert.run(userId, item.path, item.kind, at);
+      items.forEach((item, index) => insert.run(userId, item.path, item.kind, at, first - 1 - index));
       return fresh.length;
+    });
+  }
+
+  /** Nuevo orden: las rutas indicadas primero, en ese orden; las que no se nombran, detrás como estaban. */
+  reorder(userId: number, paths: readonly string[]): void {
+    transaction(this.#db, () => {
+      const current = this.list(userId).map((row) => row.path);
+      const known = new Set(current);
+      const wanted = [...new Set(paths)].filter((p) => known.has(p));
+      const named = new Set(wanted);
+      const order = [...wanted, ...current.filter((p) => !named.has(p))];
+      const update = this.#db.prepare('UPDATE favorites SET position = ? WHERE user_id = ? AND path = ?');
+      order.forEach((p, index) => update.run(index, userId, p));
     });
   }
 
