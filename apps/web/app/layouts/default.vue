@@ -52,7 +52,6 @@ const quick = computed(() =>
 function quickMenu(item: { path: string; name: string; to: string }): MenuItem[] {
   return [
     { label: t('explorer.open'), icon: 'folder', run: () => void navigateTo(item.to) },
-    { label: t('explorer.openInNewTab'), icon: 'external', run: () => window.open(item.to, '_blank', 'noopener') },
     { label: t('favorites.remove'), icon: 'star-off', separator: true, run: () => void favorites.remove([{ path: item.path, type: 'dir' }]) },
   ];
 }
