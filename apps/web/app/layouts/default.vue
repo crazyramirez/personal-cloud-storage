@@ -37,16 +37,25 @@ const NAV = computed<Array<{ to: string; label: string; icon: IconName; mobile: 
 ]);
 const MOBILE_NAV = computed(() => NAV.value.filter((item) => item.mobile));
 
-/** Acceso rápido (ADR-0027): las carpetas favoritas, a un clic desde cualquier pantalla. */
-const QUICK_MAX = 8;
+/**
+ * Acceso rápido (ADR-0027): las carpetas favoritas, a un clic desde cualquier pantalla. Vinculado
+ * a favoritos: añadir una carpeta a favoritos la pone aquí y quitarla de aquí le quita la estrella.
+ */
+const QUICK_MAX = 10;
 const favorites = useFavorites();
 watch(session.user, () => favorites.ensure(), { immediate: true });
+const quickAll = computed(() => favorites.entries.value.filter((entry) => entry.type === 'dir' && entry.exists !== false));
 const quick = computed(() =>
-  favorites.entries.value
-    .filter((entry) => entry.type === 'dir' && entry.exists !== false)
-    .slice(0, QUICK_MAX)
-    .map((entry) => ({ path: entry.path, name: entry.name, to: explorerLink(entry.path.split('/').filter(Boolean)) })),
+  quickAll.value.slice(0, QUICK_MAX).map((entry) => ({ path: entry.path, name: entry.name, to: explorerLink(entry.path.split('/').filter(Boolean)) })),
 );
+
+function quickMenu(item: { path: string; name: string; to: string }): MenuItem[] {
+  return [
+    { label: t('explorer.open'), icon: 'folder', run: () => void navigateTo(item.to) },
+    { label: t('explorer.openInNewTab'), icon: 'external', run: () => window.open(item.to, '_blank', 'noopener') },
+    { label: t('favorites.remove'), icon: 'star-off', separator: true, run: () => void favorites.remove([{ path: item.path, type: 'dir' }]) },
+  ];
+}
 const decodedPath = computed(() => {
   try {
     return decodeURIComponent(route.path);
@@ -92,15 +101,31 @@ const appVersion = useAppVersion();
         </li>
       </ul>
 
-      <section v-if="quick.length > 0" class="quick" aria-labelledby="t-acceso-rapido">
-        <h2 id="t-acceso-rapido" class="quick-title muted">{{ t('favorites.quickAccess') }}</h2>
-        <ul class="menu">
-          <li v-for="item in quick" :key="item.path">
-            <NuxtLink :to="item.to" class="link quick-link" :class="{ current: quickCurrent(item.to) }" :aria-current="quickCurrent(item.to) ? 'page' : undefined" :title="item.path">
+      <section v-if="favorites.loaded.value" class="quick" aria-labelledby="t-acceso-rapido">
+        <h2 id="t-acceso-rapido" class="quick-title muted" :title="t('favorites.quickAccessHint')" @contextmenu.prevent="openMenuFor($event, [{ label: t('favorites.seeAll'), icon: 'star', run: () => void navigateTo('/favoritos') }], t('favorites.quickAccess'))">{{ t('favorites.quickAccess') }}</h2>
+        <ul v-if="quick.length > 0" class="menu">
+          <li v-for="item in quick" :key="item.path" class="quick-item">
+            <NuxtLink
+              :to="item.to"
+              class="link quick-link"
+              :class="{ current: quickCurrent(item.to) }"
+              :aria-current="quickCurrent(item.to) ? 'page' : undefined"
+              :title="item.path"
+              @contextmenu.prevent="openMenuFor($event, quickMenu(item), item.name)"
+            >
               <AppIcon name="folder" :size="17" class="ico-folder" /><span class="quick-name">{{ item.name }}</span>
             </NuxtLink>
+            <button
+                type="button"
+                class="quick-more"
+                :aria-label="t('favorites.quickActions', { name: item.name })"
+                :title="t('explorer.moreActions')"
+                @click="openMenuFor($event, quickMenu(item), item.name)"
+            ><AppIcon name="more" :size="16" /></button>
           </li>
         </ul>
+        <p v-else class="quick-empty muted">{{ t('favorites.quickEmpty') }}</p>
+        <NuxtLink v-if="quickAll.length > QUICK_MAX" to="/favoritos" class="quick-all">{{ t('favorites.seeAllCount', { n: quickAll.length }) }}</NuxtLink>
       </section>
 
       <DiskWidget />
@@ -266,6 +291,64 @@ a.link:hover {
 
 .quick-link.current .ico-folder {
   color: inherit;
+}
+
+.quick-item {
+  position: relative;
+}
+
+.quick-link {
+  padding-right: 36px;
+}
+
+/* «⋯» de cada carpeta: aparece al pasar el ratón o con el foco (y siempre en pantallas táctiles). */
+.quick-more {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  opacity: 0;
+  cursor: pointer;
+}
+
+.quick-item:hover .quick-more,
+.quick-item:focus-within .quick-more,
+.quick-more:focus-visible {
+  opacity: 1;
+}
+
+.quick-more:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+@media (pointer: coarse) {
+  .quick-more {
+    opacity: 1;
+  }
+}
+
+.quick-empty {
+  padding: 2px 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.quick-all {
+  padding: 2px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-decoration: none;
 }
 
 .quick-name {

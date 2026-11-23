@@ -66,7 +66,13 @@ function open(entry: FavoriteEntry): void {
     void navigateTo(explorerLink(segmentsOf(entry.path)));
     return;
   }
-  void navigateTo({ path: explorerLink(segmentsOf(entry.dir)), query: { ver: entry.name } });
+  // Al cerrar el visor se vuelve aquí (Favoritos o el Panel).
+  void navigateTo({ path: explorerLink(segmentsOf(entry.dir)), query: { ver: entry.name, volver: props.mode === 'page' ? '/favoritos' : '/panel' } });
+}
+
+/** Abre la carpeta que lo contiene con él seleccionado y destacado. */
+function reveal(entry: FavoriteEntry): void {
+  void navigateTo({ path: explorerLink(segmentsOf(entry.dir)), query: { sel: entry.name } });
 }
 
 function folderLabel(entry: FavoriteEntry): string {
@@ -115,7 +121,7 @@ async function copyLink(entry: FavoriteEntry): Promise<void> {
 function menu(entry: FavoriteEntry): MenuItem[] {
   return [
     { label: entry.type === 'dir' ? t('favorites.openFolder') : VIEWER_LABEL[viewerKind(entry.name)], icon: entry.type === 'dir' ? 'folder' : 'eye', run: () => open(entry) },
-    { label: t('favorites.openNamed', { name: folderLabel(entry) }), icon: 'folder', run: () => void navigateTo(explorerLink(segmentsOf(entry.dir))) },
+    { label: t('favorites.openNamed', { name: folderLabel(entry) }), icon: 'folder', run: () => reveal(entry) },
     {
       label: entry.type === 'dir' ? t('favorites.downloadZip') : t('favorites.download'),
       icon: entry.type === 'dir' ? 'archive' : 'download',

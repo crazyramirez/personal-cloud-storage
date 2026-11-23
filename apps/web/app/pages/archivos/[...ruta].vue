@@ -7,6 +7,7 @@ import type { BatchResponse, FsEntry, FsListResponse, FsSizeResponse, FsSizesRes
 definePageMeta({ key: 'archivos' });
 
 const route = useRoute();
+const router = useRouter();
 const storage = useStorage();
 const { transfers, enqueue, completedTick, lastCompletedDest, pause, resume, confirmCancel, openPanel } = useTransfers();
 const { clipboard } = useFileClipboard();
@@ -89,6 +90,10 @@ const filter = ref('');
 const filterInput = ref<HTMLInputElement | null>(null);
 /** Solo los favoritos de esta carpeta (ADR-0027). Se quita al cambiar de carpeta, como el filtro. */
 const onlyFavorites = ref(false);
+/** A dónde vuelve el visor al cerrarse (abierto desde Favoritos o Recientes). */
+const returnTo = ref<string | null>(null);
+/** Elemento destacado con una animación breve (llegado con ?sel=nombre, «Abrir carpeta»). */
+const flashName = ref<string | null>(null);
 watch([filter, onlyFavorites], () => {
   const visible = new Set(sorted.value.map((entry) => entry.name));
   if ([...selection.value].some((name) => !visible.has(name))) {
@@ -222,6 +227,7 @@ async function loadMore(): Promise<void> {
 }
 
 watch(clientPath, (path) => {
+  returnTo.value = null;
   filter.value = '';
   onlyFavorites.value = false;
   settle();
@@ -544,17 +550,74 @@ function openEntry(entry: FsEntry): void {
   if (files.value.some((file) => file.name === entry.name)) viewerName.value = entry.name;
 }
 
-// Enlace copiado con «Copiar enlace» (…?ver=archivo): al cargar la carpeta se abre ese archivo.
+/**
+ * Pantallas desde las que se puede abrir un archivo en el visor (?volver=…): al cerrarlo se
+ * vuelve allí y no a la carpeta. Lista cerrada: nunca se navega a una ruta que venga en la URL.
+ */
+const RETURN_TARGETS = new Set(['/favoritos', '/panel']);
+let flashTimer: ReturnType<typeof setTimeout> | null = null;
+onBeforeUnmount(() => {
+  if (flashTimer !== null) clearTimeout(flashTimer);
+});
+
+/** Lo lleva a la vista, le da el foco y lo destaca un instante. */
+function reveal(name: string): void {
+  void nextTick(() => {
+    const el = listing.value?.querySelector<HTMLElement>(`[data-entry="${CSS.escape(name)}"]`);
+    if (el === null || el === undefined) return;
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' });
+    el.focus({ preventScroll: true });
+    flashName.value = null;
+    if (flashTimer !== null) clearTimeout(flashTimer);
+    // Un fotograma sin la clase para que la animación vuelva a empezar si ya estaba.
+    requestAnimationFrame(() => {
+      flashName.value = name;
+      flashTimer = setTimeout(() => {
+        flashName.value = null;
+        flashTimer = null;
+      }, 1800);
+    });
+  });
+}
+
+/**
+ * Al cargar la carpeta:
+ *  - ?ver=archivo («Copiar enlace», Favoritos, Recientes): se abre ese archivo en el visor;
+ *  - ?sel=nombre (Favoritos o Recientes → «Abrir carpeta»): se selecciona y se destaca.
+ */
+let revealing: string | null = null;
 function openRequestedFile(): void {
   const wanted = route.query.ver;
-  if (typeof wanted !== 'string' || wanted === '') return;
-  if (files.value.some((file) => file.name === wanted)) {
-    selectOnly(wanted);
-    viewerName.value = wanted;
+  const sel = route.query.sel;
+  const back = route.query.volver;
+  if (typeof wanted === 'string' && wanted !== '') {
+    if (files.value.some((file) => file.name === wanted)) {
+      selectOnly(wanted);
+      viewerName.value = wanted;
+      returnTo.value = typeof back === 'string' && RETURN_TARGETS.has(back) ? back : null;
+    } else {
+      toast(t('explorer.notInFolder', { name: wanted }), { tone: 'warn' });
+    }
+  } else if (typeof sel === 'string' && sel !== '') {
+    if (entries.value.some((entry) => entry.name === sel)) {
+      filter.value = '';
+      onlyFavorites.value = false;
+      selectOnly(sel);
+      revealing = sel;
+    } else {
+      toast(t('explorer.notInFolder', { name: sel }), { tone: 'warn' });
+    }
   } else {
-    toast(t('explorer.notInFolder', { name: wanted }), { tone: 'warn' });
+    return;
   }
-  void navigateTo({ path: route.path, query: {} }, { replace: true });
+  // Al llegar desde otra página, el router sube al principio cuando termina la navegación: el
+  // desplazamiento hasta el elemento va después, si no se perdería.
+  const target = revealing;
+  revealing = null;
+  void Promise.resolve(navigateTo({ path: route.path, query: {} }, { replace: true })).finally(() => {
+    if (target !== null) setTimeout(() => reveal(target), 150);
+  });
 }
 
 const viewerIndex = computed(() => (viewerName.value === null ? -1 : files.value.findIndex((file) => file.name === viewerName.value)));
@@ -568,6 +631,15 @@ function closeViewer(): void {
   const name = viewerName.value;
   viewerName.value = null;
   if (name === null) return;
+  // Abierto desde Favoritos o Recientes: se vuelve allí (atrás en el historial si es la página anterior).
+  const target = returnTo.value;
+  returnTo.value = null;
+  if (target !== null) {
+    const state = window.history.state as { back?: unknown } | null;
+    if (state?.back === target) router.back();
+    else void navigateTo(target);
+    return;
+  }
   selectOnly(name);
   void nextTick(() => listing.value?.querySelector<HTMLElement>(`[data-entry="${CSS.escape(name)}"]`)?.focus({ preventScroll: false }));
 }
@@ -1572,7 +1644,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
                 :tabindex="focused === entry.name || (focused === null && entry === sorted[0]) ? 0 : -1"
                 :data-entry="entry.name"
                 :aria-selected="selection.has(entry.name)"
-                :class="{ selected: selection.has(entry.name), cut: isCut(entry), drop: dropTarget === pathOf(entry.name) }"
+                :class="{ selected: selection.has(entry.name), cut: isCut(entry), drop: dropTarget === pathOf(entry.name), flash: flashName === entry.name }"
                 :draggable="canWrite"
                 @click.stop="onItemClick($event, entry)"
                 @dblclick="lastPointer !== 'touch' && openEntry(entry)"
@@ -1631,7 +1703,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
               :tabindex="focused === entry.name || (focused === null && entry === sorted[0]) ? 0 : -1"
               :data-entry="entry.name"
               :aria-selected="selection.has(entry.name)"
-              :class="{ selected: selection.has(entry.name), cut: isCut(entry), drop: dropTarget === pathOf(entry.name) }"
+              :class="{ selected: selection.has(entry.name), cut: isCut(entry), drop: dropTarget === pathOf(entry.name), flash: flashName === entry.name }"
               :draggable="canWrite"
               :title="entry.name"
               @click.stop="onItemClick($event, entry)"
@@ -1737,6 +1809,47 @@ function ghostMenu(item: Transfer): MenuItem[] {
 </template>
 
 <style scoped>
+/* Elemento al que se llega desde Favoritos o Recientes: un destello que se apaga solo. */
+.row.flash,
+.tile.flash {
+  animation: reveal-flash 1.6s ease-out;
+}
+
+.tile.flash .thumb {
+  animation: reveal-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+@keyframes reveal-flash {
+  0%,
+  35% {
+    box-shadow: 0 0 0 3px var(--accent), 0 0 0 8px var(--accent-soft);
+  }
+  100% {
+    box-shadow: 0 0 0 3px transparent, 0 0 0 8px transparent;
+  }
+}
+
+@keyframes reveal-pop {
+  0% {
+    transform: scale(0.92);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row.flash,
+  .tile.flash {
+    animation: none;
+    box-shadow: 0 0 0 3px var(--accent);
+  }
+
+  .tile.flash .thumb {
+    animation: none;
+  }
+}
+
 /* Favoritos (ADR-0027): estrella ámbar, igual en tema claro y oscuro. */
 .fav-badge {
   margin-left: 6px;

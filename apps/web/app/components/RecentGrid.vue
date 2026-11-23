@@ -59,7 +59,8 @@ function open(entry: RecentEntry): void {
     void navigateTo(explorerLink(segmentsOf(entry.path)));
     return;
   }
-  void navigateTo({ path: explorerLink(segmentsOf(entry.dir)), query: { ver: entry.name } });
+  // Al cerrar el visor se vuelve al Panel.
+  void navigateTo({ path: explorerLink(segmentsOf(entry.dir)), query: { ver: entry.name, volver: '/panel' } });
 }
 
 function folderLabel(entry: RecentEntry): string {
@@ -74,7 +75,8 @@ function showThumb(entry: RecentEntry): boolean {
 function menu(entry: RecentEntry): MenuItem[] {
   return [
     { label: entry.type === 'dir' ? t('recent.openFolder') : VIEWER_LABEL[viewerKind(entry.name)], icon: entry.type === 'dir' ? 'folder' : 'eye', run: () => open(entry) },
-    ...(entry.type === 'file' ? [{ label: t('recent.openNamed', { name: folderLabel(entry) }), icon: 'folder' as const, run: () => void navigateTo(explorerLink(segmentsOf(entry.dir))) }] : []),
+    // La carpeta que lo contiene, con él seleccionado y destacado.
+    { label: t('recent.openNamed', { name: folderLabel(entry) }), icon: 'folder' as const, run: () => void navigateTo({ path: explorerLink(segmentsOf(entry.dir)), query: { sel: entry.name } }) },
     {
       label: entry.type === 'dir' ? t('recent.downloadZip') : t('recent.download'),
       icon: entry.type === 'dir' ? 'archive' : 'download',
