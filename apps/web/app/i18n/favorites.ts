@@ -57,6 +57,7 @@ const es = {
   unavailableCount: (p) => (Number(p.n) === 1 ? '1 favorito no está disponible' : `${p.n} favoritos no están disponibles`),
   unavailableHint: 'Ya no están en su sitio: se eliminaron, están en la papelera o se cambiaron desde otro ordenador. Si los restauras de la papelera, vuelven a aparecer solos.',
   removeUnavailable: 'Quitar los no disponibles',
+  actionFailed: 'No se pudo completar. Inténtalo de nuevo.',
   openTrash: 'Abrir la papelera',
 } satisfies MessageTable;
 
@@ -119,6 +120,7 @@ export default {
     unavailableCount: (p) => (Number(p.n) === 1 ? '1 favorite is unavailable' : `${p.n} favorites are unavailable`),
     unavailableHint: 'They’re no longer where they were: deleted, in the Trash or changed from another computer. If you restore them from the Trash, they come back on their own.',
     removeUnavailable: 'Remove unavailable ones',
+    actionFailed: 'Couldn’t complete that. Try again.',
     openTrash: 'Open Trash',
   } satisfies Record<keyof typeof es, Message>,
 };

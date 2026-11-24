@@ -58,5 +58,6 @@ export default {
   unavailableCount: (p) => `${p.n} 個のお気に入りが使用できません`,
   unavailableHint: '元の場所にありません。削除されたか、ゴミ箱にあるか、別のコンピューターから変更されました。ゴミ箱から復元すると、自動的に再び表示されます。',
   removeUnavailable: '使用できない項目を削除',
+  actionFailed: '完了できませんでした。もう一度お試しください。',
   openTrash: 'ゴミ箱を開く',
 } satisfies Translation<typeof source>;

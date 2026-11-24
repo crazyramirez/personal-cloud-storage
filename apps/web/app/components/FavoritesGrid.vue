@@ -7,7 +7,7 @@
  * Orden personalizado: arrastrar con el ratón, o mantener pulsado y mover el dedo (como en la
  * pantalla de inicio del móvil: el menú se abre y, al mover, se cierra y empieza el arrastre).
  */
-import type { FavoriteEntry } from '@pcloud/contracts';
+import type { BatchResponse, FavoriteEntry } from '@pcloud/contracts';
 
 const props = withDefaults(defineProps<{ mode?: 'panel' | 'page'; limit?: number }>(), { mode: 'panel', limit: 12 });
 
@@ -315,6 +315,68 @@ function onThumbError(entry: FavoriteEntry): void {
 
 const unfavorite = (list: readonly FavoriteEntry[]): void => void favorites.remove(list.map((entry) => ({ path: entry.path, type: entry.type })));
 
+const session = useSession();
+const isOwner = computed(() => session.user.value?.role === 'owner');
+const asApiError = (error: unknown): ApiError => (error instanceof ApiError ? error : new ApiError('INTERNAL', () => t('explorer.unexpectedError'), 0, false));
+
+/** Mueve a la papelera. El favorito se queda (ADR-0027): pasa a «No disponibles» y vuelve al deshacer. */
+async function trash(entry: FavoriteEntry): Promise<void> {
+  if (!storage.writable.value) return;
+  const busy = toast(t('explorer.trashing', { n: 1, name: entry.name }), { busy: true });
+  try {
+    const response = await api<BatchResponse>('/fs/trash', { method: 'POST', body: { paths: [entry.path] }, timeoutMs: 0 });
+    dismissToast(busy);
+    const done = response.results[0];
+    if (done === undefined || !done.ok) {
+      toast(done !== undefined && !done.ok ? localizeServerError(done.code, done.message) : t('favorites.actionFailed'), { tone: 'danger' });
+      return;
+    }
+    const id = done.path.startsWith('trash:') ? done.path.slice(6) : null;
+    toast(t('explorer.trashed', { n: 1, name: entry.name }), {
+      tone: 'ok',
+      ...(id === null ? {} : { action: { label: t('explorer.undo'), run: () => void api('/trash/restore', { method: 'POST', body: { ids: [id] } }).then(() => favorites.refresh(), (error: unknown) => toast(asApiError(error).message, { tone: 'danger' })) } }),
+    });
+  } catch (error) {
+    dismissToast(busy);
+    toast(asApiError(error).message, { tone: 'danger' });
+  }
+  void favorites.refresh();
+}
+
+/**
+ * Eliminar definitivamente (solo el propietario, siempre con confirmación). Como la persona lo
+ * borra a propósito, también deja de ser favorito.
+ */
+async function deleteForever(entry: FavoriteEntry): Promise<void> {
+  if (!storage.writable.value || !isOwner.value) return;
+  const ok = await confirmDialog({
+    title: t('explorer.deleteForeverTitle', { n: 1, name: entry.name }),
+    message: t('explorer.deleteForeverMessage'),
+    confirm: t('explorer.deleteForever'),
+    danger: true,
+  });
+  if (!ok) return;
+  const busy = toast(t('explorer.deleting'), { busy: true });
+  try {
+    const moved = await api<BatchResponse>('/fs/trash', { method: 'POST', body: { paths: [entry.path] }, timeoutMs: 0 });
+    const done = moved.results[0];
+    if (done === undefined || !done.ok || !done.path.startsWith('trash:')) {
+      dismissToast(busy);
+      toast(done !== undefined && !done.ok ? localizeServerError(done.code, done.message) : t('favorites.actionFailed'), { tone: 'danger' });
+      void favorites.refresh();
+      return;
+    }
+    await api('/trash/delete', { method: 'POST', body: { ids: [done.path.slice(6)] }, timeoutMs: 0 });
+    dismissToast(busy);
+    await favorites.remove([{ path: entry.path, type: entry.type }], { quiet: true });
+    toast(t('explorer.deletedForever', { n: 1 }), { tone: 'ok' });
+  } catch (error) {
+    dismissToast(busy);
+    toast(asApiError(error).message, { tone: 'danger' });
+    void favorites.refresh();
+  }
+}
+
 async function copyLink(entry: FavoriteEntry): Promise<void> {
   let url = `${window.location.origin}${explorerLink(segmentsOf(entry.type === 'dir' ? entry.path : entry.dir))}`;
   if (entry.type === 'file') url += `?ver=${encodeURIComponent(entry.name)}`;
@@ -325,6 +387,9 @@ async function copyLink(entry: FavoriteEntry): Promise<void> {
     toast(t('explorer.linkCopyFailed'), { tone: 'danger' });
   }
 }
+
+/** Solo lo que está en su sitio y con el disco escribible. */
+const canDelete = (entry: FavoriteEntry): boolean => storage.writable.value && entry.exists === true;
 
 function menu(entry: FavoriteEntry): MenuItem[] {
   return [
@@ -338,6 +403,9 @@ function menu(entry: FavoriteEntry): MenuItem[] {
       run: () => startDownload(entry.type === 'dir' ? zipUrl(entry.dir, [entry.name]) : downloadUrl(entry.path), entry.type === 'dir' ? zipName(entry.name) : entry.name),
     },
     { label: t('explorer.copyLink'), icon: 'link', run: () => void copyLink(entry) },
+    ...(isOwner.value
+      ? [{ label: t('shares.menu'), icon: 'globe' as const, disabled: entry.exists !== true, run: () => void shareDialog({ path: entry.path, name: entry.name, kind: entry.type }) }]
+      : []),
     ...(visible.value.length > 1
       ? [
           { label: t('favorites.moveEarlier'), icon: 'chevron-left' as const, separator: true, disabled: visible.value[0]?.path === entry.path, run: () => moveBy(entry, -1) },
@@ -345,6 +413,18 @@ function menu(entry: FavoriteEntry): MenuItem[] {
         ]
       : []),
     { label: t('favorites.remove'), icon: 'star-off', separator: true, run: () => unfavorite([entry]) },
+    {
+      label: t('explorer.moveToTrash'),
+      icon: 'trash',
+      danger: true,
+      separator: true,
+      disabled: !canDelete(entry),
+      ...(storage.writable.value ? {} : { hint: t('explorer.noWrite') }),
+      run: () => void trash(entry),
+    },
+    ...(isOwner.value
+      ? [{ label: t('explorer.deleteForever'), icon: 'trash-x' as const, danger: true, disabled: !canDelete(entry), ...(storage.writable.value ? {} : { hint: t('explorer.noWrite') }), run: () => void deleteForever(entry) }]
+      : []),
   ];
 }
 

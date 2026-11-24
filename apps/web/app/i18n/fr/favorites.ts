@@ -58,5 +58,6 @@ export default {
   unavailableCount: (p) => (Number(p.n) === 1 ? '1 favori est indisponible' : `${p.n} favoris sont indisponibles`),
   unavailableHint: 'Ils ne sont plus à leur place : supprimés, dans la corbeille ou modifiés depuis un autre ordinateur. Si vous les restaurez depuis la corbeille, ils réapparaissent d’eux-mêmes.',
   removeUnavailable: 'Retirer les indisponibles',
+  actionFailed: 'Impossible de terminer. Réessayez.',
   openTrash: 'Ouvrir la corbeille',
 } satisfies Translation<typeof source>;

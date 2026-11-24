@@ -58,5 +58,6 @@ export default {
   unavailableCount: (p) => (Number(p.n) === 1 ? '1 Favorit ist nicht verfügbar' : `${p.n} Favoriten sind nicht verfügbar`),
   unavailableHint: 'Sie sind nicht mehr an ihrem Platz: gelöscht, im Papierkorb oder von einem anderen Computer aus geändert. Wenn Sie sie aus dem Papierkorb wiederherstellen, erscheinen sie von selbst wieder.',
   removeUnavailable: 'Nicht verfügbare entfernen',
+  actionFailed: 'Das hat nicht geklappt. Versuche es erneut.',
   openTrash: 'Papierkorb öffnen',
 } satisfies Translation<typeof source>;

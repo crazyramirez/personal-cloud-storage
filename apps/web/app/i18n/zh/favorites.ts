@@ -58,5 +58,6 @@ export default {
   unavailableCount: (p) => `${p.n} 个收藏不可用`,
   unavailableHint: '它们已不在原来的位置：已删除、在回收站中，或在另一台电脑上被更改。从回收站恢复后，它们会自动重新出现。',
   removeUnavailable: '移除不可用的收藏',
+  actionFailed: '无法完成，请重试。',
   openTrash: '打开回收站',
 } satisfies Translation<typeof source>;

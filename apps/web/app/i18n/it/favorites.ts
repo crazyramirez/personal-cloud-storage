@@ -58,5 +58,6 @@ export default {
   unavailableCount: (p) => (Number(p.n) === 1 ? '1 preferito non è disponibile' : `${p.n} preferiti non sono disponibili`),
   unavailableHint: 'Non sono più al loro posto: eliminati, nel cestino o modificati da un altro computer. Se li ripristini dal cestino, ricompaiono da soli.',
   removeUnavailable: 'Rimuovi quelli non disponibili',
+  actionFailed: 'Impossibile completare. Riprova.',
   openTrash: 'Apri il cestino',
 } satisfies Translation<typeof source>;
