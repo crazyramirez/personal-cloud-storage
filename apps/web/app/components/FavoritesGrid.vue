@@ -225,7 +225,9 @@ function startDrag(event: PointerEvent): void {
     if (drag.value === null) return;
     const edge = 72;
     const y = drag.value.y;
-    const speed = y < edge ? -(edge - y) / 3 : y > window.innerHeight - edge ? (y - (window.innerHeight - edge)) / 3 : 0;
+    // Suave y con tope: cerca del borde (o de la barra de pestañas del móvil) no da tirones.
+    const raw = y < edge ? -(edge - y) / 6 : y > window.innerHeight - edge ? (y - (window.innerHeight - edge)) / 6 : 0;
+    const speed = Math.max(-10, Math.min(10, raw));
     if (speed !== 0) {
       window.scrollBy(0, speed);
       updateDrag(drag.value.x, drag.value.y);
@@ -235,13 +237,33 @@ function startDrag(event: PointerEvent): void {
   scrollFrame = requestAnimationFrame(scroll);
 }
 
+const favsEl = ref<HTMLElement | null>(null);
+
+/**
+ * Favorito cuyo sitio (el definitivo, no el animado) está bajo el puntero. No vale
+ * `elementFromPoint`: mientras la animación de reordenar desliza los vecinos, el que se aparta
+ * sigue un instante bajo el dedo, se volvería a intercambiar y el arrastrado daría saltos.
+ * `offsetLeft`/`offsetTop` dan la posición de maquetación, sin las transformaciones.
+ */
+function cellAt(x: number, y: number): string | undefined {
+  for (const cell of favsEl.value?.querySelectorAll<HTMLElement>('[data-fav-cell]') ?? []) {
+    const parent = cell.offsetParent as HTMLElement | null;
+    if (parent === null) continue;
+    const box = parent.getBoundingClientRect();
+    const left = box.left + parent.clientLeft + cell.offsetLeft;
+    const top = box.top + parent.clientTop + cell.offsetTop;
+    if (x >= left && x < left + cell.offsetWidth && y >= top && y < top + cell.offsetHeight) return cell.dataset['favCell'];
+  }
+  return undefined;
+}
+
 /** Sigue al puntero y, al pasar sobre otro favorito, el arrastrado ocupa su sitio. */
 function updateDrag(x: number, y: number): void {
   const current = drag.value;
   if (current === null) return;
   current.x = x;
   current.y = y;
-  const over = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-fav-cell]')?.dataset['favCell'];
+  const over = cellAt(x, y);
   if (over === undefined || over === current.path) return;
   const from = current.order.indexOf(current.path);
   const to = current.order.indexOf(over);
@@ -433,7 +455,7 @@ const titleId = `t-favoritos-${props.mode}`;
 </script>
 
 <template>
-  <section :aria-labelledby="titleId" class="favs" :class="[`mode-${mode}`, { card: mode === 'panel' }]">
+  <section ref="favsEl" :aria-labelledby="titleId" class="favs" :class="[`mode-${mode}`, { card: mode === 'panel' }]">
     <div v-if="mode === 'panel'" class="title">
       <AppIcon name="star" :size="20" class="muted" />
       <h2 :id="titleId">{{ t('favorites.title') }}</h2>
