@@ -235,6 +235,7 @@ export class SearchIndex {
   #lastScanEnd = 0;
   #dirty = false;
   #loadedGeneration: number | null = null;
+  #loading: Promise<void> | null = null;
   /** Rutas creadas o cambiadas desde la web después del último recorrido (aún no indexadas). */
   #added = new Set<string>();
 
@@ -306,11 +307,26 @@ export class SearchIndex {
     this.#timer.unref?.();
   }
 
+  /**
+   * Carga el índice guardado en el disco si no está en memoria (o el volumen cambió). Es rápido
+   * (~1 s con medio millón de elementos): se llama en cuanto el disco está listo, sin esperar a la
+   * primera renovación.
+   */
+  ensureLoaded(): Promise<void> {
+    const state = this.#o.gate.current.state;
+    if (state !== 'READY' && state !== 'READ_ONLY') return Promise.resolve();
+    if (this.#index !== null && this.#loadedGeneration === this.#o.gate.current.generation) return Promise.resolve();
+    this.#loading ??= this.#load().finally(() => {
+      this.#loading = null;
+    });
+    return this.#loading;
+  }
+
   /** Carga el índice guardado si no hay uno en memoria y renueva si es viejo o hubo cambios. */
   async tick(): Promise<void> {
     const state = this.#o.gate.current.state;
     if (state !== 'READY' && state !== 'READ_ONLY') return;
-    if (this.#index === null || this.#loadedGeneration !== this.#o.gate.current.generation) await this.#load();
+    await this.ensureLoaded();
     const age = this.#index === null ? Infinity : this.#o.now() - Date.parse(this.#index.builtAt);
     if (this.#scanning === null && (age > this.#o.maxAgeMs || this.#dirty)) await this.rebuild();
   }
@@ -323,10 +339,12 @@ export class SearchIndex {
       const data = parseIndex(text);
       this.#loadedGeneration = lease.generation;
       if (data === null) return;
-      if (this.#index === null || data.builtAt > this.#index.builtAt) this.#index = new NameIndex(data);
+      if (this.#index !== null && data.builtAt <= this.#index.builtAt) return; // el de memoria es igual o más nuevo
+      this.#index = new NameIndex(data);
       this.#o.log?.info({ entries: this.#index.size, builtAt: this.#index.builtAt }, 'índice de búsqueda cargado');
     } catch (error) {
-      if (errnoOf(error) !== 'ENOENT') this.#o.log?.warn({ err: error }, 'no se pudo cargar el índice de búsqueda');
+      if (errnoOf(error) === 'ENOENT') this.#loadedGeneration = this.#o.gate.current.generation; // aún no hay índice guardado
+      else this.#o.log?.warn({ err: error }, 'no se pudo cargar el índice de búsqueda');
     }
   }
 

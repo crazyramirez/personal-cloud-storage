@@ -155,6 +155,11 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
     ctx.user(request);
     const query = request.query as FsSearchQuery;
     const lease = await guardian.assertReadableVolume();
+    // Si el índice aún no está en memoria (recién arrancado), se carga ahora (~1 s) en vez de
+    // buscar solo en directo.
+    if (ctx.searchIndex !== undefined && ctx.searchIndex.state !== 'ready') {
+      await Promise.race([ctx.searchIndex.ensureLoaded(), new Promise((resolve) => setTimeout(resolve, 5_000))]);
+    }
     const gone = new AbortController();
     reply.raw.once('close', () => {
       if (!reply.raw.writableFinished) gone.abort();

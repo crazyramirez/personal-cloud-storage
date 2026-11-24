@@ -122,6 +122,7 @@ async function main(): Promise<void> {
   // se resuelve lo que quedó a medias; nunca se purga nada al recuperar el disco.
   guardian.onChange((snapshot) => {
     app.log.info({ state: snapshot.state, generation: snapshot.generation, issues: snapshot.issues.map((i) => i.code) }, 'estado del volumen');
+    if (snapshot.state === 'READY' || snapshot.state === 'READ_ONLY') void searchIndex.ensureLoaded();
     if (snapshot.state === 'READY') {
       uploads.recover().catch((error: unknown) => app.log.error({ err: error }, 'fallo al reconciliar subidas'));
       operations.recover().catch((error: unknown) => app.log.error({ err: error }, 'fallo al reconciliar operaciones'));
