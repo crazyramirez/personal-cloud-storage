@@ -4,7 +4,7 @@
  *
  * Con el índice de nombres (search-index.ts, ADR-0029) la búsqueda cubre todo el árbol al
  * instante; además se recorre en directo un momento la carpeta de la búsqueda (lo más cercano y lo
- * más reciente) y se suma lo creado desde la web después del último índice. El índice es solo una
+ * más reciente, a la vez que se comprueba lo del índice) y se suma lo creado desde la web después del último índice. El índice es solo una
  * pista: cada resultado se comprueba en el disco (sin enlaces, sin salir del volumen) antes de
  * devolverlo, así que nunca aparece algo que ya no existe.
  *
@@ -22,7 +22,7 @@ import { formatClientPath, isReservedTopName, parseClientPath, resolveInside } f
 
 export const SEARCH_TIME_BUDGET_MS = 8_000;
 /** Recorrido en directo cuando hay índice: solo lo cercano y lo reciente. */
-export const LIVE_WITH_INDEX_MS = 1_500;
+export const LIVE_WITH_INDEX_MS = 400;
 export const MAX_SEARCH_VISITED = 400_000;
 export const DEFAULT_SEARCH_LIMIT = 300;
 const STAT_CONCURRENCY = 16;
@@ -106,106 +106,115 @@ export async function searchTree(dataRoot: string, clientPath: string, query: st
     }
   }
 
-  // 2) En directo: con índice, solo un momento (lo cercano y lo reciente); sin él, es la búsqueda.
+  // 2) En directo (con índice, solo un momento: lo cercano y lo reciente; sin él, es la búsqueda)
+  //    y, a la vez, comprobación en el disco de lo que dice el índice.
   const deadline = now() + (fromIndex !== null ? Math.min(LIVE_WITH_INDEX_MS, options.budgetMs ?? SEARCH_TIME_BUDGET_MS) : (options.budgetMs ?? SEARCH_TIME_BUDGET_MS));
   const stopped = (): boolean => options.signal?.aborted === true || now() > deadline;
-  const found: Array<{ abs: string; segments: string[] }> = [];
-  const queue: Array<{ abs: string; segments: string[] }> = [{ abs: base.abs, segments }];
-  let head = 0;
   let scanned = 0;
   let liveTruncated: FsSearchResponse['truncated'] = null;
 
-  walk: while (head < queue.length) {
-    if (stopped() || scanned >= maxVisited) {
-      liveTruncated = 'time';
-      break;
-    }
-    const dir = queue[head++] as { abs: string; segments: string[] };
-    let dirents;
-    try {
-      dirents = await readdir(dir.abs, { withFileTypes: true });
-    } catch (error) {
-      if (SKIPPABLE.has(errnoOf(error) ?? '')) continue; // desapareció o no se puede leer: se sigue
-      throw error; // E/S del disco: lo traduce la capa HTTP (503)
-    }
-    // Dentro de cada carpeta, como en el listado: carpetas primero y por nombre.
-    dirents.sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || collator.compare(a.name, b.name));
-    for (const dirent of dirents) {
-      scanned += 1;
-      // Solo carpetas y archivos regulares; enlaces y especiales no existen para la web (spec §3.1).
-      if (!dirent.isDirectory() && !dirent.isFile()) continue;
-      if (dir.segments.length === 0 && isReservedTopName(dirent.name)) continue;
-      const child = { abs: path.join(dir.abs, dirent.name), segments: [...dir.segments, dirent.name] };
-      const name = foldForSearch(dirent.name);
-      if (tokens.every((token) => name.includes(token))) {
-        if (found.length >= limit) {
-          liveTruncated = 'limit';
+  const liveSearch = async (): Promise<Array<FsSearchResult & { depth: number }>> => {
+    const found: Array<{ abs: string; segments: string[] }> = [];
+    const queue: Array<{ abs: string; segments: string[] }> = [{ abs: base.abs, segments }];
+    let head = 0;
+    walk: while (head < queue.length) {
+      if (stopped() || scanned >= maxVisited) {
+        liveTruncated = 'time';
+        break;
+      }
+      const dir = queue[head++] as { abs: string; segments: string[] };
+      let dirents;
+      try {
+        dirents = await readdir(dir.abs, { withFileTypes: true });
+      } catch (error) {
+        if (SKIPPABLE.has(errnoOf(error) ?? '')) continue; // desapareció o no se puede leer: se sigue
+        throw error; // E/S del disco: lo traduce la capa HTTP (503)
+      }
+      // Dentro de cada carpeta, como en el listado: carpetas primero y por nombre.
+      dirents.sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || collator.compare(a.name, b.name));
+      for (const dirent of dirents) {
+        scanned += 1;
+        // Solo carpetas y archivos regulares; enlaces y especiales no existen para la web (spec §3.1).
+        if (!dirent.isDirectory() && !dirent.isFile()) continue;
+        if (dir.segments.length === 0 && isReservedTopName(dirent.name)) continue;
+        const child = { abs: path.join(dir.abs, dirent.name), segments: [...dir.segments, dirent.name] };
+        const name = foldForSearch(dirent.name);
+        if (tokens.every((token) => name.includes(token))) {
+          if (found.length >= limit) {
+            liveTruncated = 'limit';
+            break walk;
+          }
+          found.push(child);
+        }
+        if (dirent.isDirectory()) queue.push(child);
+        if ((scanned & 0xff) === 0 && stopped()) {
+          liveTruncated = 'time';
           break walk;
         }
-        found.push(child);
-      }
-      if (dirent.isDirectory()) queue.push(child);
-      if ((scanned & 0xff) === 0 && stopped()) {
-        liveTruncated = 'time';
-        break walk;
       }
     }
-  }
-
-  // 3) Comprobación en el disco: lo encontrado en directo (lstat) y lo del índice (por componentes,
-  //    sin enlaces ni salir del volumen), hasta el máximo de resultados.
-  const results: Array<FsSearchResult & { depth: number }> = [];
-  const seen = new Set<string>();
-  const live = new Array<FsSearchResult | null>(found.length);
-  let next = 0;
-  const liveWorker = async (): Promise<void> => {
-    while (next < found.length) {
-      const index = next++;
-      const item = found[index] as { abs: string; segments: string[] };
-      try {
-        live[index] = resultOf(item.segments, await lstat(item.abs));
-      } catch (error) {
-        if (!SKIPPABLE.has(errnoOf(error) ?? '')) throw error;
-        live[index] = null; // desapareció mientras se buscaba
+    // Tamaño y fecha solo de lo encontrado.
+    const live = new Array<(FsSearchResult & { depth: number }) | null>(found.length);
+    let next = 0;
+    const worker = async (): Promise<void> => {
+      while (next < found.length) {
+        const index = next++;
+        const item = found[index] as { abs: string; segments: string[] };
+        try {
+          const result = resultOf(item.segments, await lstat(item.abs));
+          live[index] = result === null ? null : { ...result, depth: item.segments.length };
+        } catch (error) {
+          if (!SKIPPABLE.has(errnoOf(error) ?? '')) throw error;
+          live[index] = null; // desapareció mientras se buscaba
+        }
       }
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(STAT_CONCURRENCY, found.length) }, worker));
+    return live.filter((item): item is FsSearchResult & { depth: number } => item !== null);
   };
-  await Promise.all(Array.from({ length: Math.min(STAT_CONCURRENCY, found.length) }, liveWorker));
-  found.forEach((item, index) => {
-    seen.add(keyOf(item.segments));
-    const result = live[index];
-    if (result !== null && result !== undefined) results.push({ ...result, depth: item.segments.length });
-  });
 
+  // Lo del índice se comprueba por componentes (sin enlaces ni salir del volumen): lo que ya no está
+  // no se muestra. Como mucho «limit» válidos.
+  const unique = new Set<string>();
   const pending = candidates.filter((candidate) => {
     const key = keyOf(candidate);
-    if (seen.has(key)) return false;
-    seen.add(key);
+    if (unique.has(key)) return false;
+    unique.add(key);
     return true;
   });
   let cursor = 0;
-  const indexWorker = async (): Promise<void> => {
-    while (cursor < pending.length && results.length < limit && options.signal?.aborted !== true) {
-      const candidate = pending[cursor++] as string[];
-      try {
-        const resolved = await resolveInside(dataRoot, candidate, 'any');
-        const result = resultOf(candidate, resolved.stats);
-        if (result !== null && results.length < limit) results.push({ ...result, depth: candidate.length });
-      } catch (error) {
-        // Ya no está (o dejó de ser válido): el índice era viejo. No se muestra.
-        if (error instanceof AppError || SKIPPABLE.has(errnoOf(error) ?? '')) continue;
-        throw error;
+  const indexSearch = async (): Promise<Array<FsSearchResult & { depth: number }>> => {
+    const valid: Array<FsSearchResult & { depth: number }> = [];
+    const worker = async (): Promise<void> => {
+      while (cursor < pending.length && valid.length < limit && options.signal?.aborted !== true) {
+        const candidate = pending[cursor++] as string[];
+        try {
+          const resolved = await resolveInside(dataRoot, candidate, 'any');
+          const result = resultOf(candidate, resolved.stats);
+          if (result !== null) valid.push({ ...result, depth: candidate.length });
+        } catch (error) {
+          // Ya no está (o dejó de ser válido): el índice era viejo. No se muestra.
+          if (error instanceof AppError || SKIPPABLE.has(errnoOf(error) ?? '')) continue;
+          throw error;
+        }
       }
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(STAT_CONCURRENCY, pending.length) }, worker));
+    return valid;
   };
-  await Promise.all(Array.from({ length: Math.min(STAT_CONCURRENCY, pending.length) }, indexWorker));
+
+  const [fromLive, fromDisk] = await Promise.all([liveSearch(), indexSearch()]);
+  const merged = new Map<string, FsSearchResult & { depth: number }>();
+  for (const item of [...fromLive, ...fromDisk]) if (!merged.has(item.path)) merged.set(item.path, item);
+  // Lo más cercano primero; dentro del mismo nivel, carpetas y luego por nombre.
+  const results = [...merged.values()].sort(
+    (a, b) => a.depth - b.depth || Number(b.type === 'dir') - Number(a.type === 'dir') || collator.compare(a.name, b.name),
+  );
 
   let truncated: FsSearchResponse['truncated'];
-  if (results.length >= limit && (cursor < pending.length || liveTruncated === 'limit')) truncated = 'limit';
+  if (results.length > limit || (results.length >= limit && (cursor < pending.length || liveTruncated === 'limit'))) truncated = 'limit';
   else if (fromIndex !== null) truncated = null; // el índice cubre todo el árbol
   else truncated = liveTruncated;
 
-  // Lo más cercano primero; dentro del mismo nivel, carpetas y luego por nombre.
-  results.sort((a, b) => a.depth - b.depth || Number(b.type === 'dir') - Number(a.type === 'dir') || collator.compare(a.name, b.name));
-  return response(results.map(({ depth: _depth, ...result }) => result), truncated, scanned);
+  return response(results.slice(0, limit).map(({ depth: _depth, ...result }) => result), truncated, scanned);
 }
