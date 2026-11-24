@@ -16,4 +16,6 @@ export default {
   location: 'In {path}',
   openLocation: 'Apri percorso',
   failed: 'Impossibile completare la ricerca.',
+  indexBuilding: 'Preparazione dell’indice di ricerca (la prima volta richiede qualche minuto): nel frattempo si cerca direttamente sul disco e potrebbero mancare risultati.',
+  indexAge: 'indice {when}',
 } satisfies Translation<typeof source>;

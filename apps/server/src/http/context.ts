@@ -9,6 +9,7 @@ import type { PcloudConfig } from '../config/config.ts';
 import type { Db } from '../db/database.ts';
 import type { MediaService } from '../media/service.ts';
 import type { FsOperations } from '../storage/operations.ts';
+import type { SearchIndex } from '../storage/search-index.ts';
 import type { VolumeSnapshot } from '../storage/storage-guardian.ts';
 import type { VolumeGate } from '../storage/uploads.ts';
 
@@ -28,6 +29,10 @@ export interface RouteContext {
   readonly guardian: GuardianLike;
   readonly operations: FsOperations;
   readonly media: MediaService;
+  /** Índice de nombres para la búsqueda (opcional: sin él, la búsqueda recorre en directo). */
+  readonly searchIndex?: SearchIndex | undefined;
+  /** Avisa al índice de que estas rutas se crearon o cambiaron desde la web. */
+  indexTouched(paths: readonly string[]): void;
   readonly clock: () => Date;
   readonly loginLimiter: AttemptLimit;
   readonly challenges: ChallengeStore;

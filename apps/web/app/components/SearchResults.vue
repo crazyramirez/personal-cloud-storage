@@ -26,6 +26,8 @@ const shownFor = ref('');
 const searching = ref(false);
 const failed = ref<string | null>(null);
 const truncated = ref<FsSearchResponse['truncated']>(null);
+/** Índice de nombres del servidor (ADR-0029): mientras se genera, la búsqueda puede ser parcial. */
+const indexInfo = ref<FsSearchResponse['index'] | null>(null);
 const rowsEl = ref<HTMLElement | null>(null);
 const broken = ref<Set<string>>(new Set());
 
@@ -48,6 +50,7 @@ async function run(): Promise<void> {
     if (controller !== current) return;
     results.value = response.results;
     truncated.value = response.truncated;
+    indexInfo.value = response.index;
     shownFor.value = key;
   } catch (error) {
     if (controller !== current || current.signal.aborted) return;
@@ -254,9 +257,11 @@ function onRowKey(event: KeyboardEvent, item: FsSearchResult): void {
       <AppIcon v-else name="search" :size="16" class="muted" />
       <span v-if="searching && stale">{{ t('search.searching', { name: dirName }) }}</span>
       <span v-else-if="!failed">{{ t('search.count', { n: sorted.length, name: dirName }) }}</span>
+      <span v-if="!failed && indexInfo?.state === 'ready' && indexInfo.builtAt" class="age" :title="formatDate(indexInfo.builtAt)">· {{ t('search.indexAge', { when: formatRelative(indexInfo.builtAt) }) }}</span>
     </div>
 
     <p v-if="!stale && truncated === 'limit'" class="notice notice-warn"><AppIcon name="alert" /><span>{{ t('search.truncatedLimit', { n: results.length }) }}</span></p>
+    <p v-else-if="!stale && indexInfo !== null && indexInfo.state !== 'ready'" class="notice"><AppIcon name="info" /><span>{{ t('search.indexBuilding') }}</span></p>
     <p v-else-if="!stale && truncated === 'time'" class="notice notice-warn"><AppIcon name="alert" /><span>{{ t('search.truncatedTime') }}</span></p>
 
     <div v-if="failed && !stale" class="card empty">
@@ -338,6 +343,10 @@ function onRowKey(event: KeyboardEvent, item: FsSearchResult): void {
   min-height: 24px;
   font-size: 13px;
   color: var(--muted);
+}
+
+.age {
+  font-size: 12px;
 }
 
 .spinner {

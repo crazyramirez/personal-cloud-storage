@@ -46,7 +46,7 @@ describe('búsqueda en la carpeta y sus subcarpetas', () => {
 
   it('encuentra en todas las subcarpetas, sin mayúsculas ni acentos, lo más cercano primero', async () => {
     const result = await search('/', 'VIAJE');
-    assert.deepEqual(result.results.map((item) => item.path), ['/Documentos/presupuesto viaje.pdf', '/Fotos/Viaje 2026', '/Fotos/viaje-portada.jpg']);
+    assert.deepEqual(result.results.map((item) => item.path), ['/Fotos/Viaje 2026', '/Documentos/presupuesto viaje.pdf', '/Fotos/viaje-portada.jpg']);
     assert.equal(result.truncated, null);
     const photo = result.results.find((item) => item.name === 'viaje-portada.jpg');
     assert.deepEqual({ dir: photo?.dir, type: photo?.type, size: photo?.size }, { dir: '/Fotos', type: 'file', size: 4 });

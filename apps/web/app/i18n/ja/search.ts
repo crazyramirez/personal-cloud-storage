@@ -16,4 +16,6 @@ export default {
   location: '場所: {path}',
   openLocation: 'ファイルの場所を開く',
   failed: '検索を完了できませんでした。',
+  indexBuilding: '検索インデックスを準備しています（初回は数分かかります）。それまではディスクを直接検索するため、結果が不足することがあります。',
+  indexAge: 'インデックス: {when}',
 } satisfies Translation<typeof source>;

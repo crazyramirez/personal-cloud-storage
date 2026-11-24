@@ -16,4 +16,6 @@ export default {
   location: '位于 {path}',
   openLocation: '打开所在位置',
   failed: '无法完成搜索。',
+  indexBuilding: '正在准备搜索索引（首次需要几分钟）：在此期间直接在磁盘上搜索，可能缺少部分结果。',
+  indexAge: '索引更新于{when}',
 } satisfies Translation<typeof source>;

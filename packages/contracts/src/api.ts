@@ -154,8 +154,13 @@ export const FsSearchResponse = Type.Object({
   results: Type.Array(FsSearchResult),
   /** null = se miró todo; «limit» = hay más resultados de los devueltos; «time» = se cortó antes de mirarlo todo. */
   truncated: Type.Union([Type.Literal('limit'), Type.Literal('time'), Type.Null()]),
-  /** Elementos recorridos. */
+  /** Elementos recorridos en directo. */
   scanned: Type.Integer(),
+  /** Índice de nombres (ADR-0029): «building» = aún generándose (la búsqueda puede ser parcial). */
+  index: Type.Object({
+    state: Type.Union([Type.Literal('ready'), Type.Literal('building'), Type.Literal('none')]),
+    builtAt: Type.Union([Type.String(), Type.Null()]),
+  }),
 });
 export type FsSearchResponse = Static<typeof FsSearchResponse>;
 

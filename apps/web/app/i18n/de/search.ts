@@ -16,4 +16,6 @@ export default {
   location: 'In {path}',
   openLocation: 'Dateispeicherort öffnen',
   failed: 'Die Suche konnte nicht abgeschlossen werden.',
+  indexBuilding: 'Der Suchindex wird vorbereitet (beim ersten Mal dauert es einige Minuten): Bis dahin wird direkt auf der Festplatte gesucht und es können Ergebnisse fehlen.',
+  indexAge: 'Index {when}',
 } satisfies Translation<typeof source>;

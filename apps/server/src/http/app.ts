@@ -78,6 +78,7 @@ import { registerBackupRoutes } from './routes-backup.ts';
 import { registerShareRoutes } from './routes-shares.ts';
 import type { ShareGateway } from '../share/gateway.ts';
 import type { ShareStore } from '../share/store.ts';
+import type { SearchIndex } from '../storage/search-index.ts';
 import { registerSystemRoutes } from './routes-system.ts';
 import { registerFileRoutes } from './routes-files.ts';
 import { registerMediaRoutes } from './routes-media.ts';
@@ -120,6 +121,8 @@ export interface AppDeps {
   readonly pairing?: PairingService;
   /** Enlaces para compartir con invitados (opcional: sin ellos no hay rutas /shares). */
   readonly shares?: { readonly store: ShareStore; readonly gateway: ShareGateway };
+  /** Índice de nombres para la búsqueda (opcional, ADR-0029). */
+  readonly searchIndex?: SearchIndex;
 }
 
 const API = '/api/v1';
@@ -373,6 +376,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const body = request.body as CreateFolderRequest;
     const created = await ctx.operations.createFolder(body.path, body.name);
     audit(db, { userId: session.userId, action: 'fs.mkdir', path: created.path, result: 'ok', ip: request.ip }, clock());
+    ctx.indexTouched([created.path]);
     void reply.status(201);
     return created;
   });
@@ -465,6 +469,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const { id } = request.params as UploadParams;
     const done = await uploads.complete(session.userId, id);
     audit(db, { userId: session.userId, action: 'fs.upload', path: done.path, result: 'ok', ip: request.ip, detail: `${done.size} bytes` }, clock());
+    ctx.indexTouched([done.path]);
     return done;
   });
 
@@ -498,6 +503,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         relocated: (from, to) => relocatePaths(db, from, to),
       }),
     media: deps.media ?? new MediaService(guardian),
+    searchIndex: deps.searchIndex,
+    indexTouched: (paths) => deps.searchIndex?.touched(paths),
     clock,
     loginLimiter,
     challenges: new ChallengeStore(),

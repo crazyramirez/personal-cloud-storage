@@ -15,6 +15,8 @@ const es = {
   location: 'En {path}',
   openLocation: 'Abrir ubicación',
   failed: 'No se pudo completar la búsqueda.',
+  indexBuilding: 'Preparando el índice de búsqueda (la primera vez tarda unos minutos): mientras tanto se busca directamente en el disco y pueden faltar resultados.',
+  indexAge: 'índice {when}',
 } satisfies MessageTable;
 
 export default {
@@ -34,5 +36,7 @@ export default {
     location: 'In {path}',
     openLocation: 'Open file location',
     failed: 'The search couldn’t be completed.',
+    indexBuilding: 'Preparing the search index (the first time takes a few minutes): meanwhile the disk is searched directly and some results may be missing.',
+    indexAge: 'index {when}',
   } satisfies Record<keyof typeof es, Message>,
 };

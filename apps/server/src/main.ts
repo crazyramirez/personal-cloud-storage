@@ -27,6 +27,7 @@ import { ShareStore } from './share/store.ts';
 import { MediaService } from './media/service.ts';
 import { FsOperations } from './storage/operations.ts';
 import { relocatePaths } from './storage/relocate.ts';
+import { SearchIndex } from './storage/search-index.ts';
 import { SerialQueue } from './storage/serial.ts';
 import { UploadManager } from './storage/uploads.ts';
 
@@ -107,9 +108,13 @@ async function main(): Promise<void> {
     activeCount: () => shareStore.countActive(new Date()),
     log: { info: (o, m) => gatewayLog.info(o, m), warn: (o, m) => gatewayLog.warn(o, m) },
   });
-  const app = await buildApp({ config, db, guardian, uploads, operations, media, release, backup, resources, shares: { store: shareStore, gateway }, power: new FilePowerAgent(), pairing: new PairingService(), version });
+  // Índice de nombres para la búsqueda (ADR-0029): proceso aparte de prioridad baja; caché en el HDD.
+  let indexLog: GatewayLogger = console as unknown as GatewayLogger;
+  const searchIndex = new SearchIndex({ gate: guardian, log: { info: (o, m) => indexLog.info(o, m), warn: (o, m) => indexLog.warn(o, m) } });
+  const app = await buildApp({ config, db, guardian, uploads, operations, media, release, backup, resources, shares: { store: shareStore, gateway }, power: new FilePowerAgent(), pairing: new PairingService(), version, searchIndex });
   backupLog = app.log;
   gatewayLog = app.log;
+  indexLog = app.log;
   const guest = await buildGuestApp({ db, store: shareStore, guardian, logLevel: config.server.logLevel, onShareChanged: () => void gateway.reconcile() });
   app.log.info({ ffmpeg: tools.ffmpeg !== null, office: tools.soffice !== null, hwEncoder: tools.hwEncoder }, 'visores');
 
@@ -125,6 +130,7 @@ async function main(): Promise<void> {
   guardian.start(config.storage.healthCheckIntervalSeconds * 1000);
   backup.start().catch((error: unknown) => app.log.error({ err: error }, 'no se pudo iniciar la copia de seguridad'));
   gateway.start();
+  searchIndex.start();
 
   const housekeeping = setInterval(() => {
     purgeExpiredSessions(db, new Date());
@@ -155,6 +161,7 @@ async function main(): Promise<void> {
         clearInterval(housekeeping);
         backup.stop();
         gateway.stop();
+        searchIndex.stop();
         resources.stop();
         guardian.stop();
         db.close();

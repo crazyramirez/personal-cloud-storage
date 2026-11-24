@@ -55,6 +55,9 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
     }
   };
 
+  /** Rutas finales de lo que salió bien en un lote (para el índice de búsqueda). */
+  const okPaths = (results: readonly ItemResult[]): string[] => results.flatMap((item) => (item.ok && item.path.startsWith('/') ? [item.path] : []));
+
   const logBatch = (request: FastifyRequest, userId: number, action: string, results: ItemResult[], target?: string): void => {
     for (const result of results.slice(0, 200)) {
       audit(
@@ -79,6 +82,7 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
     const body = request.body as CreateFileRequest;
     const created = await operations.createFile(body.path, body.name);
     audit(db, { userId: session.userId, action: 'fs.create', path: created.path, result: 'ok', ip: request.ip }, clock());
+    ctx.indexTouched([created.path]);
     void reply.status(201);
     return created;
   });
@@ -89,6 +93,7 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
     await guardSystemFolders([body.path]);
     const renamed = await operations.rename(body.path, body.name);
     audit(db, { userId: session.userId, action: 'fs.rename', path: body.path, result: 'ok', ip: request.ip, detail: `→ ${renamed.path}` }, clock());
+    ctx.indexTouched([renamed.path]);
     return renamed;
   });
 
@@ -98,6 +103,7 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
     await guardSystemFolders(body.paths);
     const results = await operations.move(body.paths, body.destination);
     logBatch(request, session.userId, 'fs.move', results, body.destination);
+    ctx.indexTouched(okPaths(results));
     return { results };
   });
 
@@ -106,6 +112,7 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
     const body = request.body as TransferItemsRequest;
     const results = await operations.copy(body.paths, body.destination);
     logBatch(request, session.userId, 'fs.copy', results, body.destination);
+    ctx.indexTouched(okPaths(results));
     return { results };
   });
 
@@ -115,6 +122,7 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
     await guardSystemFolders(body.paths);
     const results = await operations.trash(body.paths, session.userId);
     logBatch(request, session.userId, 'fs.trash', results);
+    ctx.indexTouched([]); // lo eliminado ya no sale (se comprueba al buscar); se renueva igualmente
     return { results };
   });
 
@@ -151,7 +159,7 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
     reply.raw.once('close', () => {
       if (!reply.raw.writableFinished) gone.abort();
     });
-    return searchTree(lease.dataRoot, query.path, query.q, { limit: query.limit, signal: gone.signal });
+    return searchTree(lease.dataRoot, query.path, query.q, { limit: query.limit, signal: gone.signal, index: ctx.searchIndex });
   });
 
   app.get(`${API}/fs/zip`, { schema: { querystring: ZipQuery } }, async (request, reply) => {
@@ -241,6 +249,7 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
     const body = request.body as TrashIdsRequest;
     const results = await operations.restore(body.ids);
     logBatch(request, session.userId, 'trash.restore', results);
+    ctx.indexTouched(okPaths(results));
     return { results };
   });
 
