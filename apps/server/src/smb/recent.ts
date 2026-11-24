@@ -149,6 +149,14 @@ export class SmbRecentStore {
     this.#db.prepare("DELETE FROM smb_audit_state WHERE key = 'cursor'").run();
   }
 
+  /** Lo anotado después de `since` (ISO), lo más antiguo primero (para el índice de búsqueda). */
+  since(since: string, limit = 5000): SmbRecentRow[] {
+    return this.#db
+      .prepare('SELECT path, at FROM smb_recent WHERE at > ? ORDER BY at LIMIT ?')
+      .all(since, limit)
+      .map((row) => ({ path: String(row['path']), at: String(row['at']) }));
+  }
+
   list(limit: number): SmbRecentRow[] {
     return this.#db
       .prepare('SELECT path, at FROM smb_recent ORDER BY at DESC LIMIT ?')

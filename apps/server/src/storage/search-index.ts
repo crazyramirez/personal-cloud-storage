@@ -10,8 +10,11 @@
  *  - Se guarda como caché regenerable en el propio disco de datos (`.pcloud/cache/search/`),
  *    nunca en la microSD, y solo con el volumen escribible y el mismo lease de principio a fin.
  *    Al arrancar se carga de ahí: la búsqueda funciona desde el primer momento.
- *  - Se renueva tras los cambios hechos desde la web (con unos minutos de margen) y cada 12 h. Lo
- *    creado desde la web desde la última vez se recuerda aparte hasta entonces.
+ *  - Se mantiene al día como Spotlight o Windows Search, con los diarios de cambios que ya hay
+ *    (ADR-0030): lo creado desde la web y lo que anota Samba de la carpeta de red entra al momento;
+ *    renombrar o mover desde la web traslada la carpeta en el índice sin recorrer nada. El recorrido
+ *    completo queda como red de seguridad: una vez al día y, si la carpeta de red tuvo actividad
+ *    (puede haber renombrado algo), como mucho una vez por hora.
  *  - Es solo una pista: cada resultado se comprueba en el disco antes de devolverlo (storage/
  *    search.ts). Un índice viejo nunca muestra algo que ya no existe, y una ausencia en el índice
  *    nunca se trata como un borrado.
@@ -194,7 +197,13 @@ export class NameIndex {
   }
 }
 
-// ── Servicio: carga, renovación y lo cambiado desde la web ────────────────────────────────────
+/** Cambia el prefijo `from` por `to` si la ruta es esa carpeta o algo de dentro. */
+function rebase(clientPath: string, from: string, to: string): string {
+  if (clientPath === from) return to;
+  return clientPath.startsWith(`${from}/`) ? `${to}${clientPath.slice(from.length)}` : clientPath;
+}
+
+// ── Servicio: carga, renovación y lo cambiado ───────────────────────────────────────────────
 
 export interface IndexGate {
   readonly current: { readonly state: string; readonly generation: number };
@@ -217,6 +226,12 @@ export interface SearchIndexOptions {
   readonly minGapMs?: number;
   /** Espera tras arrancar antes del primer recorrido (que el equipo termine de arrancar). */
   readonly startDelayMs?: number;
+  /**
+   * Diario de cambios hechos fuera de la web (la carpeta de red, smb_recent): rutas anotadas
+   * después de `since` (ISO) y la marca de la última. Se consulta cada pocos segundos.
+   */
+  readonly changes?: ((since: string) => { paths: string[]; last: string | null }) | undefined;
+  readonly changesEveryMs?: number;
   readonly now?: () => number;
   readonly log?: { info(obj: object, msg: string): void; warn(obj: object, msg: string): void };
 }
@@ -224,10 +239,12 @@ export interface SearchIndexOptions {
 export type IndexState = 'ready' | 'building' | 'none';
 
 const HOUR = 60 * 60 * 1000;
-const MAX_ADDED = 5000;
+/** Rutas añadidas que se recuerdan hasta el siguiente recorrido; si se llena, se renueva antes. */
+const MAX_ADDED = 50_000;
+const MAX_RENAMES = 2_000;
 
 export class SearchIndex {
-  readonly #o: Required<Omit<SearchIndexOptions, 'log'>> & Pick<SearchIndexOptions, 'log'>;
+  readonly #o: Required<Omit<SearchIndexOptions, 'log' | 'changes'>> & Pick<SearchIndexOptions, 'log' | 'changes'>;
   #index: NameIndex | null = null;
   #scanning: AbortController | null = null;
   #timer: ReturnType<typeof setTimeout> | null = null;
@@ -236,16 +253,22 @@ export class SearchIndex {
   #dirty = false;
   #loadedGeneration: number | null = null;
   #loading: Promise<void> | null = null;
-  /** Rutas creadas o cambiadas desde la web después del último recorrido (aún no indexadas). */
+  /** Rutas creadas o cambiadas después del último recorrido (aún no indexadas). */
   #added = new Set<string>();
+  /** Carpetas renombradas o movidas desde la web después del último recorrido, en orden. */
+  #renames: Array<{ from: string; to: string; at: number }> = [];
+  #changesTimer: ReturnType<typeof setInterval> | null = null;
+  /** Marca de lo último leído del diario de la carpeta de red. */
+  #changesSince: string | null = null;
 
   constructor(options: SearchIndexOptions) {
     this.#o = {
       scanner: scanInChildProcess,
-      maxAgeMs: 12 * HOUR,
+      maxAgeMs: 24 * HOUR,
       settleMs: 3 * 60_000,
-      minGapMs: 30 * 60_000,
+      minGapMs: HOUR,
       startDelayMs: 60_000,
+      changesEveryMs: 15_000,
       now: Date.now,
       ...options,
     };
@@ -264,9 +287,63 @@ export class SearchIndex {
     return this.#index;
   }
 
-  /** Lo creado desde la web aún sin indexar (para buscarlo también). */
+  /** Lo creado aún sin indexar (para buscarlo también). */
   get added(): ReadonlySet<string> {
     return this.#added;
+  }
+
+  /**
+   * Busca en el índice teniendo en cuenta lo renombrado o movido desde la web después del último
+   * recorrido: la carpeta de la búsqueda se traduce a su ruta antigua y los resultados a la nueva.
+   */
+  find(segments: readonly string[], tokens: readonly string[]): string[][] | null {
+    const index = this.#index;
+    if (index === null) return null;
+    if (this.#renames.length === 0) return index.find(segments, tokens);
+    const asPath = formatClientPath(segments);
+    const prefix = asPath === '/' ? '/' : `${asPath}/`;
+    const back = (p: string): string => [...this.#renames].reverse().reduce((acc, rename) => rebase(acc, rename.to, rename.from), p);
+    const forward = (p: string): string => this.#renames.reduce((acc, rename) => rebase(acc, rename.from, rename.to), p);
+    // Dónde estaba en el índice lo que ahora hay en la carpeta: la propia carpeta (con su nombre
+    // antiguo) y el origen de todo lo que se trasladó a ella o dentro de ella.
+    const sources = new Set<string>([back(asPath)]);
+    for (const rename of this.#renames) {
+      if (rename.to === asPath || rename.to.startsWith(prefix)) sources.add(back(rename.to));
+    }
+    let any = false;
+    const seen = new Set<string>();
+    const results: string[][] = [];
+    for (const source of sources) {
+      const found = index.find(parseClientPath(source), tokens);
+      if (found === null) continue;
+      any = true;
+      for (const hit of found) {
+        const p = forward(formatClientPath(hit));
+        // Lo que se movió fuera de la carpeta de la búsqueda ya no está en ella.
+        if (!p.startsWith(prefix) || seen.has(p)) continue;
+        seen.add(p);
+        results.push(parseClientPath(p));
+      }
+    }
+    if (!any) return index.find(segments, tokens); // la carpeta se creó después del índice
+    results.sort((a, b) => a.length - b.length);
+    return results;
+  }
+
+  /** Renombrar o mover desde la web: el índice lo traslada al instante (sin recorrer nada). */
+  relocated(from: string, to: string): void {
+    try {
+      const rename = { from: formatClientPath(parseClientPath(from)), to: formatClientPath(parseClientPath(to)), at: this.#o.now() };
+      if (rename.from === rename.to || rename.from === '/') return;
+      this.#renames.push(rename);
+      this.#added.add(rename.to);
+      if (this.#renames.length > MAX_RENAMES) {
+        this.#renames.shift();
+        this.#markDirty(); // ya no se puede seguir el rastro de todo: mejor recorrer
+      }
+    } catch {
+      // ruta no válida: nada que trasladar
+    }
   }
 
   /** Comprobación periódica: carga el guardado al estar el disco y renueva si toca. */
@@ -274,24 +351,57 @@ export class SearchIndex {
     this.#periodic = setInterval(() => void this.tick(), HOUR);
     this.#periodic.unref?.();
     this.#schedule(this.#o.startDelayMs);
+    if (this.#o.changes !== undefined) {
+      this.#changesTimer = setInterval(() => this.pollChanges(), this.#o.changesEveryMs);
+      this.#changesTimer.unref?.();
+    }
+  }
+
+  /** Lee el diario de la carpeta de red: lo nuevo entra al índice al momento. */
+  pollChanges(): void {
+    if (this.#o.changes === undefined) return;
+    // La primera vez, desde que se hizo el índice (lo anterior ya está en él).
+    const since = this.#changesSince ?? this.#index?.builtAt ?? new Date(this.#o.now()).toISOString();
+    try {
+      const { paths, last } = this.#o.changes(since);
+      this.#changesSince = last ?? since;
+      if (paths.length === 0) return;
+      // Por la carpeta de red también se renombra y se mueve, y eso no se puede seguir desde
+      // aquí: se renueva el índice (como mucho una vez por hora).
+      this.touched(paths, { rescan: true });
+    } catch (error) {
+      this.#o.log?.warn({ err: error }, 'no se pudo leer el diario de la carpeta de red');
+    }
   }
 
   stop(): void {
+    if (this.#changesTimer !== null) clearInterval(this.#changesTimer);
     if (this.#periodic !== null) clearInterval(this.#periodic);
     if (this.#timer !== null) clearTimeout(this.#timer);
     this.#scanning?.abort();
   }
 
-  /** Cambios desde la web: se recuerdan y se renueva el índice pasado un rato. */
-  touched(clientPaths: readonly string[]): void {
+  /**
+   * Rutas creadas o cambiadas: se buscan desde ya. `rescan`: además hay que recorrer (p. ej. se
+   * copió o restauró una carpeta con contenido que el índice no tiene); se agrupan los cambios.
+   */
+  touched(clientPaths: readonly string[], options: { rescan?: boolean } = {}): void {
+    let full = false;
     for (const p of clientPaths) {
-      if (this.#added.size >= MAX_ADDED) break;
+      if (this.#added.size >= MAX_ADDED) {
+        full = true;
+        break;
+      }
       try {
         this.#added.add(formatClientPath(parseClientPath(p)));
       } catch {
         // ruta no válida: nada que recordar
       }
     }
+    if (options.rescan === true || full) this.#markDirty();
+  }
+
+  #markDirty(): void {
     this.#dirty = true;
     if (this.#scanning !== null) return; // se renovará al terminar el recorrido en curso
     const wait = Math.max(this.#o.settleMs, this.#lastScanEnd + this.#o.minGapMs - this.#o.now());
@@ -355,15 +465,17 @@ export class SearchIndex {
     this.#scanning = controller;
     this.#dirty = false;
     const addedBefore = new Set(this.#added);
+    const started = this.#o.now();
     try {
       const lease = await this.#o.gate.assertReadableVolume();
-      const started = this.#o.now();
       const data = await this.#o.scanner(lease.dataRoot, controller.signal);
       // El disco tiene que ser el mismo de principio a fin: si cambió, el resultado no vale.
       await this.#o.gate.revalidate(lease);
       this.#index = new NameIndex(data);
       this.#loadedGeneration = lease.generation;
       for (const p of addedBefore) this.#added.delete(p);
+      // Lo renombrado antes de empezar el recorrido ya está en él con su nombre nuevo.
+      this.#renames = this.#renames.filter((rename) => rename.at > started);
       this.#o.log?.info({ entries: data.names.length, ms: this.#o.now() - started }, 'índice de búsqueda renovado');
       await this.#persist(data);
     } catch (error) {

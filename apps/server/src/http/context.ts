@@ -31,8 +31,11 @@ export interface RouteContext {
   readonly media: MediaService;
   /** Índice de nombres para la búsqueda (opcional: sin él, la búsqueda recorre en directo). */
   readonly searchIndex?: SearchIndex | undefined;
-  /** Avisa al índice de que estas rutas se crearon o cambiaron desde la web. */
-  indexTouched(paths: readonly string[]): void;
+  /**
+   * Avisa al índice de que estas rutas se crearon o cambiaron desde la web. `rescan`: traen
+   * contenido que el índice no tiene (copiar o restaurar una carpeta).
+   */
+  indexTouched(paths: readonly string[], options?: { rescan?: boolean }): void;
   readonly clock: () => Date;
   readonly loginLimiter: AttemptLimit;
   readonly challenges: ChallengeStore;

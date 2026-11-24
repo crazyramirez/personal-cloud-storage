@@ -53,7 +53,7 @@ describe('índice de nombres para la búsqueda (ADR-0029)', () => {
     await mkdir(path.join(h.dataRoot, 'Nueva', 'Sub'), { recursive: true });
     await writeFile(path.join(h.dataRoot, 'Nueva', 'Sub', 'viaje nuevo.txt'), 'n');
     // El recorrido en directo no llega a nada (presupuesto 0): solo cuenta el índice + lo añadido.
-    const source = { state: 'ready' as const, builtAt: index.builtAt, index, added: new Set(['/Nueva/Sub/viaje nuevo.txt']) };
+    const source = { state: 'ready' as const, builtAt: index.builtAt, find: (seg: readonly string[], tok: readonly string[]) => index.find(seg, tok), added: new Set(['/Nueva/Sub/viaje nuevo.txt']) };
     const result = await searchTree(h.dataRoot, '/', 'viaje', { index: source, budgetMs: 0 });
     assert.deepEqual(result.results.map((item) => item.path).sort(), ['/Documentos/presupuesto viaje.pdf', '/Fotos/Viaje 2026', '/Nueva/Sub/viaje nuevo.txt']);
     assert.equal(result.truncated, null, 'el índice cubre todo');
@@ -67,7 +67,7 @@ describe('índice de nombres para la búsqueda (ADR-0029)', () => {
   it('un candidato del índice que ahora es un enlace o sale del volumen no se muestra', async () => {
     const data: IndexData = { builtAt: '2026-11-24T10:00:00.000Z', names: ['..', 'viaje.txt'], parents: [-1, 0], kinds: [1, 0] };
     const index = new NameIndex(data);
-    const result = await searchTree(h.dataRoot, '/', 'viaje', { index: { state: 'ready', builtAt: data.builtAt, index, added: new Set() }, budgetMs: 0 });
+    const result = await searchTree(h.dataRoot, '/', 'viaje', { index: { state: 'ready', builtAt: data.builtAt, find: (seg, tok) => index.find(seg, tok), added: new Set() }, budgetMs: 0 });
     assert.ok(!result.results.some((item) => item.path.includes('..')));
   });
 
@@ -122,6 +122,54 @@ describe('índice de nombres para la búsqueda (ADR-0029)', () => {
     assert.equal(service.state, 'none', 'resultado descartado');
     h.gate.reconnect();
     service.stop();
+  });
+
+  it('renombrar o mover desde la web: el índice lo traslada al instante, sin recorrer', async () => {
+    let scans = 0;
+    const service = new SearchIndex({ gate: h.gate, scanner: async (root) => (scans++, scanTree(root)), settleMs: 0, minGapMs: 0 });
+    await service.rebuild();
+    scans = 0;
+    service.relocated('/Fotos', '/Álbum');
+    service.relocated('/Álbum/Viaje 2026', '/Archivo/Viaje 2026');
+    const paths = (dir: string[], q: string): string[] => (service.find(dir, searchTokens(q)) ?? []).map((s) => '/' + s.join('/'));
+    assert.deepEqual(paths([], 'playa'), ['/Archivo/Viaje 2026/Playa', '/Archivo/Viaje 2026/Playa/atardecer en la playa.jpg']);
+    assert.deepEqual(paths(['Álbum'], 'viaje'), ['/Álbum/viaje-portada.jpg'], 'buscar en la carpeta con su nombre nuevo');
+    assert.deepEqual(paths(['Archivo'], 'atardecer'), ['/Archivo/Viaje 2026/Playa/atardecer en la playa.jpg']);
+    assert.equal(scans, 0, 'sin recorrer el disco');
+    service.stop();
+  });
+
+  it('diario de la carpeta de red: lo nuevo entra al momento; y se programa un recorrido', async () => {
+    let scans = 0;
+    const since: string[] = [];
+    const service = new SearchIndex({
+      gate: h.gate,
+      scanner: async (root) => (scans++, scanTree(root)),
+      changes: (from) => {
+        since.push(from);
+        return since.length === 1 ? { paths: ['/DEV_Backup_Studio/PC/nuevo viaje.txt'], last: '2099-01-01T00:00:00.000Z' } : { paths: [], last: null };
+      },
+      startDelayMs: 3_600_000,
+    });
+    await service.rebuild();
+    scans = 0;
+    service.pollChanges();
+    assert.ok(service.added.has('/DEV_Backup_Studio/PC/nuevo viaje.txt'));
+    assert.equal(since[0], service.builtAt, 'desde que se hizo el índice');
+    service.pollChanges();
+    assert.equal(since[1], '2099-01-01T00:00:00.000Z', 'después, desde lo último leído');
+    // Lo creado desde la web no obliga a recorrer; copiar o restaurar una carpeta, sí.
+    const web = new SearchIndex({ gate: h.gate, scanner: async (root) => (scans++, scanTree(root)), settleMs: 0, minGapMs: 0, startDelayMs: 3_600_000 });
+    await web.rebuild();
+    scans = 0;
+    web.touched(['/Fotos/subida.jpg']);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(scans, 0);
+    web.touched(['/Copia de Fotos'], { rescan: true });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(scans, 1);
+    service.stop();
+    web.stop();
   });
 
   it('el proceso aparte de verdad: recorre y devuelve el mismo índice', async () => {

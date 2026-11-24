@@ -112,7 +112,7 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
     const body = request.body as TransferItemsRequest;
     const results = await operations.copy(body.paths, body.destination);
     logBatch(request, session.userId, 'fs.copy', results, body.destination);
-    ctx.indexTouched(okPaths(results));
+    ctx.indexTouched(okPaths(results), { rescan: true }); // una carpeta copiada trae su contenido
     return { results };
   });
 
@@ -122,7 +122,7 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
     await guardSystemFolders(body.paths);
     const results = await operations.trash(body.paths, session.userId);
     logBatch(request, session.userId, 'fs.trash', results);
-    ctx.indexTouched([]); // lo eliminado ya no sale (se comprueba al buscar); se renueva igualmente
+    // Lo eliminado no hace falta quitarlo del índice: cada resultado se comprueba al buscar.
     return { results };
   });
 
@@ -254,7 +254,7 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
     const body = request.body as TrashIdsRequest;
     const results = await operations.restore(body.ids);
     logBatch(request, session.userId, 'trash.restore', results);
-    ctx.indexTouched(okPaths(results));
+    ctx.indexTouched(okPaths(results), { rescan: true }); // una carpeta restaurada trae su contenido
     return { results };
   });
 

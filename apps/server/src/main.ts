@@ -28,6 +28,7 @@ import { MediaService } from './media/service.ts';
 import { FsOperations } from './storage/operations.ts';
 import { relocatePaths } from './storage/relocate.ts';
 import { SearchIndex } from './storage/search-index.ts';
+import { SmbRecentStore } from './smb/recent.ts';
 import { SerialQueue } from './storage/serial.ts';
 import { UploadManager } from './storage/uploads.ts';
 
@@ -61,6 +62,18 @@ async function main(): Promise<void> {
     snapshotDir: path.join(config.paths.stateDir, 'snapshots-db'),
   });
   const guardian = createGuardian(config);
+  // Índice de nombres para la búsqueda (ADR-0029, ADR-0030): proceso aparte de prioridad baja;
+  // caché en el HDD; al día con los cambios de la web y el diario de la carpeta de red.
+  let indexLog: GatewayLogger = console as unknown as GatewayLogger;
+  const smbRecent = new SmbRecentStore(db);
+  const searchIndex = new SearchIndex({
+    gate: guardian,
+    changes: (since) => {
+      const rows = smbRecent.since(since);
+      return { paths: rows.map((row) => row.path), last: rows.at(-1)?.at ?? null };
+    },
+    log: { info: (o, m) => indexLog.info(o, m), warn: (o, m) => indexLog.warn(o, m) },
+  });
   // Una sola cola para todo lo que elige nombres y hace rename: subidas y explorador.
   const serial = new SerialQueue();
   const operations = new FsOperations({
@@ -71,7 +84,10 @@ async function main(): Promise<void> {
     trashRetentionDays: config.trash.enabled ? config.trash.retentionDays : null,
     // systemd-timesyncd crea este fichero cuando ha sincronizado la hora con la red.
     clockTrusted: () => access('/run/systemd/timesync/synchronized').then(() => true, () => false),
-    relocated: (from, to) => relocatePaths(db, from, to),
+    relocated: (from, to) => {
+      searchIndex.relocated(from, to);
+      relocatePaths(db, from, to);
+    },
   });
   const media = new MediaService(guardian, undefined, { minFreePercent: config.storage.minFreePercent, minFreeBytes: config.storage.minFreeBytes });
   const tools = await media.init();
@@ -108,9 +124,6 @@ async function main(): Promise<void> {
     activeCount: () => shareStore.countActive(new Date()),
     log: { info: (o, m) => gatewayLog.info(o, m), warn: (o, m) => gatewayLog.warn(o, m) },
   });
-  // Índice de nombres para la búsqueda (ADR-0029): proceso aparte de prioridad baja; caché en el HDD.
-  let indexLog: GatewayLogger = console as unknown as GatewayLogger;
-  const searchIndex = new SearchIndex({ gate: guardian, log: { info: (o, m) => indexLog.info(o, m), warn: (o, m) => indexLog.warn(o, m) } });
   const app = await buildApp({ config, db, guardian, uploads, operations, media, release, backup, resources, shares: { store: shareStore, gateway }, power: new FilePowerAgent(), pairing: new PairingService(), version, searchIndex });
   backupLog = app.log;
   gatewayLog = app.log;

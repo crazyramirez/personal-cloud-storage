@@ -500,11 +500,14 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         minFreeBytes: config.storage.minFreeBytes,
         trashRetentionDays: config.trash.enabled ? config.trash.retentionDays : null,
         clock,
-        relocated: (from, to) => relocatePaths(db, from, to),
+        relocated: (from, to) => {
+          deps.searchIndex?.relocated(from, to);
+          relocatePaths(db, from, to);
+        },
       }),
     media: deps.media ?? new MediaService(guardian),
     searchIndex: deps.searchIndex,
-    indexTouched: (paths) => deps.searchIndex?.touched(paths),
+    indexTouched: (paths, options) => deps.searchIndex?.touched(paths, options),
     clock,
     loginLimiter,
     challenges: new ChallengeStore(),

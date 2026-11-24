@@ -32,8 +32,9 @@ const collator = new Intl.Collator('es', { numeric: true, sensitivity: 'base' })
 export interface SearchIndexSource {
   readonly state: 'ready' | 'building' | 'none';
   readonly builtAt: string | null;
-  readonly index: { find(segments: readonly string[], tokens: readonly string[]): string[][] | null } | null;
-  /** Rutas creadas o cambiadas desde la web después del último índice. */
+  /** Coincidencias dentro de la carpeta; null = sin índice o la carpeta no está en él. */
+  find(segments: readonly string[], tokens: readonly string[]): string[][] | null;
+  /** Rutas creadas o cambiadas después del último índice. */
   readonly added: ReadonlySet<string>;
 }
 
@@ -92,7 +93,7 @@ export async function searchTree(dataRoot: string, clientPath: string, query: st
   if (tokens.length === 0) return response([], null, 0);
 
   // 1) Índice: todas las coincidencias dentro de la carpeta (null = la carpeta no está en él).
-  const fromIndex = source?.index?.find(segments, tokens) ?? null;
+  const fromIndex = source?.find(segments, tokens) ?? null;
   const candidates: string[][] = fromIndex ?? [];
   // Lo creado desde la web después del índice, si cae dentro y coincide.
   if (source !== undefined) {
