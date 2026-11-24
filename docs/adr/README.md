@@ -32,6 +32,7 @@ Formato: Contexto → Decisión → Consecuencias → Alternativas. Un ADR acept
 | [0028](0028-orden-personalizado-favoritos.md) | Orden personalizado de los favoritos (arrastrar; también el del acceso rápido) | Aceptado |
 | [0029](0029-indice-de-busqueda.md) | Índice de nombres (en la caché del disco, proceso de prioridad baja) para buscar en carpetas y subcarpetas | Aceptado |
 | [0030](0030-indice-al-dia-con-diarios.md) | El índice de búsqueda se mantiene al día con los cambios de la web y el diario de la carpeta de red | Aceptado |
+| [0031](0031-ver-enlaces-compartidos-en-el-navegador.md) | Ver en el navegador lo que se comparte con un enlace (imágenes, vídeo, audio, PDF y Office, sin JavaScript) | Aceptado |
 
 ## Pendientes
 

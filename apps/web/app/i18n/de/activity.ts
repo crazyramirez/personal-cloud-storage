@@ -54,6 +54,7 @@ export default {
   shareCreate: 'Freigabelink erstellt',
   shareRevoke: 'Link zurückgezogen',
   shareDownload: 'Ein Gast hat heruntergeladen',
+  shareView: 'Ein Gast hat angesehen',
   shareUnlock: 'Falsches Passwort für einen Link',
   detailShare: 'Link {id}',
   detailDays: (p) => (Number(p.n) === 1 ? '1 Tag' : `${p.n} Tage`),

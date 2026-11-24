@@ -64,6 +64,7 @@ function icon(action: string): IconName {
   if (action.startsWith('auth') || action.startsWith('setup')) return 'lock';
   if (action.startsWith('users')) return 'users';
   if (action === 'share.download') return 'download';
+  if (action === 'share.view') return 'eye';
   if (action.startsWith('share')) return 'link';
   if (action.startsWith('trash')) return 'trash';
   if (action === 'fs.upload') return 'upload';

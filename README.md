@@ -43,6 +43,7 @@ Nube personal autocontenida: un servidor Linux pequeño (una **Raspberry Pi**, u
 ### Compartir
 
 - **Enlaces para invitados sin cuenta** (solo el propietario): un archivo o una carpeta de solo lectura, con caducidad obligatoria (1, 7 o 30 días) y, opcionalmente, contraseña y límite de descargas. Se pueden retirar al instante en Ajustes → Enlaces compartidos.
+- **El invitado lo ve en el navegador**, sin descargar nada: fotos (también HEIC o RAW), vídeo y audio (los que el navegador no entiende los convierte el servidor), PDF, documentos de Office y texto. En una carpeta compartida pasa de un archivo al siguiente. Los enlaces con límite de descargas solo descargan ([ADR-0031](docs/adr/0031-ver-enlaces-compartidos-en-el-navegador.md)).
 - Solo se publica una puerta mínima de descarga, en un nodo de Tailscale aparte y **solo mientras hay enlaces activos**. La app nunca queda expuesta a Internet y no se abre ningún puerto del router ([ADR-0018](docs/adr/0018-enlaces-para-invitados.md), [ADR-0019](docs/adr/0019-nodo-tailscale-dedicado-enlaces.md)).
 
 ### Cuentas y seguridad

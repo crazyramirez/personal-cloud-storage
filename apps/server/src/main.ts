@@ -128,7 +128,7 @@ async function main(): Promise<void> {
   backupLog = app.log;
   gatewayLog = app.log;
   indexLog = app.log;
-  const guest = await buildGuestApp({ db, store: shareStore, guardian, logLevel: config.server.logLevel, onShareChanged: () => void gateway.reconcile() });
+  const guest = await buildGuestApp({ db, store: shareStore, guardian, media, logLevel: config.server.logLevel, onShareChanged: () => void gateway.reconcile() });
   app.log.info({ ffmpeg: tools.ffmpeg !== null, office: tools.soffice !== null, hwEncoder: tools.hwEncoder }, 'visores');
 
   // Reconciliar el diario de subidas cada vez que el volumen pasa a READY (spec §3.4.9): primero

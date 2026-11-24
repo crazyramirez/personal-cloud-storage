@@ -54,6 +54,7 @@ export default {
   shareCreate: '创建了共享链接',
   shareRevoke: '撤销了链接',
   shareDownload: '访客下载了',
+  shareView: '访客查看了',
   shareUnlock: '链接密码错误',
   detailShare: '链接 {id}',
   detailDays: (p) => `${p.n} 天`,

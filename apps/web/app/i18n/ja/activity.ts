@@ -54,6 +54,7 @@ export default {
   shareCreate: '共有リンクを作成',
   shareRevoke: 'リンクを取り消し',
   shareDownload: 'ゲストがダウンロード',
+  shareView: 'ゲストが表示',
   shareUnlock: 'リンクのパスワードが不正',
   detailShare: 'リンク {id}',
   detailDays: (p) => `${p.n} 日`,

@@ -54,6 +54,7 @@ export default {
   shareCreate: 'A créé un lien de partage',
   shareRevoke: 'A retiré un lien',
   shareDownload: 'Un invité a téléchargé',
+  shareView: 'Un invité a consulté',
   shareUnlock: 'Mot de passe incorrect sur un lien',
   detailShare: 'lien {id}',
   detailDays: (p) => (Number(p.n) <= 1 ? `${p.n} jour` : `${p.n} jours`),
