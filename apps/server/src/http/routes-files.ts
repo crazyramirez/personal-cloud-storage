@@ -12,6 +12,8 @@ import {
   TrashIdsRequest,
   TrashItemsRequest,
   ZipQuery,
+  FsSearchQuery,
+  type FsSearchResponse,
   RecentQuery,
   type DiskSpeedResponse,
   type FsSizeResponse,
@@ -25,6 +27,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { audit } from '../auth/sessions.ts';
 import { AppError } from '../errors.ts';
 import { SMB_RECENT_KEEP, SmbRecentStore, smbRecentGroup } from '../smb/recent.ts';
+import { searchTree } from '../storage/search.ts';
 import { measureEach, measureSize } from '../storage/size.ts';
 import { measureDiskSpeed } from '../storage/speedtest.ts';
 import { formatClientPath, parseClientPath, resolveInside } from '../storage/paths.ts';
@@ -136,6 +139,19 @@ export function registerFileRoutes(app: FastifyInstance, ctx: RouteContext): voi
       if (!reply.raw.writableFinished) gone.abort();
     });
     return measureEach(lease.dataRoot, (request.body as FsSizeRequest).paths, { signal: gone.signal });
+  });
+
+  // Búsqueda por nombre en la carpeta y sus subcarpetas (cuadro de búsqueda del explorador). Solo
+  // lectura; se corta por tiempo y si el navegador abandona la petición (sigue escribiendo).
+  app.get(`${API}/fs/search`, { schema: { querystring: FsSearchQuery } }, async (request, reply): Promise<FsSearchResponse> => {
+    ctx.user(request);
+    const query = request.query as FsSearchQuery;
+    const lease = await guardian.assertReadableVolume();
+    const gone = new AbortController();
+    reply.raw.once('close', () => {
+      if (!reply.raw.writableFinished) gone.abort();
+    });
+    return searchTree(lease.dataRoot, query.path, query.q, { limit: query.limit, signal: gone.signal });
   });
 
   app.get(`${API}/fs/zip`, { schema: { querystring: ZipQuery } }, async (request, reply) => {

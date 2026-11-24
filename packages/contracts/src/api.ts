@@ -125,6 +125,40 @@ export type RecentQuery = Static<typeof RecentQuery>;
 export const RecentResponse = Type.Object({ entries: Type.Array(RecentEntry) });
 export type RecentResponse = Static<typeof RecentResponse>;
 
+/** Búsqueda por nombre en una carpeta y sus subcarpetas (sin mayúsculas ni acentos; todas las palabras). */
+export const FsSearchQuery = Type.Object(
+  {
+    path: ClientPath,
+    q: Type.String({ minLength: 1, maxLength: 200 }),
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 1000 })),
+  },
+  { additionalProperties: false },
+);
+export type FsSearchQuery = Static<typeof FsSearchQuery>;
+
+export const FsSearchResult = Type.Object({
+  path: Type.String(),
+  /** Carpeta que lo contiene. */
+  dir: Type.String(),
+  name: Type.String(),
+  type: Type.Union([Type.Literal('dir'), Type.Literal('file')]),
+  /** Bytes; 0 en carpetas. */
+  size: Type.Number(),
+  mtime: Type.String(),
+});
+export type FsSearchResult = Static<typeof FsSearchResult>;
+
+export const FsSearchResponse = Type.Object({
+  path: Type.String(),
+  /** Por niveles: lo más cercano a la carpeta de la búsqueda, antes. */
+  results: Type.Array(FsSearchResult),
+  /** null = se miró todo; «limit» = hay más resultados de los devueltos; «time» = se cortó antes de mirarlo todo. */
+  truncated: Type.Union([Type.Literal('limit'), Type.Literal('time'), Type.Null()]),
+  /** Elementos recorridos. */
+  scanned: Type.Integer(),
+});
+export type FsSearchResponse = Static<typeof FsSearchResponse>;
+
 export const DownloadQuery = Type.Object(
   {
     path: ClientPath,

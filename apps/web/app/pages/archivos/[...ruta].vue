@@ -85,15 +85,24 @@ onBeforeUnmount(() => toolbarObserver?.disconnect());
 const brokenThumbs = ref<Set<string>>(new Set());
 /** Miniaturas que se sirven con la propia imagen (el servidor no pudo generarlas). */
 const directThumbs = ref<Set<string>>(new Set());
-/** Filtro rápido por nombre (sin distinguir mayúsculas ni acentos). Se limpia al cambiar de carpeta. */
+/**
+ * Cuadro de búsqueda: busca en esta carpeta y en todas sus subcarpetas (sin distinguir mayúsculas
+ * ni acentos), como en Windows o macOS. Mientras hay texto, la lista muestra los resultados
+ * (SearchResults). Se limpia al cambiar de carpeta.
+ */
 const filter = ref('');
 const filterInput = ref<HTMLInputElement | null>(null);
+const searchActive = computed(() => filter.value.trim() !== '');
+const searchRef = ref<{ focusFirst: () => void } | null>(null);
 /** Solo los favoritos de esta carpeta (ADR-0027). Se quita al cambiar de carpeta, como el filtro. */
 const onlyFavorites = ref(false);
 /** A dónde vuelve el visor al cerrarse (abierto desde Favoritos o Recientes). */
 const returnTo = ref<string | null>(null);
 /** Elemento destacado con una animación breve (llegado con ?sel=nombre, «Abrir carpeta»). */
 const flashName = ref<string | null>(null);
+watch(searchActive, (active) => {
+  if (active) selection.value = new Set();
+});
 watch([filter, onlyFavorites], () => {
   const visible = new Set(sorted.value.map((entry) => entry.name));
   if ([...selection.value].some((name) => !visible.has(name))) {
@@ -588,6 +597,12 @@ function reveal(name: string): void {
  */
 let revealing: string | null = null;
 function openRequestedFile(): void {
+  const searchFor = route.query.buscar;
+  if (typeof searchFor === 'string' && searchFor.trim() !== '') {
+    filter.value = searchFor.slice(0, 200);
+    void navigateTo({ path: route.path, query: {} }, { replace: true });
+    return;
+  }
   const wanted = route.query.ver;
   const sel = route.query.sel;
   const back = route.query.volver;
@@ -1229,7 +1244,7 @@ function onItemContext(event: MouseEvent | KeyboardEvent, entry: FsEntry): void 
 function onBackgroundContext(event: MouseEvent): void {
   const target = event.target as HTMLElement;
   // Campos de texto: menú nativo (copiar/pegar). Elementos, ruta y menús propios: lo gestionan ellos.
-  if (target.closest('input, textarea, [contenteditable], [data-entry], .crumbs, .ctx, .viewer, .details') !== null) return;
+  if (target.closest('input, textarea, [contenteditable], [data-entry], [data-result], .crumbs, .ctx, .viewer, .details') !== null) return;
   clearSelection();
   openMenuFor(event, backgroundMenu(), folderName.value);
 }
@@ -1279,6 +1294,14 @@ function moveFocus(step: number, extend: boolean): void {
 
 function onKeydown(event: KeyboardEvent): void {
   if (viewerName.value !== null) return;
+  if (searchActive.value) {
+    const target = event.target instanceof Element ? event.target : document.body;
+    if (event.key === '/' && target.closest('input, textarea, [contenteditable]') === null && document.querySelector('dialog[open], .ctx') === null) {
+      event.preventDefault();
+      filterInput.value?.focus();
+    }
+    return;
+  }
   // 15) Nada de atajos con un diálogo o un menú abiertos, aunque el foco haya quedado en <body>.
   if (document.querySelector('dialog[open], .ctx') !== null) return;
   const target = event.target instanceof Element ? event.target : document.body;
@@ -1463,16 +1486,18 @@ function ghostMenu(item: Transfer): MenuItem[] {
             :title="folderIsFav ? t('favorites.removeFolder') : t('favorites.addFolder')"
             @click="toggleFolderFav"
           ><AppIcon :name="folderIsFav ? 'star-filled' : 'star'" :size="19" /></button>
-          <span v-if="!loading && !failure && !unavailable" class="muted count">{{ countLabel }}</span>
+          <span v-if="!loading && !failure && !unavailable && !searchActive" class="muted count">{{ countLabel }}</span>
         </div>
         <label class="search" :class="{ active: filter !== '' }">
           <AppIcon name="search" :size="17" class="muted" />
-          <span class="sr-only">{{ t('explorer.filterLabel') }}</span>
+          <span class="sr-only">{{ t('search.placeholder', { name: folderName }) }}</span>
           <input
             ref="filterInput"
             v-model="filter"
             type="search"
-            :placeholder="t('explorer.filterPlaceholder')"
+            :placeholder="t('search.placeholder', { name: folderName })"
+            maxlength="200"
+            @keydown.down.prevent="searchRef?.focusFirst()"
             autocomplete="off"
             autocapitalize="off"
             spellcheck="false"
@@ -1558,7 +1583,18 @@ function ghostMenu(item: Transfer): MenuItem[] {
     </section>
 
     <div v-else class="columns">
+      <SearchResults
+        v-if="searchActive"
+        ref="searchRef"
+        :dir="clientPath"
+        :dir-name="folderName"
+        :query="filter"
+        :only-favorites="onlyFavorites"
+        :sort-key="sortKey"
+        :sort-desc="sortDesc"
+      />
       <section
+        v-else
         ref="listing"
         :aria-label="t('explorer.listing')"
         class="listing"
@@ -1748,7 +1784,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
       </section>
 
       <div v-if="detailsSheet" class="sheet-backdrop" aria-hidden="true" @click="detailsSheet = false" />
-      <aside v-if="!loading && entries.length > 0 && (detailsOpen || detailsSheet)" :aria-label="t('explorer.itemDetails')" class="card details" :class="{ sheet: detailsSheet }">
+      <aside v-if="!loading && entries.length > 0 && !searchActive && (detailsOpen || detailsSheet)" :aria-label="t('explorer.itemDetails')" class="card details" :class="{ sheet: detailsSheet }">
         <button type="button" class="d-close" :aria-label="t('explorer.closeDetails')" :title="t('explorer.closeDetails')" @click="detailsSheet ? (detailsSheet = false) : (detailsOpen = false)"><AppIcon name="close" :size="16" /></button>
         <template v-if="single">
           <div class="preview">
