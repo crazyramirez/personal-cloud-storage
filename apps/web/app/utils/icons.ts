@@ -72,6 +72,9 @@ export const ICONS = {
   wrap: '<path d="M4 6h16M4 12h13a3 3 0 0 1 0 6h-4"/><path d="m15 16-2 2 2 2"/><path d="M4 18h5"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
   sort: '<path d="M7 4v16M3 16l4 4 4-4"/><path d="M17 20V4M13 8l4-4 4 4"/>',
+  // Orden ascendente (de menor a mayor) y descendente: flecha y barras crecientes/decrecientes.
+  'sort-asc': '<path d="m3 8 4-4 4 4M7 4v16"/><path d="M12 12h4M12 16h6M12 20h8"/>',
+  'sort-desc': '<path d="m3 16 4 4 4-4M7 20V4"/><path d="M12 4h8M12 8h6M12 12h4"/>',
   home: '<path d="M4 11 12 4l8 7"/><path d="M6 10v10h12V10"/>',
   'folder-upload': '<path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2h8.5A1.5 1.5 0 0 1 21 9.5v8A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/><path d="M12 16v-5M9.5 13.5 12 11l2.5 2.5"/>',
   install: '<rect x="6" y="2.5" width="12" height="19" rx="2"/><path d="M12 7v7M9 11.5l3 3 3-3"/>',

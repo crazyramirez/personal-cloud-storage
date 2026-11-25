@@ -164,7 +164,7 @@ const appVersion = useAppVersion();
 
     <nav :aria-label="t('nav.tabNav')" class="tabbar">
       <NuxtLink v-for="item in MOBILE_NAV" :key="item.to" :to="item.to" class="tab" :class="{ current: isActive(item.to) }" :aria-current="isActive(item.to) ? 'page' : undefined">
-        <AppIcon :name="item.icon" :size="22" />
+        <AppIcon :name="item.icon" :size="19" />
         <span>{{ item.label }}</span>
       </NuxtLink>
     </nav>

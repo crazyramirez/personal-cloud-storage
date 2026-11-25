@@ -1586,14 +1586,14 @@ function ghostMenu(item: Transfer): MenuItem[] {
         </button>
         <div class="sorter hide-sm">
           <label for="orden" class="sr-only">{{ t('explorer.sortBy') }}</label>
-          <select id="orden" v-model="sortKey" class="input select">
+          <select id="orden" v-model="sortKey" class="sort-key">
             <option value="name">{{ t('explorer.colName') }}</option>
             <option value="date">{{ t('explorer.colDate') }}</option>
             <option value="size">{{ t('explorer.colSize') }}</option>
             <option value="type">{{ t('explorer.colType') }}</option>
           </select>
-          <button type="button" class="btn btn-icon" :aria-label="sortDesc ? t('explorer.sortDescending') : t('explorer.sortAscending')" :title="sortDesc ? t('explorer.descending') : t('explorer.ascending')" @click="sortDesc = !sortDesc">
-            <AppIcon :name="sortDesc ? 'chevron-down' : 'chevron-up'" />
+          <button type="button" class="sort-dir" :aria-label="sortDesc ? t('explorer.sortDescending') : t('explorer.sortAscending')" :title="sortDesc ? t('explorer.descending') : t('explorer.ascending')" @click="sortDesc = !sortDesc">
+            <AppIcon :name="sortDesc ? 'sort-desc' : 'sort-asc'" :size="18" />
           </button>
         </div>
         <div class="views">
@@ -2172,9 +2172,64 @@ h2 {
   font-size: 13px;
 }
 
+/* Orden: un solo control (como .views) con el criterio y el sentido separados por una línea. */
 .sorter {
   display: flex;
-  gap: 4px;
+  align-items: stretch;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+
+.sorter:hover {
+  border-color: var(--border-strong);
+}
+
+.sorter:focus-within {
+  border-color: var(--accent);
+}
+
+.sort-key {
+  appearance: none;
+  min-width: 0;
+  padding: 0 32px 0 12px;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b93a1' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 11px center / 13px;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.sort-key:hover,
+.sort-dir:hover {
+  background-color: var(--surface-2);
+}
+
+.sort-dir {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.sort-dir:hover {
+  color: var(--text);
+}
+
+.sort-key:focus-visible,
+.sort-dir:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent-soft);
 }
 
 /*
@@ -2254,11 +2309,6 @@ h2 {
   background: none;
   color: var(--muted);
   padding: 4px;
-}
-
-.select {
-  min-height: 40px;
-  padding: 0 36px 0 12px;
 }
 
 .views {
