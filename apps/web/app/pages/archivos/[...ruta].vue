@@ -1532,7 +1532,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
           class="back"
           :aria-label="t('explorer.backTo', { name: parentName })"
           @contextmenu.prevent="openMenuFor($event, ancestorsMenu(), t('explorer.goTo'))"
-        ><AppIcon name="chevron-left" :size="22" :stroke="2.2" /><span>{{ parentName }}</span></NuxtLink>
+        ><AppIcon name="chevron-left" :size="18" :stroke="2.2" /><span>{{ parentName }}</span></NuxtLink>
         <div class="heading">
           <div class="title-line">
             <h1>{{ folderName }}</h1>
@@ -3064,7 +3064,7 @@ h2 {
     min-height: 44px;
     margin-left: -6px;
     color: var(--accent);
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 500;
     text-decoration: none;
     -webkit-tap-highlight-color: transparent;
@@ -3081,7 +3081,7 @@ h2 {
     background: none;
     color: var(--accent);
     font: inherit;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 500;
     text-align: left;
     -webkit-tap-highlight-color: transparent;
@@ -3154,7 +3154,7 @@ h2 {
 
   .heading h1 {
     max-width: 100%;
-    font-size: 26px;
+    font-size: 21px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
