@@ -139,6 +139,8 @@ export interface MenuItem {
 interface MenuState {
   x: number;
   y: number;
+  /** Abierto desde un botón: el menú cuelga de él, alineado con su borde derecho (x). */
+  anchorRight?: boolean;
   title?: string;
   items: MenuItem[];
   /** Elemento al que devolver el foco al cerrar. */
@@ -147,15 +149,22 @@ interface MenuState {
 
 const menu = shallowRef<MenuState | null>(null);
 
-export function openMenu(at: { x: number; y: number }, items: MenuItem[], title?: string): void {
+export function openMenu(at: { x: number; y: number; anchorRight?: boolean }, items: MenuItem[], title?: string): void {
   const visible = items.filter((item) => item.label !== '');
   if (visible.length === 0) return;
-  menu.value = { x: at.x, y: at.y, items: visible, title, returnFocus: document.activeElement as HTMLElement | null };
+  menu.value = { x: at.x, y: at.y, anchorRight: at.anchorRight === true, items: visible, title, returnFocus: document.activeElement as HTMLElement | null };
 }
 
 /** Abre el menú desde un evento (clic derecho, pulsación larga o botón «⋯»). */
 export function openMenuFor(event: MouseEvent | KeyboardEvent | { x: number; y: number }, items: MenuItem[], title?: string): void {
   if ('preventDefault' in event) event.preventDefault();
+  // Clic en un botón («⋯»): el menú se despliega bajo él, como un desplegable.
+  const button = event instanceof MouseEvent && event.type === 'click' ? (event.currentTarget as Element | null)?.closest?.('button') : null;
+  if (button) {
+    const rect = button.getBoundingClientRect();
+    openMenu({ x: rect.right, y: rect.bottom + 6, anchorRight: true }, items, title);
+    return;
+  }
   if (event instanceof MouseEvent && (event.clientX !== 0 || event.clientY !== 0)) {
     openMenu({ x: event.clientX, y: event.clientY }, items, title);
     return;

@@ -27,11 +27,14 @@ watch(menu, async (state) => {
   }
   const el = root.value;
   if (el === null) return;
-  const rect = el.getBoundingClientRect();
-  const margin = 8;
-  let left = state.x;
+  // Tamaño sin la animación de entrada (que lo escala): offsetWidth/offsetHeight.
+  const rect = { width: el.offsetWidth, height: el.offsetHeight };
+  // Separación mínima con los bordes de la ventana (a la derecha suele estar el botón «⋯»).
+  const margin = 16;
+  let left = state.anchorRight === true ? state.x - rect.width : state.x;
   let top = state.y;
   if (left + rect.width > window.innerWidth - margin) left = Math.max(margin, window.innerWidth - rect.width - margin);
+  if (left < margin) left = margin;
   if (top + rect.height > window.innerHeight - margin) top = Math.max(margin, state.y - rect.height);
   if (top + rect.height > window.innerHeight - margin) top = Math.max(margin, window.innerHeight - rect.height - margin);
   position.value = { left, top };

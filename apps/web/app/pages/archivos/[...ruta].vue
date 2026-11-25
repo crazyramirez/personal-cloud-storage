@@ -1604,7 +1604,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
         <button v-if="selectMode" type="button" class="btn btn-primary done" @click="stopSelecting">{{ t('explorer.done') }}</button>
         <button v-else type="button" class="btn btn-icon more-btn" :aria-label="t('explorer.moreActions')" :title="t('explorer.moreActions')" @click="openMenuFor($event, backgroundMenu(), folderName)"><AppIcon name="more" /></button>
         <button type="button" class="btn btn-primary upload-btn" :class="{ 'fab-hidden': selection.size > 0 || selectMode }" :disabled="!canWrite" :title="canWrite ? t('explorer.uploadFiles') : noWrite()" :aria-label="t('explorer.uploadFiles')" @click="fileInput?.click()">
-          <AppIcon name="upload" :stroke="1.9" /><span class="hide-xs">{{ t('explorer.upload') }}</span>
+          <AppIcon name="upload" :size="26" :stroke="2" /><span>{{ t('explorer.upload') }}</span>
         </button>
         <input ref="fileInput" type="file" multiple class="sr-only" tabindex="-1" aria-hidden="true" @change="onPicked">
         <input ref="folderInput" type="file" webkitdirectory multiple class="sr-only" tabindex="-1" aria-hidden="true" @change="onPicked">
@@ -2217,7 +2217,7 @@ h2 {
 
 .select {
   min-height: 40px;
-  padding: 0 10px;
+  padding: 0 36px 0 12px;
 }
 
 .views {
@@ -2879,20 +2879,78 @@ h2 {
   }
 }
 
+/*
+ * «Subir»: botón flotante redondo abajo a la derecha, en el ordenador y en el móvil. Con relieve
+ * suave (luz arriba, sombra del color de acento) para que destaque sin salirse del estilo.
+ */
+.upload-btn {
+  position: fixed;
+  z-index: 35;
+  right: calc(28px + env(safe-area-inset-right));
+  bottom: calc(28px + env(safe-area-inset-bottom));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: radial-gradient(130% 130% at 30% 15%, color-mix(in srgb, var(--accent-btn) 72%, #fff) 0%, var(--accent-btn) 50%, var(--accent-btn-hover) 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 28%),
+    inset 0 -3px 8px rgb(0 0 0 / 14%),
+    0 10px 24px color-mix(in srgb, var(--accent-btn) 42%, transparent),
+    0 2px 6px rgb(0 0 0 / 16%);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, bottom 0.18s ease, filter 0.18s ease;
+}
+
+.upload-btn:hover:not(:disabled) {
+  background: radial-gradient(130% 130% at 30% 15%, color-mix(in srgb, var(--accent-btn) 62%, #fff) 0%, var(--accent-btn) 48%, var(--accent-btn-hover) 100%);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 30%),
+    inset 0 -3px 8px rgb(0 0 0 / 14%),
+    0 14px 30px color-mix(in srgb, var(--accent-btn) 50%, transparent),
+    0 3px 8px rgb(0 0 0 / 18%);
+}
+
+.upload-btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.upload-btn:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 3px;
+}
+
+.upload-btn:disabled {
+  filter: saturate(0.3);
+  opacity: 0.55;
+  box-shadow: none;
+}
+
+.upload-btn span {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upload-btn,
+  .upload-btn:hover:not(:disabled),
+  .upload-btn:active:not(:disabled) {
+    transition: none;
+    transform: none;
+  }
+}
+
 @media (max-width: 720px) {
-  /* Móvil: «Subir» como botón flotante sobre la barra de pestañas. */
+  /* Móvil: sobre la barra de pestañas (y por encima de los avisos). */
   .upload-btn {
-    position: fixed;
-    z-index: 35;
-    right: 18px;
+    right: calc(18px + env(safe-area-inset-right));
     bottom: calc(var(--tabbar-h) + 18px + var(--toast-lift, 0px));
-    transition: bottom 0.18s ease, transform 0.18s ease;
     width: 58px;
     height: 58px;
-    padding: 0;
-    border-radius: 18px;
-    justify-content: center;
-    box-shadow: 0 10px 24px rgb(36 87 214 / 40%);
   }
 
   /* En el móvil no se arrastran archivos: se sube con el botón flotante. */
@@ -2902,10 +2960,6 @@ h2 {
 
   .upload-btn.fab-hidden {
     transform: scale(0);
-  }
-
-  .upload-btn span {
-    display: none;
   }
 
   /* Última fila: buscador y, a su derecha, las vistas (lista / iconos) siempre a mano. */
