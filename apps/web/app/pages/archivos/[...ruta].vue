@@ -513,31 +513,49 @@ function selectRange(name: string): void {
 
 function selectAll(): void {
   selection.value = new Set(sorted.value.map((entry) => entry.name));
+  if (lastPointer !== 'mouse') selectMode.value = true;
 }
 
 function clearSelection(): void {
   selection.value = new Set();
 }
 
-const touchSelecting = computed(() => lastPointer === 'touch' && selection.value.size > 0);
+/**
+ * Modo selección (táctil), como en Archivos de iOS o Documents: fuera de él, un toque abre la
+ * carpeta o el archivo; dentro, cada toque marca o desmarca. Se entra con «Seleccionar» (menú ⋯
+ * o pulsación larga) y se sale con «Listo», con Escape o al cambiar de carpeta.
+ */
+const selectMode = ref(false);
+const touchSelecting = computed(() => selectMode.value);
+const allMarked = computed(() => sorted.value.length > 0 && selection.value.size === sorted.value.length);
 
-/** Doble toque (táctil): iOS no emite dblclick de forma fiable, se detecta aquí. */
-const DOUBLE_TAP_MS = 320;
-let lastTap: { name: string; at: number; before: Set<string> } | null = null;
+function startSelecting(name?: string): void {
+  selectMode.value = true;
+  selection.value = name === undefined ? new Set() : new Set([name]);
+  if (name !== undefined) {
+    anchor.value = name;
+    focused.value = name;
+  }
+}
+
+function stopSelecting(): void {
+  selectMode.value = false;
+  clearSelection();
+}
+
+watch(clientPath, () => {
+  selectMode.value = false;
+});
 
 function onItemClick(event: MouseEvent, entry: FsEntry): void {
   if (longPress.wasLong()) return;
-  if (lastPointer === 'touch') {
-    // Móvil: un toque selecciona (o marca/desmarca si ya hay selección); doble toque abre.
-    const now = performance.now();
-    if (lastTap !== null && lastTap.name === entry.name && now - lastTap.at < DOUBLE_TAP_MS) {
-      selection.value = lastTap.before; // deshace el primer toque: abrir no cambia la selección
-      lastTap = null;
-      openEntry(entry);
-      return;
-    }
-    lastTap = { name: entry.name, at: now, before: new Set(selection.value) };
+  if (selectMode.value) {
     toggle(entry.name);
+    return;
+  }
+  if (lastPointer !== 'mouse') {
+    // Táctil: un toque abre (como cualquier gestor de archivos del móvil).
+    openEntry(entry);
     return;
   }
   if (event.shiftKey) selectRange(entry.name);
@@ -546,7 +564,21 @@ function onItemClick(event: MouseEvent, entry: FsEntry): void {
 }
 
 function onBackgroundClick(event: MouseEvent): void {
-  if (event.target === event.currentTarget) clearSelection();
+  // En modo selección, tocar un hueco no deshace lo marcado (se sale con «Listo»).
+  if (event.target === event.currentTarget && !selectMode.value) clearSelection();
+}
+
+/** Carpeta superior (botón «atrás»: sube un nivel, como en las apps de archivos). */
+const parentName = computed(() => segments.value.at(-2) ?? t('common.files'));
+const parentLink = computed(() => explorerLink(segments.value.slice(0, -1)));
+
+/** Mantener pulsado o clic derecho en «atrás»: saltar a cualquier carpeta superior. */
+function ancestorsMenu(): MenuItem[] {
+  const levels = segments.value.slice(0, -1);
+  return [
+    ...levels.map((name, index) => ({ label: name, icon: 'folder' as const, run: () => void navigateTo(explorerLink(levels.slice(0, index + 1))) })).reverse(),
+    { label: t('common.files'), icon: 'home' as const, run: () => void navigateTo(explorerLink([])) },
+  ];
 }
 
 // ── Acciones ────────────────────────────────────────────────────────────────────────────────
@@ -1170,6 +1202,7 @@ function itemMenu(entry: FsEntry, alone = false): MenuItem[] {
   const isDir = entry.type === 'dir';
   const kind = viewerKind(entry.name);
   return [
+    ...(lastPointer !== 'mouse' && !selectMode.value ? [{ label: t('explorer.select'), icon: 'check' as const, run: () => startSelecting(entry.name) }] : []),
     { label: isDir ? t('explorer.open') : VIEWER_LABEL[kind], icon: isDir ? 'folder' : 'eye', shortcut: t('explorer.keyEnter'), run: () => openEntry(entry) },
     { label: t('explorer.openInNewTab'), icon: 'external', run: () => openInNewTab(entry) },
     { label: isDir ? t('explorer.downloadAsZip') : t('explorer.download'), icon: isDir ? 'archive' : 'download', run: () => download([entry]) },
@@ -1197,7 +1230,10 @@ function backgroundMenu(): MenuItem[] {
   const w = !canWrite.value;
   const clip = clipboard.value;
   return [
-    { label: t('explorer.newFolder'), icon: 'folder-plus', disabled: w, hint: noWrite(), run: () => void newFolder() },
+    ...(lastPointer !== 'mouse' && !selectMode.value
+      ? [{ label: t('explorer.select'), icon: 'check' as const, disabled: entries.value.length === 0, run: () => startSelecting() }]
+      : []),
+    { label: t('explorer.newFolder'), icon: 'folder-plus', disabled: w, hint: noWrite(), separator: lastPointer !== 'mouse' && !selectMode.value, run: () => void newFolder() },
     { label: t('explorer.newTextDoc'), icon: 'file-plus', disabled: w, hint: noWrite(), run: () => void newTextFile() },
     { label: t('explorer.uploadFilesMenu'), icon: 'upload', disabled: w, hint: noWrite(), separator: true, run: () => fileInput.value?.click() },
     { label: t('explorer.uploadFolderMenu'), icon: 'folder-upload', disabled: w, hint: noWrite(), run: () => folderInput.value?.click() },
@@ -1236,6 +1272,11 @@ function crumbMenu(path: string, link: string): MenuItem[] {
 }
 
 function onItemContext(event: MouseEvent | KeyboardEvent, entry: FsEntry): void {
+  if (lastPointer !== 'mouse' && !selectMode.value) {
+    focused.value = entry.name;
+    openMenuFor(event, itemMenu(entry, true), entry.name);
+    return;
+  }
   if (!selection.value.has(entry.name)) selectOnly(entry.name);
   focused.value = entry.name;
   openMenuFor(event, itemMenu(entry), selection.value.size > 1 ? t('explorer.itemsSelected', { n: selection.value.size }) : entry.name);
@@ -1245,7 +1286,7 @@ function onBackgroundContext(event: MouseEvent): void {
   const target = event.target as HTMLElement;
   // Campos de texto: menú nativo (copiar/pegar). Elementos, ruta y menús propios: lo gestionan ellos.
   if (target.closest('input, textarea, [contenteditable], [data-entry], [data-result], .crumbs, .ctx, .viewer, .details') !== null) return;
-  clearSelection();
+  if (!selectMode.value) clearSelection();
   openMenuFor(event, backgroundMenu(), folderName.value);
 }
 
@@ -1322,7 +1363,7 @@ function onKeydown(event: KeyboardEvent): void {
   else if (key === 'Delete' && list.length > 0) void trash(list);
   else if (key === 'F2' && single.value !== null) void rename(single.value);
   else if (key === 'Enter' && single.value !== null) openEntry(single.value);
-  else if (key === 'Escape') clearSelection();
+  else if (key === 'Escape') stopSelecting();
   else if ((key === 'Backspace' || (event.altKey && key === 'ArrowUp')) && segments.value.length > 0) void navigateTo(explorerLink(segments.value.slice(0, -1)));
   else if (key === 'ArrowDown') moveFocus(columns(), event.shiftKey);
   else if (key === 'ArrowUp') moveFocus(-columns(), event.shiftKey);
@@ -1442,6 +1483,14 @@ function ghostMenu(item: Transfer): MenuItem[] {
     <!-- Ruta y barra de herramientas: fijas bajo la cabecera del layout al hacer scroll. -->
     <div ref="toolbarEl" class="explorer-head">
       <nav :aria-label="t('explorer.breadcrumb')" class="crumbs muted">
+        <NuxtLink
+          v-if="segments.length > 0"
+          :to="parentLink"
+          class="up"
+          :aria-label="t('explorer.backTo', { name: parentName })"
+          :title="t('explorer.backTo', { name: parentName })"
+          @contextmenu.prevent="openMenuFor($event, ancestorsMenu(), t('explorer.goTo'))"
+        ><AppIcon name="chevron-left" :size="18" :stroke="2.2" /></NuxtLink>
         <ol>
           <li>
             <NuxtLink
@@ -1473,10 +1522,21 @@ function ghostMenu(item: Transfer): MenuItem[] {
         </ol>
       </nav>
 
-      <div class="toolbar">
+      <div class="toolbar" :class="{ 'has-back': segments.length > 0 || selectMode }">
+        <!-- Móvil, en modo selección: «Seleccionar todo» arriba a la izquierda y «Listo» a la derecha (como en iOS). -->
+        <button v-if="selectMode" type="button" class="select-all-top" :disabled="sorted.length === 0" @click="allMarked ? clearSelection() : selectAll()">{{ allMarked ? t('explorer.deselectAll') : t('explorer.selectAll') }}</button>
+        <!-- Móvil: «‹ Carpeta superior» en lugar de la ruta completa (como en las apps de archivos). -->
+        <NuxtLink
+          v-if="segments.length > 0 && !selectMode"
+          :to="parentLink"
+          class="back"
+          :aria-label="t('explorer.backTo', { name: parentName })"
+          @contextmenu.prevent="openMenuFor($event, ancestorsMenu(), t('explorer.goTo'))"
+        ><AppIcon name="chevron-left" :size="22" :stroke="2.2" /><span>{{ parentName }}</span></NuxtLink>
         <div class="heading">
-          <h1>{{ folderName }}</h1>
-          <button
+          <div class="title-line">
+            <h1>{{ folderName }}</h1>
+            <button
             v-if="segments.length > 0 && !missing"
             type="button"
             class="fav-folder"
@@ -1485,7 +1545,8 @@ function ghostMenu(item: Transfer): MenuItem[] {
             :aria-label="folderIsFav ? t('favorites.removeFolder') : t('favorites.addFolder')"
             :title="folderIsFav ? t('favorites.removeFolder') : t('favorites.addFolder')"
             @click="toggleFolderFav"
-          ><AppIcon :name="folderIsFav ? 'star-filled' : 'star'" :size="19" /></button>
+            ><AppIcon :name="folderIsFav ? 'star-filled' : 'star'" :size="19" /></button>
+          </div>
           <span v-if="!loading && !failure && !unavailable && !searchActive" class="muted count">{{ countLabel }}</span>
         </div>
         <label class="search" :class="{ active: filter !== '' }">
@@ -1508,7 +1569,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
         </label>
         <button
           type="button"
-          class="btn btn-icon fav-filter"
+          class="btn btn-icon fav-filter hide-sm"
           :class="{ on: onlyFavorites }"
           :aria-pressed="onlyFavorites"
           :aria-label="t('favorites.onlyFavorites')"
@@ -1533,15 +1594,16 @@ function ghostMenu(item: Transfer): MenuItem[] {
             <AppIcon :name="sortDesc ? 'chevron-down' : 'chevron-up'" />
           </button>
         </div>
-        <div class="views">
+        <div class="views hide-sm">
           <button type="button" :aria-pressed="view === 'list'" :aria-label="t('explorer.viewList')" :title="t('explorer.viewList')" :class="{ on: view === 'list' }" @click="view = 'list'"><AppIcon name="list" /></button>
           <button type="button" :aria-pressed="view === 'grid' && gridSize === 'sm'" :aria-label="t('explorer.iconsSmall')" :title="t('explorer.iconsSmall')" :class="{ on: view === 'grid' && gridSize === 'sm' }" @click="setGrid('sm')"><AppIcon name="grid-sm" /></button>
           <button type="button" :aria-pressed="view === 'grid' && gridSize === 'md'" :aria-label="t('explorer.iconsMedium')" :title="t('explorer.iconsMedium')" :class="{ on: view === 'grid' && gridSize === 'md' }" @click="setGrid('md')"><AppIcon name="grid" /></button>
           <button type="button" :aria-pressed="view === 'grid' && gridSize === 'lg'" :aria-label="t('explorer.iconsLarge')" :title="t('explorer.iconsLarge')" :class="{ on: view === 'grid' && gridSize === 'lg' }" @click="setGrid('lg')"><AppIcon name="grid-lg" /></button>
         </div>
         <button v-if="!detailsOpen" type="button" class="btn btn-icon details-toggle" :aria-label="t('explorer.showDetails')" :title="t('explorer.showDetailsPanel')" @click="detailsOpen = true"><AppIcon name="info" /></button>
-        <button type="button" class="btn btn-icon" :aria-label="t('explorer.moreActions')" :title="t('explorer.moreActions')" @click="openMenuFor($event, backgroundMenu(), folderName)"><AppIcon name="more" /></button>
-        <button type="button" class="btn btn-primary upload-btn" :class="{ 'fab-hidden': selection.size > 0 }" :disabled="!canWrite" :title="canWrite ? t('explorer.uploadFiles') : noWrite()" :aria-label="t('explorer.uploadFiles')" @click="fileInput?.click()">
+        <button v-if="selectMode" type="button" class="btn btn-primary done" @click="stopSelecting">{{ t('explorer.done') }}</button>
+        <button v-else type="button" class="btn btn-icon more" :aria-label="t('explorer.moreActions')" :title="t('explorer.moreActions')" @click="openMenuFor($event, backgroundMenu(), folderName)"><AppIcon name="more" /></button>
+        <button type="button" class="btn btn-primary upload-btn" :class="{ 'fab-hidden': selection.size > 0 || selectMode }" :disabled="!canWrite" :title="canWrite ? t('explorer.uploadFiles') : noWrite()" :aria-label="t('explorer.uploadFiles')" @click="fileInput?.click()">
           <AppIcon name="upload" :stroke="1.9" /><span class="hide-xs">{{ t('explorer.upload') }}</span>
         </button>
         <input ref="fileInput" type="file" multiple class="sr-only" tabindex="-1" aria-hidden="true" @change="onPicked">
@@ -1549,17 +1611,28 @@ function ghostMenu(item: Transfer): MenuItem[] {
       </div>
     </div>
 
-    <div v-if="selection.size > 0 && !unavailable" class="selbar" role="toolbar" :aria-label="t('explorer.selectionActions')">
-      <button type="button" class="btn btn-icon" :aria-label="t('explorer.clearSelection')" @click="clearSelection"><AppIcon name="close" /></button>
-      <strong>{{ t('explorer.selectedCount', { n: selection.size }) }}</strong>
+    <div v-if="(selection.size > 0 || selectMode) && !unavailable" class="selbar" :class="{ 'select-mode': selectMode }" role="toolbar" :aria-label="t('explorer.selectionActions')">
+      <button type="button" class="btn btn-icon" :class="{ 'hide-sm': selectMode }" :aria-label="selectMode ? t('explorer.done') : t('explorer.clearSelection')" @click="stopSelecting"><AppIcon name="close" /></button>
+      <strong>{{ selection.size > 0 ? t('explorer.selectedCount', { n: selection.size }) : t('explorer.selectItems') }}</strong>
       <span v-if="selectionSize !== null" class="muted hide-xs" :title="selectionSize.partial ? t('explorer.sizePartialHint') : undefined">{{ selectionSize.text }}</span>
       <span class="grow" />
-      <button type="button" class="btn btn-icon" :aria-label="t('explorer.download')" :title="t('explorer.download')" @click="download(selected)"><AppIcon name="download" /></button>
-      <button type="button" class="btn btn-icon" :class="{ 'fav-on': allFav(selected) }" :aria-pressed="allFav(selected)" :aria-label="favMenuItem(selected).label" :title="favMenuItem(selected).label" @click="toggleFav(selected)"><AppIcon :name="allFav(selected) ? 'star-filled' : 'star'" /></button>
-      <button type="button" class="btn btn-icon" :aria-label="t('explorer.moveTo')" :title="t('explorer.moveTo')" :disabled="!canWrite" @click="moveOrCopyTo('move', selected)"><AppIcon name="move" /></button>
-      <button v-if="single" type="button" class="btn btn-icon" :aria-label="t('explorer.rename')" :title="t('explorer.renameF2')" :disabled="!canWrite" @click="rename(single)"><AppIcon name="edit" /></button>
-      <button type="button" class="btn btn-icon danger" :aria-label="t('explorer.moveToTrash')" :title="t('explorer.moveToTrashKey')" :disabled="!canWrite" @click="trash(selected)"><AppIcon name="trash" /></button>
-      <button type="button" class="btn btn-icon" :aria-label="t('explorer.moreActions')" @click="openMenuFor($event, itemMenu(selected[0] as FsEntry), t('explorer.selectedTitle', { n: selection.size }))"><AppIcon name="more" /></button>
+      <button
+        v-if="selectMode"
+        type="button"
+        class="btn btn-icon hide-sm"
+        :class="{ 'fav-on': allMarked }"
+        :aria-label="allMarked ? t('explorer.deselectAll') : t('explorer.selectAll')"
+        :title="allMarked ? t('explorer.deselectAll') : t('explorer.selectAll')"
+        :aria-pressed="allMarked"
+        :disabled="sorted.length === 0"
+        @click="allMarked ? clearSelection() : selectAll()"
+      ><AppIcon name="check-all" /></button>
+      <button type="button" class="btn btn-icon" :aria-label="t('explorer.download')" :title="t('explorer.download')" :disabled="selection.size === 0" @click="download(selected)"><AppIcon name="download" /></button>
+      <button type="button" class="btn btn-icon" :class="{ 'fav-on': selection.size > 0 && allFav(selected) }" :aria-pressed="selection.size > 0 && allFav(selected)" :aria-label="favMenuItem(selected).label" :title="favMenuItem(selected).label" :disabled="selection.size === 0" @click="toggleFav(selected)"><AppIcon :name="selection.size > 0 && allFav(selected) ? 'star-filled' : 'star'" /></button>
+      <button type="button" class="btn btn-icon" :aria-label="t('explorer.moveTo')" :title="t('explorer.moveTo')" :disabled="!canWrite || selection.size === 0" @click="moveOrCopyTo('move', selected)"><AppIcon name="move" /></button>
+      <button v-if="single" type="button" class="btn btn-icon hide-xs" :aria-label="t('explorer.rename')" :title="t('explorer.renameF2')" :disabled="!canWrite" @click="rename(single)"><AppIcon name="edit" /></button>
+      <button type="button" class="btn btn-icon danger" :aria-label="t('explorer.moveToTrash')" :title="t('explorer.moveToTrashKey')" :disabled="!canWrite || selection.size === 0" @click="trash(selected)"><AppIcon name="trash" /></button>
+      <button type="button" class="btn btn-icon" :aria-label="t('explorer.moreActions')" :disabled="selection.size === 0" @click="openMenuFor($event, itemMenu(selected[0] as FsEntry), t('explorer.selectedTitle', { n: selection.size }))"><AppIcon name="more" /></button>
     </div>
 
     <p v-if="storage.state.value === 'READ_ONLY'" class="notice notice-warn">
@@ -2008,6 +2081,54 @@ function ghostMenu(item: Transfer): MenuItem[] {
   color: var(--text);
 }
 
+/* Subir un nivel (escritorio): junto a la ruta. En el móvil lo sustituye «‹ Carpeta». */
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.up {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.up:hover {
+  background: var(--surface-2);
+}
+
+.up:focus-visible,
+.back:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.back,
+.select-all-top {
+  display: none;
+}
+
+.title-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.done {
+  min-height: 38px;
+  padding: 0 16px;
+}
+
 .crumb.drop {
   background: var(--accent-soft);
   outline: 2px dashed var(--accent);
@@ -2152,6 +2273,13 @@ h2 {
 .selbar strong {
   padding: 0 6px;
   white-space: nowrap;
+}
+
+@keyframes selbar-in-mobile {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
 }
 
 .selbar .grow {
@@ -2792,6 +2920,77 @@ h2 {
     font-size: 16px;
   }
 
+  /*
+   * Cabecera del móvil, como en las apps de archivos:
+   *   ‹ Carpeta superior                [pegar] [⋯ | Listo]
+   *   Título grande ☆
+   *   12 carpetas · 30 archivos
+   *   [ Buscar en «…»                              ]
+   * La ruta completa, las vistas y el filtro de favoritos pasan al menú ⋯.
+   */
+  .explorer-head {
+    gap: 4px;
+  }
+
+  .crumbs {
+    display: none;
+  }
+
+  .toolbar {
+    gap: 4px 6px;
+  }
+
+  .back {
+    order: 0;
+    display: inline-flex;
+    flex: 1 1 0;
+    align-items: center;
+    min-width: 0;
+    min-height: 44px;
+    margin-left: -6px;
+    color: var(--accent);
+    font-size: 16px;
+    font-weight: 500;
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .select-all-top {
+    order: 0;
+    display: inline-flex;
+    flex: 1 1 0;
+    align-items: center;
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-size: 16px;
+    font-weight: 500;
+    text-align: left;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .select-all-top:disabled {
+    color: var(--muted);
+  }
+
+  .back span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .toolbar > .btn {
+    order: 1;
+  }
+
+  .toolbar.has-back .heading {
+    order: 2;
+    flex: 1 1 100%;
+  }
+
   .heading {
     flex: 1 1 0;
     flex-direction: column;
@@ -2799,9 +2998,48 @@ h2 {
     gap: 0;
   }
 
+  .heading .count {
+    margin-top: -2px;
+  }
+
+  .search,
+  .search:focus-within,
+  .search.active {
+    margin-top: 6px;
+  }
+
+  /* Barra de selección a lo ancho, sobre la barra de pestañas. */
+  .selbar {
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-width: none;
+    transform: none;
+    gap: 0;
+    padding: 6px 4px;
+    animation: selbar-in-mobile 0.16s ease-out;
+  }
+
+  .selbar strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1 1 auto;
+    padding: 0 4px 0 8px;
+    font-size: 15px;
+  }
+
+  .selbar .btn-icon {
+    width: 40px;
+  }
+
+  .selbar .grow {
+    display: none;
+  }
+
   .heading h1 {
     max-width: 100%;
-    font-size: 22px;
+    font-size: 26px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

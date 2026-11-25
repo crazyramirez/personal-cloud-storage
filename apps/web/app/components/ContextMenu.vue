@@ -16,6 +16,8 @@ const enabledIndexes = computed(() => (menu.value?.items ?? []).map((item, index
 watch(menu, async (state) => {
   if (state === null) return;
   active.value = -1;
+  dragY.value = 0;
+  dragging.value = false;
   position.value = { left: state.x, top: state.y };
   sheet.value = window.matchMedia('(max-width: 640px) and (pointer: coarse)').matches;
   await nextTick();
@@ -70,8 +72,64 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 function onOutside(event: Event): void {
+  // La hoja de acciones tiene su propio fondo, que se queda el toque (ver onBackdrop).
+  if (sheet.value) return;
   if (menu.value !== null && root.value !== null && !root.value.contains(event.target as Node)) closeMenu();
 }
+
+/**
+ * Fondo de la hoja de acciones: se cierra con el CLIC (no al apoyar el dedo), así el toque termina
+ * en el fondo y nunca llega a lo que hay detrás (otra fila, una pestaña, el botón de subir).
+ */
+function onBackdrop(): void {
+  if (menuTouchGuard()) return; // el dedo que abrió el menú aún no se ha levantado
+  closeMenu();
+}
+
+// ── Cerrar la hoja arrastrándola hacia abajo (desde la barrita o el título) ─────────────────
+const dragY = ref(0);
+const dragging = ref(false);
+let dragStart: { y: number; at: number; pointerId: number } | null = null;
+
+function onGrabDown(event: PointerEvent): void {
+  if (!sheet.value || (event.pointerType === 'mouse' && event.button !== 0)) return;
+  dragStart = { y: event.clientY, at: performance.now(), pointerId: event.pointerId };
+  dragging.value = true;
+  dragY.value = 0;
+  try {
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  } catch {
+    // El puntero ya no está activo: se sigue igual, sin captura.
+  }
+}
+
+function onGrabMove(event: PointerEvent): void {
+  if (dragStart === null || event.pointerId !== dragStart.pointerId) return;
+  // Hacia arriba apenas cede (como en iOS); hacia abajo sigue al dedo.
+  const dy = event.clientY - dragStart.y;
+  dragY.value = dy > 0 ? dy : dy / 6;
+}
+
+function onGrabUp(event: PointerEvent): void {
+  if (dragStart === null || event.pointerId !== dragStart.pointerId) return;
+  const speed = dragY.value / Math.max(1, performance.now() - dragStart.at); // px/ms
+  const height = root.value?.offsetHeight ?? 400;
+  dragStart = null;
+  dragging.value = false;
+  if (dragY.value > Math.min(120, height * 0.3) || (speed > 0.6 && dragY.value > 20)) {
+    dragY.value = height; // sale por abajo y se cierra
+    setTimeout(() => {
+      closeMenu();
+      dragY.value = 0;
+    }, 180);
+  } else {
+    dragY.value = 0; // vuelve a su sitio
+  }
+}
+
+const sheetStyle = computed(() =>
+  dragY.value === 0 && !dragging.value ? undefined : { transform: `translateY(${dragY.value}px)`, transition: dragging.value ? 'none' : 'transform 0.18s ease-out' },
+);
 
 const closeQuietly = (event?: Event): void => {
   // Desplazarse DENTRO del menú (hoja de acciones larga en el móvil) no lo cierra.
@@ -97,7 +155,16 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="menu && sheet" class="ctx-backdrop" aria-hidden="true" @pointerdown="closeMenu" />
+  <div
+    v-if="menu && sheet"
+    class="ctx-backdrop"
+    :style="dragY > 0 ? { opacity: Math.max(0, 1 - dragY / 400) } : undefined"
+    aria-hidden="true"
+    @pointerdown.prevent
+    @touchmove.prevent
+    @click="onBackdrop"
+    @contextmenu.prevent
+  />
   <div
     v-if="menu"
     ref="root"
@@ -106,11 +173,15 @@ onBeforeUnmount(() => {
     role="menu"
     :aria-label="menu.title ?? t('ui.actions')"
     tabindex="-1"
-    :style="sheet ? undefined : { left: `${position.left}px`, top: `${position.top}px` }"
+    :style="sheet ? sheetStyle : { left: `${position.left}px`, top: `${position.top}px` }"
     @keydown="onKeydown"
     @contextmenu.prevent
   >
-    <p v-if="menu.title" class="title">{{ menu.title }}</p>
+    <div v-if="sheet" class="sheet-head" @pointerdown="onGrabDown" @pointermove="onGrabMove" @pointerup="onGrabUp" @pointercancel="onGrabUp">
+      <span class="grab" aria-hidden="true" />
+      <p v-if="menu.title" class="title">{{ menu.title }}</p>
+    </div>
+    <p v-else-if="menu.title" class="title">{{ menu.title }}</p>
     <template v-for="(item, index) in menu.items" :key="`${index}-${item.label}`">
       <div v-if="item.separator && index > 0" class="sep" role="separator" />
       <button
@@ -266,15 +337,30 @@ onBeforeUnmount(() => {
   animation: sheet-up 0.22s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 
-.ctx.sheet::before {
-  content: '';
+/* Barrita y título: se arrastran hacia abajo para cerrar. Fijos arriba si la hoja se desplaza. */
+.sheet-head {
+  position: sticky;
+  top: -8px;
+  z-index: 1;
+  margin: -8px -10px 0;
+  padding: 8px 10px 0;
+  background: inherit;
+  touch-action: none;
+  cursor: grab;
+}
+
+.grab {
   display: block;
   width: 40px;
   height: 5px;
-  margin: 2px auto 8px;
+  margin: 2px auto 10px;
   border-radius: 3px;
   background: var(--border-strong);
-  opacity: 0.6;
+  opacity: 0.7;
+}
+
+.ctx-backdrop {
+  touch-action: none;
 }
 
 .ctx.sheet .title {
