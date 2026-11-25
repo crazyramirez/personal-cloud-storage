@@ -1549,6 +1549,8 @@ function ghostMenu(item: Transfer): MenuItem[] {
           </div>
           <span v-if="!loading && !failure && !unavailable && !searchActive" class="muted count">{{ countLabel }}</span>
         </div>
+        <!-- Salto de fila: buscar, filtrar, ordenar y vistas van siempre en su propia fila. -->
+        <span class="row-break" aria-hidden="true" />
         <label class="search" :class="{ active: filter !== '' }">
           <AppIcon name="search" :size="17" class="muted" />
           <span class="sr-only">{{ t('search.placeholder', { name: folderName }) }}</span>
@@ -2175,12 +2177,52 @@ h2 {
   gap: 4px;
 }
 
+/*
+ * Barra en dos filas fijas (ordenador):
+ *   Título  12 carpetas · 30 archivos             [pegar] [Nueva carpeta] [i] [⋯]
+ *   [ Buscar en «…»        ] [☆]                   [Nombre ▾] [↑] [≡ ▦ ▦ ▢]
+ */
+.heading {
+  order: 0;
+  flex: 1 1 auto;
+}
+
+.toolbar > .btn {
+  order: 1;
+}
+
+.row-break {
+  order: 2;
+  flex-basis: 100%;
+  height: 0;
+}
+
+.search {
+  order: 3;
+}
+
+.toolbar > .fav-filter {
+  order: 4;
+}
+
+.sorter {
+  order: 5;
+  margin-left: auto;
+}
+
+.toolbar > .views {
+  order: 6;
+}
+
 .search {
   display: flex;
   align-items: center;
   gap: 6px;
   height: 40px;
-  width: 180px;
+  flex: 1 1 180px;
+  width: auto;
+  min-width: 160px;
+  max-width: 380px;
   padding: 0 10px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -2190,7 +2232,6 @@ h2 {
 
 .search:focus-within,
 .search.active {
-  width: 240px;
   border-color: var(--accent);
 }
 
@@ -2975,6 +3016,10 @@ h2 {
 
   .search input {
     font-size: 16px;
+  }
+
+  .row-break {
+    order: 9;
   }
 
   .toolbar > .views {

@@ -10,6 +10,8 @@
   --surface-2: #f1f3f6;
   --border: #e3e6eb;
   --border-strong: #8e97a5;
+  --scrollbar: rgb(20 23 28 / 20%);
+  --scrollbar-hover: rgb(20 23 28 / 38%);
   --text: #14171c;
   --muted: #5b6472;
   --accent: #2457d6;
@@ -39,6 +41,8 @@
   --surface-2: #1e232c;
   --border: #2a303b;
   --border-strong: #4a5262;
+  --scrollbar: rgb(236 238 242 / 18%);
+  --scrollbar-hover: rgb(236 238 242 / 34%);
   --text: #e8ebf0;
   --muted: #9aa3b2;
   --accent: #7ba2ff;
@@ -69,6 +73,8 @@
     --surface-2: #1e232c;
     --border: #2a303b;
     --border-strong: #4a5262;
+    --scrollbar: rgb(236 238 242 / 18%);
+    --scrollbar-hover: rgb(236 238 242 / 34%);
     --text: #e8ebf0;
     --muted: #9aa3b2;
     --accent: #7ba2ff;
@@ -141,6 +147,42 @@ select {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/*
+ * Barras de desplazamiento finas y del color del tema, sin carril visible (como en macOS).
+ * Barra de 8 px con 2 px de aire: el «pulgar» se ve de 4 px y se oscurece al pasar por encima.
+ */
+/* Firefox: propiedades estándar. Chrome y Safari usan las de WebKit (sin flechas ni carril). */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar) transparent;
+  }
+
+  *:hover {
+    scrollbar-color: var(--scrollbar-hover) transparent;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: var(--scrollbar) padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-hover);
 }
 
 /* Colores de los iconos de archivo: carpetas en azul acero suave (más claro en el tema oscuro), multimedia en acento. */
@@ -332,15 +374,15 @@ select {
 
 /*
  * Desplegables: flecha propia con margen a la derecha (la nativa queda pegada al borde y cambia
- * en cada sistema). Dibujada con degradados en el color del texto atenuado: vale en los dos temas.
+ * en cada sistema). Chevron de trazo como los iconos de la app, en un gris que vale en los dos temas.
  */
 select.input {
   -webkit-appearance: none;
   appearance: none;
   padding-right: 40px;
-  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
-  background-position: calc(100% - 20px) 55%, calc(100% - 15px) 55%;
-  background-size: 5px 5px, 5px 5px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b93a1' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right 14px center;
+  background-size: 14px 14px;
   background-repeat: no-repeat;
   text-overflow: ellipsis;
   cursor: pointer;
