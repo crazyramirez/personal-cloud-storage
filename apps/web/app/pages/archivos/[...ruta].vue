@@ -1594,7 +1594,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
             <AppIcon :name="sortDesc ? 'chevron-down' : 'chevron-up'" />
           </button>
         </div>
-        <div class="views hide-sm">
+        <div class="views">
           <button type="button" :aria-pressed="view === 'list'" :aria-label="t('explorer.viewList')" :title="t('explorer.viewList')" :class="{ on: view === 'list' }" @click="view = 'list'"><AppIcon name="list" /></button>
           <button type="button" :aria-pressed="view === 'grid' && gridSize === 'sm'" :aria-label="t('explorer.iconsSmall')" :title="t('explorer.iconsSmall')" :class="{ on: view === 'grid' && gridSize === 'sm' }" @click="setGrid('sm')"><AppIcon name="grid-sm" /></button>
           <button type="button" :aria-pressed="view === 'grid' && gridSize === 'md'" :aria-label="t('explorer.iconsMedium')" :title="t('explorer.iconsMedium')" :class="{ on: view === 'grid' && gridSize === 'md' }" @click="setGrid('md')"><AppIcon name="grid" /></button>
@@ -2908,16 +2908,32 @@ h2 {
     display: none;
   }
 
+  /* Última fila: buscador y, a su derecha, las vistas (lista / iconos) siempre a mano. */
   .search,
   .search:focus-within,
   .search.active {
     order: 10;
-    width: 100%;
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
     height: 44px;
   }
 
   .search input {
     font-size: 16px;
+  }
+
+  .toolbar > .views {
+    order: 11;
+    display: flex;
+    flex: none;
+    margin-top: 6px;
+    border-radius: 12px;
+  }
+
+  .views button {
+    width: 38px;
+    height: 42px;
   }
 
   /*
@@ -2926,7 +2942,7 @@ h2 {
    *   Título grande ☆
    *   12 carpetas · 30 archivos
    *   [ Buscar en «…»                              ]
-   * La ruta completa, las vistas y el filtro de favoritos pasan al menú ⋯.
+   * La ruta completa y el filtro de favoritos pasan al menú ⋯; las vistas, junto al buscador.
    */
   .explorer-head {
     gap: 4px;
