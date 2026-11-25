@@ -1602,7 +1602,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
         </div>
         <button v-if="!detailsOpen" type="button" class="btn btn-icon details-toggle" :aria-label="t('explorer.showDetails')" :title="t('explorer.showDetailsPanel')" @click="detailsOpen = true"><AppIcon name="info" /></button>
         <button v-if="selectMode" type="button" class="btn btn-primary done" @click="stopSelecting">{{ t('explorer.done') }}</button>
-        <button v-else type="button" class="btn btn-icon more" :aria-label="t('explorer.moreActions')" :title="t('explorer.moreActions')" @click="openMenuFor($event, backgroundMenu(), folderName)"><AppIcon name="more" /></button>
+        <button v-else type="button" class="btn btn-icon more-btn" :aria-label="t('explorer.moreActions')" :title="t('explorer.moreActions')" @click="openMenuFor($event, backgroundMenu(), folderName)"><AppIcon name="more" /></button>
         <button type="button" class="btn btn-primary upload-btn" :class="{ 'fab-hidden': selection.size > 0 || selectMode }" :disabled="!canWrite" :title="canWrite ? t('explorer.uploadFiles') : noWrite()" :aria-label="t('explorer.uploadFiles')" @click="fileInput?.click()">
           <AppIcon name="upload" :stroke="1.9" /><span class="hide-xs">{{ t('explorer.upload') }}</span>
         </button>
