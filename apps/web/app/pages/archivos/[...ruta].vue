@@ -63,6 +63,18 @@ const view = ref<'list' | 'grid'>('list');
 /** Tamaño de los elementos en la cuadrícula: pequeño, mediano o grande. */
 const gridSize = ref<'sm' | 'md' | 'lg'>('md');
 const THUMB_PX = { sm: 160, md: 320, lg: 640 } as const;
+/**
+ * En el móvil no hay iconos pequeños (solo lista, medianos y grandes): con la preferencia «pequeños»
+ * guardada se ven medianos, sin perderla para el ordenador.
+ */
+const mobileQuery = typeof window === 'undefined' ? null : window.matchMedia('(max-width: 720px)');
+const mobile = ref(mobileQuery?.matches ?? false);
+const onMobileChange = (): void => {
+  mobile.value = mobileQuery?.matches ?? false;
+};
+onMounted(() => mobileQuery?.addEventListener('change', onMobileChange));
+onBeforeUnmount(() => mobileQuery?.removeEventListener('change', onMobileChange));
+const shownSize = computed<'sm' | 'md' | 'lg'>(() => (mobile.value && gridSize.value === 'sm' ? 'md' : gridSize.value));
 const sortKey = ref<'name' | 'date' | 'size' | 'type'>('name');
 const sortDesc = ref(false);
 const dragging = ref(false);
@@ -1251,9 +1263,9 @@ function backgroundMenu(): MenuItem[] {
     { label: t('explorer.sortBySize'), checked: sortKey.value === 'size', run: () => setSort('size') },
     { label: t('explorer.sortByType'), checked: sortKey.value === 'type', run: () => setSort('type') },
     { label: t('explorer.viewList'), icon: 'list', checked: view.value === 'list', separator: true, run: () => (view.value = 'list') },
-    { label: t('explorer.iconsSmall'), icon: 'grid-sm', checked: view.value === 'grid' && gridSize.value === 'sm', run: () => setGrid('sm') },
-    { label: t('explorer.iconsMedium'), icon: 'grid', checked: view.value === 'grid' && gridSize.value === 'md', run: () => setGrid('md') },
-    { label: t('explorer.iconsLarge'), icon: 'grid-lg', checked: view.value === 'grid' && gridSize.value === 'lg', run: () => setGrid('lg') },
+    ...(mobile.value ? [] : [{ label: t('explorer.iconsSmall'), icon: 'grid-sm' as const, checked: view.value === 'grid' && shownSize.value === 'sm', run: () => setGrid('sm') }]),
+    { label: t('explorer.iconsMedium'), icon: 'grid', checked: view.value === 'grid' && shownSize.value === 'md', run: () => setGrid('md') },
+    { label: t('explorer.iconsLarge'), icon: 'grid-lg', checked: view.value === 'grid' && shownSize.value === 'lg', run: () => setGrid('lg') },
     { label: t('explorer.downloadThisFolder'), icon: 'archive', separator: true, disabled: entries.value.length === 0, run: downloadFolder },
     { label: t('explorer.copyFolderLink'), icon: 'link', run: () => void copyLink(null) },
   ];
@@ -1598,9 +1610,9 @@ function ghostMenu(item: Transfer): MenuItem[] {
         </div>
         <div class="views">
           <button type="button" :aria-pressed="view === 'list'" :aria-label="t('explorer.viewList')" :title="t('explorer.viewList')" :class="{ on: view === 'list' }" @click="view = 'list'"><AppIcon name="list" /></button>
-          <button type="button" :aria-pressed="view === 'grid' && gridSize === 'sm'" :aria-label="t('explorer.iconsSmall')" :title="t('explorer.iconsSmall')" :class="{ on: view === 'grid' && gridSize === 'sm' }" @click="setGrid('sm')"><AppIcon name="grid-sm" /></button>
-          <button type="button" :aria-pressed="view === 'grid' && gridSize === 'md'" :aria-label="t('explorer.iconsMedium')" :title="t('explorer.iconsMedium')" :class="{ on: view === 'grid' && gridSize === 'md' }" @click="setGrid('md')"><AppIcon name="grid" /></button>
-          <button type="button" :aria-pressed="view === 'grid' && gridSize === 'lg'" :aria-label="t('explorer.iconsLarge')" :title="t('explorer.iconsLarge')" :class="{ on: view === 'grid' && gridSize === 'lg' }" @click="setGrid('lg')"><AppIcon name="grid-lg" /></button>
+          <button v-if="!mobile" type="button" :aria-pressed="view === 'grid' && gridSize === 'sm'" :aria-label="t('explorer.iconsSmall')" :title="t('explorer.iconsSmall')" :class="{ on: view === 'grid' && gridSize === 'sm' }" @click="setGrid('sm')"><AppIcon name="grid-sm" /></button>
+          <button type="button" :aria-pressed="view === 'grid' && shownSize === 'md'" :aria-label="t('explorer.iconsMedium')" :title="t('explorer.iconsMedium')" :class="{ on: view === 'grid' && shownSize === 'md' }" @click="setGrid('md')"><AppIcon name="grid" /></button>
+          <button type="button" :aria-pressed="view === 'grid' && shownSize === 'lg'" :aria-label="t('explorer.iconsLarge')" :title="t('explorer.iconsLarge')" :class="{ on: view === 'grid' && shownSize === 'lg' }" @click="setGrid('lg')"><AppIcon name="grid-lg" /></button>
         </div>
         <button v-if="!detailsOpen" type="button" class="btn btn-icon details-toggle" :aria-label="t('explorer.showDetails')" :title="t('explorer.showDetailsPanel')" @click="detailsOpen = true"><AppIcon name="info" /></button>
         <button v-if="selectMode" type="button" class="btn btn-primary done" @click="stopSelecting">{{ t('explorer.done') }}</button>
@@ -1783,7 +1795,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
             </ul>
           </div>
 
-          <ul v-else class="grid" :class="`size-${gridSize}`" role="listbox" aria-multiselectable="true" :aria-label="t('explorer.gridItems')">
+          <ul v-else class="grid" :class="`size-${shownSize}`" role="listbox" aria-multiselectable="true" :aria-label="t('explorer.gridItems')">
             <li
               v-for="item in ghosts"
               :key="`up-${item.id}`"
@@ -1828,7 +1840,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
               <span class="thumb">
                 <img
                   v-if="showThumb(entry)"
-                  :src="thumbSrc(entry, THUMB_PX[gridSize])"
+                  :src="thumbSrc(entry, THUMB_PX[shownSize])"
                   alt=""
                   loading="lazy"
                   decoding="async"
@@ -3227,10 +3239,6 @@ h2 {
   .grid {
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: 10px;
-  }
-
-  .grid.size-sm {
-    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
   }
 
   .grid.size-lg {
