@@ -1,6 +1,6 @@
 {
   "name": "personal-cloud",
-  "version": "0.4.25",
+  "version": "0.4.26",
   "private": true,
   "type": "module",
   "description": "Nube personal autocontenida para Linux (Raspberry Pi y otros, ARM64/x86-64) con HDD USB exFAT/NTFS",
