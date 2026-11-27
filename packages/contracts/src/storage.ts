@@ -79,9 +79,49 @@ export interface VolumeStatus {
   readonly mount: VolumeMountInfo | null;
 }
 
+/**
+ * Reparación automática del disco (ADR-0032), según el último estado que dejó el agente root en
+ * este arranque. `pending`: aviso recibido, aún sin desmontar; `running`: comprobando/reparando.
+ */
+export const VOLUME_REPAIR_PHASES = ['pending', 'running', 'done', 'failed'] as const;
+export type VolumeRepairPhase = (typeof VOLUME_REPAIR_PHASES)[number];
+
+export const VOLUME_REPAIR_RESULTS = [
+  /** Estaba bien: no hubo que cambiar nada. */
+  'clean',
+  /** Tenía errores y han quedado reparados (y verificados). */
+  'repaired',
+  /** La reparación no lo ha dejado limpio: se monta en solo lectura. */
+  'errors_left',
+  /** Error de lectura/escritura o no terminó a tiempo (disco o alimentación). */
+  'io_error',
+  /** No se pudo desmontar: algo seguía usando el disco. */
+  'busy',
+  /** Demasiadas reparaciones en 24 h: se deja en solo lectura. */
+  'limit',
+] as const;
+export type VolumeRepairResult = (typeof VOLUME_REPAIR_RESULTS)[number];
+
+export interface VolumeRepairStatus {
+  readonly phase: VolumeRepairPhase;
+  /** `dirty`: el disco no se desmontó bien (corte de luz); `readonly`: el kernel lo puso en solo lectura. */
+  readonly trigger: 'dirty' | 'readonly';
+  readonly result: VolumeRepairResult | null;
+  /** ISO 8601. */
+  readonly startedAt: string;
+  readonly finishedAt: string | null;
+}
+
 /** Respuesta de `GET /system/storage`: estado del volumen y, si es legible, su espacio. */
 export interface StorageResponse extends VolumeStatus {
   readonly space: { readonly totalBytes: number; readonly freeBytes: number; readonly reservedBytes: number } | null;
+  /** Última reparación automática de este arranque; `null` si no ha hecho falta ninguna. */
+  readonly repair: VolumeRepairStatus | null;
+}
+
+/** ¿Se está comprobando o reparando el disco ahora mismo? */
+export function volumeRepairActive(repair: VolumeRepairStatus | null | undefined): boolean {
+  return repair?.phase === 'pending' || repair?.phase === 'running';
 }
 
 export function volumeAllowsMutations(state: VolumeState): boolean {

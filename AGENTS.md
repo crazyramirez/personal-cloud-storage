@@ -9,7 +9,7 @@ Habla con la persona en su idioma y sin jerga: la mayoría no es técnica.
 
 ## 1. Reglas que no se negocian
 
-1. **Nunca formatees, particiones, repares ni borres nada de un disco** (`mkfs`, `parted`, `fdisk`, `wipefs`, `dd`, `fsck` sin `-n`, `ntfsfix` sin `-n`, `rm -r` sobre `/srv/pcloud`…). Ni aunque te lo parezca necesario. Si el disco no es exFAT/NTFS, explica cómo formatearlo desde Windows o macOS **y que eso borra lo que contiene**, y deja que lo haga la persona.
+1. **Nunca formatees, particiones, repares ni borres nada de un disco** (`mkfs`, `parted`, `fdisk`, `wipefs`, `dd`, `fsck` sin `-n`, `ntfsfix` sin `-n`, `rm -r` sobre `/srv/pcloud`…). Ni aunque te lo parezca necesario. Si el disco no es exFAT/NTFS, explica cómo formatearlo desde Windows o macOS **y que eso borra lo que contiene**, y deja que lo haga la persona. La reparación tras un corte de luz la hace el propio sistema antes de montar ([ADR-0032](docs/adr/0032-reparacion-automatica-del-disco.md)); tú no la lances a mano.
 2. **No elijas el disco por tu cuenta.** Muestra los discos compatibles (tamaño, etiqueta, modelo) y espera a que la persona confirme uno. Solo te ahorras la pregunta si ya te dio el UUID.
 3. **Nunca pidas ni escribas contraseñas** (la del sistema, la de `sudo`, la de la cuenta web). Si hace falta `sudo` con contraseña, la persona ejecuta el comando en su propia terminal (§2.3).
 4. **Nunca expongas el servidor a Internet**: nada de abrir puertos en el router, `tailscale funnel`, `tailscale serve`, túneles (ngrok, cloudflared) ni proxies públicos. Fuera de casa solo se entra por Tailscale ([ADR-0016](docs/adr/0016-acceso-remoto-tailscale.md)). Única excepción: la puerta de invitados de los enlaces para compartir ([ADR-0018](docs/adr/0018-enlaces-para-invitados.md)), publicada en un nodo Tailscale aparte, `<host>-compartir` ([ADR-0019](docs/adr/0019-nodo-tailscale-dedicado-enlaces.md)). La enciende y apaga la propia app (`pcloud-share-agent`) solo mientras hay enlaces activos; tú no la actives a mano.
@@ -136,7 +136,7 @@ Repite `--check` entre pasos (no en bucle continuo) para saber cuándo la person
 | `Arquitectura armhf/i386 no soportada` | Sistema de 32 bits: hay que grabar Raspberry Pi OS **64-bit** (borra la tarjeta: lo decide la persona) |
 | `No hay ningún disco exFAT/NTFS conectado con UUID …` | Disco desconectado o UUID mal copiado: repetir `--check` |
 | Falla `instalar la release` (pruebas en el equipo) | Ver `/var/log/pcloud-install.log`; la release anterior sigue activa. Suele ser falta de espacio o de RAM |
-| `pcloud.volume_state` distinto de `READY` con el disco conectado | [OPERATIONS §6](docs/OPERATIONS.md#6-runbook-tras-una-desconexión-o-un-corte-de-corriente): comprobación de solo lectura con `fsck -n`; reparar solo con permiso explícito |
+| `pcloud.volume_state` distinto de `READY` con el disco conectado | Si está reparando, esperar unos minutos (`/run/pcloud-volume-repair/status.json`). Si no, [OPERATIONS §6](docs/OPERATIONS.md#6-runbook-tras-una-desconexión-o-un-corte-de-corriente) |
 | «El disco no responde» / `IO_STALLED` | Casi siempre alimentación: [OPERATIONS §6 bis](docs/OPERATIONS.md#6-bis-runbook-el-disco-no-responde-io_stalled--io_timeout) |
 | No abre `https://<host>.local` desde el móvil | Probar con la IP; mismo Wi-Fi; algunos Android no resuelven `.local` |
 | Cambiar de disco | [OPERATIONS §7](docs/OPERATIONS.md#7-runbook-cambiar-de-disco) (desvincular es explícito y a mano) |

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-const { state, unreachable } = useStorage();
+const { status, state, unreachable } = useStorage();
 const view = computed(() =>
-  unreachable.value ? { pill: t('volume.noServer'), tone: 'danger' as Tone } : VOLUME_LABELS[state.value],
+  unreachable.value ? { pill: t('volume.noServer'), tone: 'danger' as Tone } : volumeLabel(status.value),
 );
 </script>
 

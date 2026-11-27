@@ -1,4 +1,4 @@
-import type { StorageResponse, VolumeState } from '@pcloud/contracts';
+import { volumeRepairActive, type StorageResponse, type VolumeState } from '@pcloud/contracts';
 
 export type Tone = 'ok' | 'warn' | 'danger' | 'muted';
 
@@ -26,6 +26,18 @@ export const VOLUME_LABELS: Record<VolumeState, { pill: string; widget: string; 
   UNHEALTHY: label(() => t('volume.unhealthyPill'), () => t('volume.unhealthyWidget'), 'danger'),
 };
 
+const REPAIRING = label(() => t('volume.repairingPill'), () => t('volume.repairingWidget'), 'warn');
+
+/** ¿Se está reparando el disco y por eso no está listo? (ADR-0032) */
+export function volumeRepairing(status: StorageResponse | null): boolean {
+  return status !== null && status.state !== 'READY' && volumeRepairActive(status.repair);
+}
+
+/** Etiqueta corta según el estado y, si se está reparando, «Reparando el disco…». */
+export function volumeLabel(status: StorageResponse | null): { pill: string; widget: string; tone: Tone } {
+  return volumeRepairing(status) ? REPAIRING : VOLUME_LABELS[status?.state ?? 'INITIALIZING'];
+}
+
 export interface VolumeExplanation {
   tone: Tone;
   title: string;
@@ -44,6 +56,33 @@ function systemCard(): { ok: boolean; title: string; text: string } {
  * Se llama durante el render (computed), así que los textos siguen el idioma activo.
  */
 export function explainVolume(status: StorageResponse | null): VolumeExplanation {
+  if (volumeRepairing(status)) {
+    return {
+      tone: 'warn',
+      title: t('volume.repairingTitle'),
+      lead: status?.repair?.trigger === 'readonly' ? t('volume.repairingLeadReadOnly') : t('volume.repairingLead'),
+      steps: [t('volume.repairingStep1'), t('volume.repairingStep2')],
+      effects: [
+        { ok: false, title: t('volume.effectCloud'), text: t('volume.repairingEffectCloud') },
+        { ok: true, title: t('volume.repairingEffectFilesTitle'), text: t('volume.repairingEffectFilesText') },
+        systemCard(),
+      ],
+      canBrowse: false,
+    };
+  }
+  if (status?.state === 'READ_ONLY' && status.repair?.phase === 'failed') {
+    return {
+      tone: 'danger',
+      title: t('volume.repairFailedTitle'),
+      lead: t('volume.repairFailedLead'),
+      steps: [t('volume.repairFailedStep1'), t('volume.repairFailedStep2'), t('volume.repairFailedStep3')],
+      effects: [
+        { ok: true, title: t('volume.readOnlyEffectViewTitle'), text: t('volume.readOnlyEffectViewText') },
+        { ok: false, title: t('volume.effectChanges'), text: t('volume.repairFailedEffectChanges') },
+      ],
+      canBrowse: true,
+    };
+  }
   switch (status?.state ?? 'INITIALIZING') {
     case 'WRONG_VOLUME':
       return {

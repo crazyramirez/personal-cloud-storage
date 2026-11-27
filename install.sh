@@ -279,7 +279,7 @@ trap cleanup EXIT
 step "Instalando paquetes base"
 export DEBIAN_FRONTEND=noninteractive
 run "apt-get update" apt-get update
-BASE_PKGS=(curl ca-certificates xz-utils tar gzip openssl avahi-daemon exfatprogs util-linux e2fsprogs udev)
+BASE_PKGS=(curl ca-certificates xz-utils tar gzip openssl avahi-daemon exfatprogs ntfs-3g util-linux e2fsprogs udev)
 run "instalar paquetes base" apt-get install -y --no-install-recommends "${BASE_PKGS[@]}"
 systemctl enable --now avahi-daemon >>"$LOG" 2>&1 || warn "avahi-daemon no arrancó: el nombre $HOST.local puede no funcionar (usa la IP)."
 ok "Listo (incluye avahi para que el equipo se encuentre como $HOST.local)"
@@ -390,6 +390,8 @@ ok "pcloud.service activo (arranca solo con el equipo, aunque no haya disco)"
 run "preparar la copia de seguridad en disco externo" bash "$SETUP/pcloud-install-backup.sh" --execute
 ok "Copia de seguridad lista: conecta un disco USB externo y elígelo en Ajustes"
 run "preparar reinicio y apagado desde Ajustes" bash "$SETUP/pcloud-install-power.sh" --execute
+run "preparar la reparación automática del disco (cortes de luz)" bash "$SETUP/pcloud-install-volume-repair.sh" --execute
+ok "Si se va la luz, al volver el disco se revisa y se repara solo antes de usarlo"
 
 # ── 7. Visores ────────────────────────────────────────────────────────────────────────────────
 

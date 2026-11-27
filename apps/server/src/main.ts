@@ -20,6 +20,7 @@ import { BackupService, type BackupLogger } from './backup/service.ts';
 import { buildApp } from './http/app.ts';
 import { ResourceMonitor } from './system/resources.ts';
 import { FilePowerAgent } from './system/power.ts';
+import { FileVolumeRepairAgent } from './system/volume-repair.ts';
 import { PairingService } from './system/pairing.ts';
 import { FileGatewayAgent, GUEST_SOCKET, ShareGateway, type GatewayLogger } from './share/gateway.ts';
 import { buildGuestApp } from './share/guest-app.ts';
@@ -124,7 +125,8 @@ async function main(): Promise<void> {
     activeCount: () => shareStore.countActive(new Date()),
     log: { info: (o, m) => gatewayLog.info(o, m), warn: (o, m) => gatewayLog.warn(o, m) },
   });
-  const app = await buildApp({ config, db, guardian, uploads, operations, media, release, backup, resources, shares: { store: shareStore, gateway }, power: new FilePowerAgent(), pairing: new PairingService(), version, searchIndex });
+  const volumeRepair = new FileVolumeRepairAgent();
+  const app = await buildApp({ config, db, guardian, uploads, operations, media, release, backup, resources, shares: { store: shareStore, gateway }, power: new FilePowerAgent(), volumeRepair, pairing: new PairingService(), version, searchIndex });
   backupLog = app.log;
   gatewayLog = app.log;
   indexLog = app.log;
@@ -136,6 +138,15 @@ async function main(): Promise<void> {
   guardian.onChange((snapshot) => {
     app.log.info({ state: snapshot.state, generation: snapshot.generation, issues: snapshot.issues.map((i) => i.code) }, 'estado del volumen');
     if (snapshot.state === 'READY' || snapshot.state === 'READ_ONLY') void searchIndex.ensureLoaded();
+    // Solo lectura por un error del sistema de archivos (exFAT errors=remount-ro, típico tras un
+    // corte de luz): el agente root desmonta, repara y vuelve a montar (ADR-0032). Él decide si
+    // hace falta y limita los intentos; aquí solo se avisa en cada entrada en READ_ONLY.
+    if (snapshot.state === 'READ_ONLY' && snapshot.issues[0]?.code === 'MOUNT_READ_ONLY') {
+      volumeRepair.request().then(
+        (sent) => app.log.warn({ sent }, sent ? 'disco en solo lectura: se pide la reparación automática' : 'disco en solo lectura y sin reparación automática instalada'),
+        (error: unknown) => app.log.error({ err: error }, 'no se pudo pedir la reparación automática del disco'),
+      );
+    }
     if (snapshot.state === 'READY') {
       uploads.recover().catch((error: unknown) => app.log.error({ err: error }, 'fallo al reconciliar subidas'));
       operations.recover().catch((error: unknown) => app.log.error({ err: error }, 'fallo al reconciliar operaciones'));

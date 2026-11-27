@@ -1,0 +1,21 @@
+# /etc/systemd/system/pcloud-volume-agent.service — agente root mínimo que repara el HDD de datos
+# cuando el kernel lo ha puesto en solo lectura (ADR-0032). Lo lanza pcloud-volume-agent.path;
+# procesa el aviso y termina. Instalado por pcloud-install-volume-repair.sh. No editar a mano.
+#
+# Solo desmonta y vuelve a montar /srv/pcloud (el montaje pasa por pcloud-volume-repair.sh). Para
+# Samba (y, si hace falta, pcloud.service) mientras tanto y los vuelve a arrancar. DELIBERADAMENTE
+# sin aislamiento de montajes: tiene que desmontar y montar en el espacio del sistema.
+
+[Unit]
+Description=Personal Cloud Storage: reparación del disco de datos en solo lectura
+After=local-fs.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/pcloud/current/deploy/linux/volume/pcloud-volume-agent.sh
+TimeoutStartSec=6h
+TimeoutStopSec=30min
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any

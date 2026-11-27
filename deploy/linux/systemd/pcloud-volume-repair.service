@@ -1,0 +1,28 @@
+# /etc/systemd/system/pcloud-volume-repair.service — comprueba y repara el HDD de datos antes de
+# montarlo si quedó sin desmontar bien, p. ej. por un corte de luz (ADR-0032). No se habilita: lo
+# pide srv-pcloud.mount con el drop-in srv-pcloud.mount.d/pcloud-volume-repair.conf, así que corre
+# antes de CADA montaje (al arrancar y cuando pcloud-volume-agent vuelve a montar el disco).
+# Instalado por pcloud-install-volume-repair.sh. No editar a mano.
+#
+# Con el disco limpio termina en milisegundos. DELIBERADAMENTE sin PrivateTmp, ProtectSystem ni
+# ningún aislamiento que cree un espacio de montajes propio: si la reparación no deja el disco
+# limpio, lo monta en solo lectura y ese montaje tiene que verse en el del sistema.
+
+[Unit]
+Description=Personal Cloud Storage: comprobación del disco de datos antes de montarlo
+DefaultDependencies=no
+After=systemd-remount-fs.service local-fs-pre.target systemd-udevd.service
+Before=shutdown.target
+Conflicts=shutdown.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/pcloud/current/deploy/linux/volume/pcloud-volume-repair.sh
+# Una pasada con ~500.000 ficheros tarda unos 5 min; reparar y verificar, el doble.
+TimeoutStartSec=5h
+# Si se apaga el equipo durante una reparación, se espera a que termine antes de cortar.
+TimeoutStopSec=30min
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-const { status, state } = useStorage();
-const label = computed(() => VOLUME_LABELS[state.value]);
+const { status } = useStorage();
+const label = computed(() => volumeLabel(status.value));
 const space = computed(() => status.value?.space ?? null);
 const used = computed(() => (space.value === null ? 0 : space.value.totalBytes - space.value.freeBytes));
 const percent = computed(() => (space.value === null || space.value.totalBytes === 0 ? 0 : Math.max(1, Math.round((used.value / space.value.totalBytes) * 100))));

@@ -8,7 +8,7 @@ Define cuándo el servidor puede tocar el HDD. Implementación: [`storage-guardi
 |---|---|---|---|---|---|
 | `INITIALIZING` | Primera comprobación en curso | ✗ | ✗ | sí | "Comprobando disco…" |
 | `READY` | Montado, identificado, escribible | ✓ | ✓ | — | Normal |
-| `READ_ONLY` | Volumen correcto en solo lectura | ✓ | ✗ | no | Aviso + explorador sin acciones |
+| `READ_ONLY` | Volumen correcto en solo lectura | ✓ | ✗ | sí, automático ([ADR-0032](adr/0032-reparacion-automatica-del-disco.md)) | Aviso + explorador sin acciones; «Reparando el disco…» mientras se repara |
 | `UNAVAILABLE` | No montado, desconectado o indeterminable | ✗ | ✗ | sí | **Pantalla de disco ausente** (no "carpeta vacía") |
 | `WRONG_VOLUME` | Hay otro disco montado | ✗ | ✗ | no | "Este no es tu disco" |
 | `NEEDS_CHECK` | Volumen esperado que requiere intervención | ✗ | ✗ | no | Instrucciones según el código |
@@ -32,6 +32,8 @@ La primera condición que falla determina el estado. READY exige demostrar **tod
 10. `.pcloud/` es un directorio real del volumen; `volume-id` es v1 y coincide → `NEEDS_CHECK NOT_ONBOARDED|MARKER_*` / `WRONG_VOLUME MARKER_MISMATCH`
 11. La raíz de datos es un directorio real del volumen → `NEEDS_CHECK DATA_ROOT_INVALID`
 12. Montaje `rw` y `access(W_OK)` concedido → `READ_ONLY` / `NEEDS_CHECK PERMISSION_DENIED`
+
+Si el estado es `READ_ONLY` por `MOUNT_READ_ONLY`, el servidor avisa al agente root de reparación ([ADR-0032](adr/0032-reparacion-automatica-del-disco.md)): desmonta, comprueba/repara con el disco desmontado y vuelve a montar. Mientras tanto el estado es `UNAVAILABLE` y `GET /system/storage` lo indica en `repair`.
 
 El guardián **nunca escribe**: solo usa `readFile(/proc)`, `lstat`, `stat`, `realpath`, `open(O_RDONLY|O_NOFOLLOW)` y `access`.
 

@@ -147,15 +147,24 @@ journalctl -k -b | grep -iE 'usb|exfat|ntfs|i/o error|reset|not properly unmount
 
 ## 6. Runbook: tras una desconexión o un corte de corriente
 
-Comportamiento medido (F0, ver §8): el guardián bloquea las mutaciones en < 0,5 s y systemd desmonta solo al desaparecer el dispositivo, pero **no vuelve a montar solo al reconectar**.
+**Normalmente no hay que hacer nada** ([ADR-0032](adr/0032-reparacion-automatica-del-disco.md)). Antes de cada montaje, `pcloud-volume-repair.service` mira si el disco quedó sin desmontar bien (marca VolumeDirty de exFAT) y, si es así, lo comprueba y repara (`fsck.exfat -y -s`, ~5 min por pasada en un disco con 500.000 ficheros). Si el kernel lo pone en solo lectura con el equipo en marcha, `pcloud-volume-agent` lo desmonta y lo vuelve a montar pasando por esa comprobación. La web muestra «Reparando el disco…» mientras tanto.
+
+```bash
+cat /run/pcloud-volume-repair/status.json        # última reparación de este arranque
+sudo tail -n 40 /var/log/pcloud-volume-repair.log # salida completa de fsck
+journalctl -u pcloud-volume-repair -u pcloud-volume-agent -b
+sudo bash /opt/pcloud/current/deploy/linux/volume/pcloud-volume-repair.sh --dry-run   # qué haría ahora
+```
+
+- `/LOST+FOUND` (en la raíz del disco, fuera de la nube): datos que `fsck` encontró sin fichero. Revisarlos y borrarlos a mano si no sirven.
+- `"phase":"failed"`: el disco sigue en solo lectura. `errors_left`/`io_error` apuntan a disco dañado o alimentación (`vcgencmd get_throttled`); `limit`, a más de 3 reparaciones en 24 h. Copiar lo importante y reiniciar (se vuelve a intentar al arrancar).
+
+Si systemd no vuelve a montar el disco solo al reconectarlo (comportamiento medido en F0, ver §8):
 
 1. Reconectar el disco (en la Raspberry Pi, puerto USB 3 azul). Comprobar `ls -l /dev/disk/by-uuid/<UUID>`.
-2. Si `/srv/pcloud` sigue montado (montaje obsoleto): `sudo systemctl stop srv-pcloud.mount`.
-3. **Comprobación de solo lectura:** `sudo fsck.exfat -n /dev/disk/by-uuid/<UUID>` (NTFS: `sudo ntfsfix -n`).
-   - Limpio → `sudo systemctl start srv-pcloud.mount` → `pcloud-volume-status` debe dar READY.
-   - Con errores → **no montar en escritura**. Montar en solo lectura para revisar, y reparar solo con una decisión explícita (`fsck.exfat -p`, o `-y` como último recurso) y, si hay datos únicos, tras copiarlos.
-4. El flag VolumeDirty de exFAT queda activo aunque `fsck` esté limpio, porque Linux no lo borra si estaba activo al montar. Se limpia con `fsck.exfat -p` sobre el volumen desmontado, tras un `-n` limpio. Es una reparación: hazla solo a sabiendas.
-5. En Raspberry Pi, revisar `vcgencmd get_throttled`: un bit de subtensión apunta a la alimentación.
+2. `sudo bash /opt/pcloud/current/deploy/linux/setup/pcloud-recover-volume.sh --execute`: desmonta un montaje obsoleto, hace la comprobación de solo lectura (`fsck.exfat -n` / `ntfsfix -n`) y monta (si había errores, el montaje los repara).
+3. `pcloud-volume-status` debe dar READY.
+4. En Raspberry Pi, revisar `vcgencmd get_throttled`: un bit de subtensión apunta a la alimentación.
 
 ## 6 bis. Runbook: «El disco no responde» (IO_STALLED / IO_TIMEOUT)
 
@@ -164,7 +173,7 @@ La interfaz muestra «El disco no responde» y la API devuelve `503` con `IO_STA
 1. Esperar 1-2 minutos: un disco SMR muy ocupado puede recuperarse solo.
 2. Comprobar el kernel: `journalctl -k -n 30 | grep -E "sd[a-z]|I/O error|timing out"`. Un *«timing out command, waited 180s»* repetido indica que no se recuperará solo.
 3. **Reconectar físicamente:** desconectar el USB del disco, esperar 10 s y volver a conectarlo.
-4. Seguir el runbook §6: `fsck` de solo lectura → montar si está limpio → `pcloud-volume-status`.
+4. Seguir el runbook §6: `pcloud-recover-volume.sh --execute` → `pcloud-volume-status`.
 5. Si los procesos de `pcloud` quedaron en estado D, reiniciar el servicio después de reconectar (`systemctl restart pcloud`). Si no termina, reiniciar el servidor.
 6. Causa más probable: **alimentación**. Un HDD alimentado solo por USB sufre con los picos de consumo (arranque del motor y CPU al máximo). Solución: fuente de alimentación adecuada para el servidor y hub USB con alimentación propia (o caja con fuente) para el disco.
 

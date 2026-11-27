@@ -1,10 +1,10 @@
 <script setup lang="ts">
 useHead({ title: () => t('panel.pageTitle') });
 
-const { status, state, readable, unreachable } = useStorage();
+const { status, readable, unreachable } = useStorage();
 const { active, completedTick, openPanel } = useTransfers();
 
-const label = computed(() => VOLUME_LABELS[state.value]);
+const label = computed(() => volumeLabel(status.value));
 const space = computed(() => status.value?.space ?? null);
 const used = computed(() => (space.value === null ? 0 : space.value.totalBytes - space.value.freeBytes));
 const percent = computed(() => (space.value === null || space.value.totalBytes === 0 ? 0 : Math.max(1, Math.round((used.value / space.value.totalBytes) * 100))));

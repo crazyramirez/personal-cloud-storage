@@ -33,6 +33,7 @@ Formato: Contexto → Decisión → Consecuencias → Alternativas. Un ADR acept
 | [0029](0029-indice-de-busqueda.md) | Índice de nombres (en la caché del disco, proceso de prioridad baja) para buscar en carpetas y subcarpetas | Aceptado |
 | [0030](0030-indice-al-dia-con-diarios.md) | El índice de búsqueda se mantiene al día con los cambios de la web y el diario de la carpeta de red | Aceptado |
 | [0031](0031-ver-enlaces-compartidos-en-el-navegador.md) | Ver en el navegador lo que se comparte con un enlace (imágenes, vídeo, audio, PDF y Office, sin JavaScript) | Aceptado |
+| [0032](0032-reparacion-automatica-del-disco.md) | Reparación automática del disco tras un corte de luz (antes de montar y al pasar a solo lectura) | Aceptado |
 
 ## Pendientes
 

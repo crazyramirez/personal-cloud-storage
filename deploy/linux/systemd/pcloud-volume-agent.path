@@ -1,0 +1,13 @@
+# /etc/systemd/system/pcloud-volume-agent.path — despierta al agente de reparación cuando
+# pcloud.service ve el disco en solo lectura por un error del sistema de archivos (ADR-0032).
+# Instalado por pcloud-install-volume-repair.sh.
+
+[Unit]
+Description=Personal Cloud Storage: avisos de disco de datos en solo lectura
+
+[Path]
+DirectoryNotEmpty=/var/lib/pcloud/volume-agent/inbox
+Unit=pcloud-volume-agent.service
+
+[Install]
+WantedBy=paths.target

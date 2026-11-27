@@ -71,6 +71,7 @@ import { contentDisposition, parseRange, type GuardianLike, type RouteContext } 
 import type { BackupService } from '../backup/service.ts';
 import type { ResourceMonitor } from '../system/resources.ts';
 import type { PowerAgent } from '../system/power.ts';
+import type { VolumeRepairAgent } from '../system/volume-repair.ts';
 import type { PairingService } from '../system/pairing.ts';
 import { registerPairingRoutes } from './routes-pairing.ts';
 import { registerAccountRoutes } from './routes-account.ts';
@@ -117,6 +118,8 @@ export interface AppDeps {
   readonly resources?: ResourceMonitor;
   /** Reinicio y apagado del equipo desde Ajustes (opcional, ADR-0020). */
   readonly power?: PowerAgent;
+  /** Reparación automática del disco (opcional, ADR-0032): su estado sale en /system/storage. */
+  readonly volumeRepair?: VolumeRepairAgent;
   /** Emparejar ordenadores con la carpeta de red (opcional, ADR-0022). */
   readonly pairing?: PairingService;
   /** Enlaces para compartir con invitados (opcional: sin ellos no hay rutas /shares). */
@@ -302,7 +305,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     if (volumeAllowsReads(status.state)) {
       space = await volumeSpace(config.storage.mountpoint, config.storage).catch(() => null);
     }
-    return { ...status, space };
+    const repair = (await deps.volumeRepair?.status().catch(() => null)) ?? null;
+    return { ...status, space, repair };
   });
 
   // ── Configuración inicial y sesión ────────────────────────────────────────────────────────

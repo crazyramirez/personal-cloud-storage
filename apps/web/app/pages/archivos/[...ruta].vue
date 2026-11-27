@@ -1638,7 +1638,7 @@ function ghostMenu(item: Transfer): MenuItem[] {
     </div>
 
     <p v-if="storage.state.value === 'READ_ONLY'" class="notice notice-warn">
-      <AppIcon name="alert" /><span>{{ t('explorer.readOnly') }}</span>
+      <AppIcon name="alert" /><span>{{ storage.status.value?.repair?.phase === 'failed' ? t('explorer.readOnlyFailed') : t('explorer.readOnly') }}</span>
     </p>
 
     <DiskUnavailable v-if="unavailable && storage.state.value !== 'READ_ONLY'" />

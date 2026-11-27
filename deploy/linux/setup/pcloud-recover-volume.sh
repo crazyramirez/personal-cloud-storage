@@ -6,8 +6,9 @@
 #   2. Si el punto de montaje sigue montado con un dispositivo que ya no existe (montaje obsoleto),
 #      lo desmonta.
 #   3. Comprueba el sistema de archivos en SOLO LECTURA (fsck.exfat -n / ntfsfix -n).
-#   4. Solo si sale limpio, monta (systemctl start srv-pcloud.mount) y muestra el veredicto del
-#      StorageGuardian. Si hay errores, se detiene y no monta: reparar es una decisión aparte.
+#   4. Monta (systemctl start srv-pcloud.mount) y muestra el veredicto del StorageGuardian. Si la
+#      comprobación encontró errores, el montaje pasa antes por pcloud-volume-repair.sh, que los
+#      repara (ADR-0032); sin esa pieza instalada, se detiene y no monta.
 #
 # DRY-RUN por defecto (solo pasos 1 y 3, sin cambiar nada); --execute para desmontar/montar.
 #
@@ -65,16 +66,27 @@ case "$FSTYPE" in
   *) echo "Tipo $FSTYPE sin comprobación conocida"; RC=1 ;;
 esac
 set -e
+NEEDS_REPAIR=0
 if [ "$RC" -ne 0 ]; then
-  echo "La comprobación ha encontrado problemas (código $RC): NO se monta."
-  echo "Reparar es una decisión aparte (fsck.exfat -p tras copiar lo importante). Ver OPERATIONS §6."
-  exit 3
+  echo "La comprobación ha encontrado problemas (código $RC)."
+  if [ ! -f /etc/systemd/system/pcloud-volume-repair.service ]; then
+    echo "Sin la reparación automática instalada (pcloud-install-volume-repair.sh) NO se monta. Ver OPERATIONS §6."
+    exit 3
+  fi
+  echo "  se repararán al montar (pcloud-volume-repair, ADR-0032)"
+  NEEDS_REPAIR=1
+else
+  echo "  limpio"
 fi
-echo "  limpio"
 
 if [ "$EXECUTE" -ne 1 ]; then
   echo "DRY-RUN: se montaría con «systemctl start $UNIT». Repite con --execute."
   exit 0
+fi
+if [ "$NEEDS_REPAIR" -eq 1 ]; then
+  install -d -o root -g pcloud -m 0750 /run/pcloud-volume-repair
+  touch /run/pcloud-volume-repair/force
+  echo "Montando: antes se comprueba y repara (unos minutos)…"
 fi
 systemctl start "$UNIT"
 sleep 2
