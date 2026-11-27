@@ -51,7 +51,7 @@ export default {
   noMatch: '検索に一致するお気に入りはありません。',
   count: (p) => `お気に入り ${p.n} 個（最大 ${p.max} 個）`,
   openFolder: 'フォルダーを開く',
-  openNamed: '「{name}」を開く',
+  openNamed: 'フォルダーで表示（「{name}」）',
   download: 'ダウンロード',
   downloadZip: 'ZIP でダウンロード',
   unavailableTitle: (p) => `使用できない項目（${p.n}）`,

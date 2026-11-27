@@ -51,7 +51,7 @@ export default {
   noMatch: 'Kein Favorit entspricht der Suche.',
   count: (p) => (Number(p.n) === 1 ? `1 Favorit (höchstens ${p.max})` : `${p.n} Favoriten (höchstens ${p.max})`),
   openFolder: 'Ordner öffnen',
-  openNamed: '„{name}“ öffnen',
+  openNamed: 'Im Ordner anzeigen („{name}“)',
   download: 'Herunterladen',
   downloadZip: 'Als ZIP herunterladen',
   unavailableTitle: (p) => `Nicht verfügbar (${p.n})`,

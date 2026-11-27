@@ -51,7 +51,7 @@ export default {
   noMatch: '没有与搜索匹配的收藏。',
   count: (p) => `${p.n} 个收藏（最多 ${p.max} 个）`,
   openFolder: '打开文件夹',
-  openNamed: '打开“{name}”',
+  openNamed: '在文件夹中显示（“{name}”）',
   download: '下载',
   downloadZip: '下载为 ZIP',
   unavailableTitle: (p) => `不可用（${p.n}）`,
