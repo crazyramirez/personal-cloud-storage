@@ -363,7 +363,7 @@ a.link:hover {
 
 
 .main {
-  flex: 999 1 560px;
+  flex: 30 1 560px;
   min-width: 0;
   display: flex;
   flex-direction: column;
