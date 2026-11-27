@@ -115,7 +115,7 @@ case "$FSTYPE" in
     if ! [[ "$FLAGS" =~ ^[0-9]+$ ]]; then log "no se puede leer el sector de arranque de $DEV: se deja al montaje"; exit 0; fi
     DIRTY=$(( (FLAGS & 6) != 0 ))
     if [ "$DIRTY" -eq 0 ] && [ "$FORCED" -eq 0 ]; then log "disco limpio (se desmontó bien)"; exit 0; fi
-    if [ "$FORCED" -eq 1 ]; then TRIGGER=readonly; else TRIGGER=dirty; fi
+    if [ "$FORCED" -eq 1 ]; then TRIGGER="readonly"; else TRIGGER="dirty"; fi
     if [ "$DRY" -eq 1 ]; then log "DRY-RUN: se comprobaría y repararía $DEV ($TRIGGER)"; exit 0; fi
     STARTED="$(now)"
     ESTIMATE="$(cat "$PASS_FILE" 2>/dev/null)"
@@ -145,8 +145,8 @@ case "$FSTYPE" in
     ;;
   ntfs3 | ntfs-3g)
     command -v ntfsfix >/dev/null || { log "falta ntfsfix (paquete ntfs-3g): no se comprueba"; exit 0; }
-    TRIGGER=dirty
-    [ "$FORCED" -eq 1 ] && TRIGGER=readonly
+    TRIGGER="dirty"
+    [ "$FORCED" -eq 1 ] && TRIGGER="readonly"
     if [ "$DRY" -eq 1 ]; then log "DRY-RUN: se comprobaría $DEV con ntfsfix -n (y -d si avisa)"; exit 0; fi
     # ntfsfix -n solo lee unos pocos metadatos: tarda segundos, así que se hace en cada montaje.
     if run_tool ntfsfix -n "$DEV" && [ "$FORCED" -eq 0 ]; then log "disco limpio"; exit 0; fi
@@ -161,7 +161,7 @@ esac
 
 if [ "$RESULT" = clean ] || [ "$RESULT" = repaired ]; then
   log "resultado: $RESULT"
-  status done "$RESULT"
+  status "done" "$RESULT"
   exit 0
 fi
 

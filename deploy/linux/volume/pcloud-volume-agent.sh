@@ -163,7 +163,7 @@ UNFINISHED=0
 grep -qE '"phase":"(pending|running)"' "$STATUS" 2>/dev/null && UNFINISHED=1
 if mountpoint -q "$MOUNTPOINT" && ! findmnt -rn -o OPTIONS --mountpoint "$MOUNTPOINT" | head -1 | tr ',' '\n' | grep -qx ro; then
   log "montado de nuevo con escritura"
-  [ "$UNFINISHED" -eq 1 ] && status done clean
+  [ "$UNFINISHED" -eq 1 ] && status "done" clean
 elif mountpoint -q "$MOUNTPOINT"; then
   log "montado en solo lectura: la reparación no lo ha dejado limpio"
   [ "$UNFINISHED" -eq 1 ] && status failed errors_left
