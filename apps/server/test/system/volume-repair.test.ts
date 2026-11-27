@@ -15,13 +15,29 @@ const NOW = new Date('2026-11-27T01:00:00Z');
 describe('reparación automática del disco (ADR-0032)', () => {
   it('interpreta el estado del agente y descarta lo que no encaja', () => {
     const running = '{"phase":"running","trigger":"dirty","result":null,"startedAt":"2026-11-27T00:58:00Z","finishedAt":null}\n';
+    const empty = { step: null, stepStartedAt: null, estimateSeconds: null, fixed: null };
     assert.deepEqual(parseRepairStatus(running, NOW), {
       phase: 'running',
       trigger: 'dirty',
       result: null,
       startedAt: '2026-11-27T00:58:00Z',
       finishedAt: null,
+      ...empty,
+    }, 'sin detalle de progreso (agente anterior): campos a null');
+    const detailed = '{"phase":"running","trigger":"readonly","result":null,"startedAt":"2026-11-27T00:58:00Z","finishedAt":null,"step":"verify","stepStartedAt":"2026-11-27T00:59:00Z","estimateSeconds":287,"fixed":1}';
+    assert.deepEqual(parseRepairStatus(detailed, NOW), {
+      phase: 'running',
+      trigger: 'readonly',
+      result: null,
+      startedAt: '2026-11-27T00:58:00Z',
+      finishedAt: null,
+      step: 'verify',
+      stepStartedAt: '2026-11-27T00:59:00Z',
+      estimateSeconds: 287,
+      fixed: 1,
     });
+    const odd = '{"phase":"running","trigger":"dirty","result":null,"startedAt":"2026-11-27T00:58:00Z","finishedAt":null,"step":"format","stepStartedAt":"ya","estimateSeconds":-3,"fixed":"1"}';
+    assert.deepEqual(parseRepairStatus(odd, NOW), { phase: 'running', trigger: 'dirty', result: null, startedAt: '2026-11-27T00:58:00Z', finishedAt: null, ...empty }, 'el detalle raro se ignora');
     const done = '{"phase":"done","trigger":"readonly","result":"repaired","startedAt":"2026-11-27T00:50:00Z","finishedAt":"2026-11-27T00:59:00Z"}';
     assert.equal(parseRepairStatus(done, NOW)?.result, 'repaired');
     for (const bad of ['', 'no es json', 'null', '{"phase":"formatting","trigger":"dirty","result":null,"startedAt":"2026-11-27T00:58:00Z","finishedAt":null}', '{"phase":"done","trigger":"dirty","result":"rm -rf","startedAt":"2026-11-27T00:58:00Z","finishedAt":null}', '{"phase":"done","trigger":"dirty","result":null,"startedAt":"ayer","finishedAt":null}']) {
@@ -31,7 +47,7 @@ describe('reparación automática del disco (ADR-0032)', () => {
 
   it('una reparación que lleva horas «en marcha» se da por interrumpida', () => {
     const stuck = '{"phase":"running","trigger":"dirty","result":null,"startedAt":"2026-11-26T12:00:00Z","finishedAt":null}';
-    assert.deepEqual(parseRepairStatus(stuck, NOW), { phase: 'failed', trigger: 'dirty', result: 'io_error', startedAt: '2026-11-26T12:00:00Z', finishedAt: null });
+    assert.deepEqual(parseRepairStatus(stuck, NOW), { phase: 'failed', trigger: 'dirty', result: 'io_error', startedAt: '2026-11-26T12:00:00Z', finishedAt: null, step: null, stepStartedAt: null, estimateSeconds: null, fixed: null });
   });
 
   describe('agente de ficheros', () => {
@@ -83,7 +99,7 @@ describe('reparación automática del disco (ADR-0032)', () => {
     it('/system/storage publica la reparación en curso', async () => {
       const get = async () => (await app.inject({ method: 'GET', url: '/api/v1/system/storage', headers: { cookie } })).json() as StorageResponse;
       assert.equal((await get()).repair, null);
-      current = { phase: 'running', trigger: 'dirty', result: null, startedAt: '2026-11-27T00:58:00Z', finishedAt: null };
+      current = { phase: 'running', trigger: 'dirty', result: null, startedAt: '2026-11-27T00:58:00Z', finishedAt: null, step: 'scan', stepStartedAt: '2026-11-27T00:58:00Z', estimateSeconds: 287, fixed: null };
       h.gate.disconnect();
       try {
         const storage = await get();

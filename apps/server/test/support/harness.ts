@@ -31,7 +31,8 @@ export class FakeGate implements GuardianLike {
       state: this.state,
       issues: this.state === 'READY' ? [] : [{ code: 'DEVICE_ABSENT', message: 'El disco configurado no está conectado' }],
       generation: this.generation,
-      checkedAt: '2026-11-14T10:00:00.000Z',
+      // Hora real: la web la usa para medir tiempos del servidor (p. ej. la reparación del disco).
+      checkedAt: new Date().toISOString(),
       mount: null,
       identity: `fake|${this.generation}`,
     };

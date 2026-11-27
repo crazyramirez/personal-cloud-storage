@@ -51,7 +51,10 @@ status() {  # status FASE RESULTADO
   case "$phase" in done | failed) finished="\"$(now)\"" ;; esac
   [ -n "$result" ] && result="\"$result\"" || result=null
   tmp="$(mktemp "$STATE_DIR/.status.XXXXXX")"
-  printf '{"phase":"%s","trigger":"readonly","result":%s,"startedAt":"%s","finishedAt":%s}\n' "$phase" "$result" "$STARTED" "$finished" >"$tmp"
+  local step=null step_at=null
+  if [ "$phase" = pending ]; then step='"unmount"'; step_at="\"$(now)\""; fi
+  printf '{"phase":"%s","trigger":"readonly","result":%s,"startedAt":"%s","finishedAt":%s,"step":%s,"stepStartedAt":%s,"estimateSeconds":null,"fixed":null}\n' \
+    "$phase" "$result" "$STARTED" "$finished" "$step" "$step_at" >"$tmp"
   chown root:"${gid:-0}" "$tmp"
   chmod 0640 "$tmp"
   mv -f "$tmp" "$STATUS"

@@ -8,6 +8,7 @@
  *
  * Simulación del disco:  GET /__dev/disconnect · /__dev/reconnect · /__dev/readonly
  * Subidas lentas (para ver el progreso): GET /__dev/slow (alterna)
+ * Reparación automática del disco (simulada): /__dev/repair-scan · -verify · -done · -clean · -failed · -clear
  * Copia de seguridad (discos simulados, sin montar nada real):
  *   /__dev/backup-connect · /__dev/backup-other · /__dev/backup-fat · /__dev/backup-unplug
  *   (el disco de copia simulado es una carpeta temporal; /__dev/slow también ralentiza la copia)
@@ -15,6 +16,8 @@
  *   /__dev/funnel-deny (Funnel sin permitir en Tailscale) · /__dev/funnel-allow
  */
 
+import type { VolumeRepairStatus } from '@pcloud/contracts';
+import type { VolumeRepairAgent } from '../../src/system/volume-repair.ts';
 import { createReadStream } from 'node:fs';
 import { copyFile, mkdir, stat, writeFile } from 'node:fs/promises';
 import http from 'node:http';
@@ -124,7 +127,32 @@ const devPower = {
   },
 };
 
-const app = await buildApp({ config: harness.config, db: harness.db, guardian: harness.gate, uploads: harness.uploads({ chunkSize: 1024 * 1024, maxChunkSize: 16 * 1024 * 1024, checkpointBytes: 8 * 1024 * 1024 }), logger: false, backup, resources, shares: { store: shareStore, gateway }, power: devPower, version: 'desarrollo' });
+// Reparación automática del disco (ADR-0032), simulada: /__dev/repair-scan, -verify, -done, -clean,
+// -failed y -clear fijan el estado que vería la web (no se repara nada).
+let devRepair: VolumeRepairStatus | null = null;
+const volumeRepair: VolumeRepairAgent = { request: async () => true, status: async () => devRepair };
+function simulateRepair(kind: string): void {
+  const ago = (s: number): string => new Date(Date.now() - s * 1000).toISOString().replace(/\.\d+Z$/, 'Z');
+  const base = { trigger: 'readonly' as const, startedAt: ago(200), estimateSeconds: 287, fixed: null };
+  if (kind === 'scan') {
+    harness.gate.disconnect();
+    devRepair = { ...base, phase: 'running', result: null, finishedAt: null, step: 'scan', stepStartedAt: ago(170) };
+  } else if (kind === 'verify') {
+    harness.gate.disconnect();
+    devRepair = { ...base, phase: 'running', result: null, finishedAt: null, step: 'verify', stepStartedAt: ago(20), fixed: 1 };
+  } else if (kind === 'done' || kind === 'clean') {
+    harness.gate.reconnect();
+    devRepair = { ...base, phase: 'done', result: kind === 'done' ? 'repaired' : 'clean', finishedAt: ago(0), step: null, stepStartedAt: null, fixed: kind === 'done' ? 1 : 0 };
+  } else if (kind === 'failed') {
+    harness.gate.reconnect();
+    harness.gate.state = 'READ_ONLY';
+    devRepair = { ...base, phase: 'failed', result: 'errors_left', finishedAt: ago(0), step: null, stepStartedAt: null };
+  } else {
+    devRepair = null;
+  }
+}
+
+const app = await buildApp({ config: harness.config, db: harness.db, guardian: harness.gate, uploads: harness.uploads({ chunkSize: 1024 * 1024, maxChunkSize: 16 * 1024 * 1024, checkpointBytes: 8 * 1024 * 1024 }), logger: false, backup, resources, shares: { store: shareStore, gateway }, power: devPower, volumeRepair, version: 'desarrollo' });
 await app.ready();
 
 async function sendFile(response: http.ServerResponse, file: string, status = 200): Promise<boolean> {
@@ -162,6 +190,7 @@ const server = http.createServer((request, response) => {
     else if (action === 'reconnect') harness.gate.reconnect();
     else if (action === 'readonly') harness.gate.state = 'READ_ONLY';
     else if (action === 'slow') slowMs = slowMs === 0 ? 1500 : 0;
+    else if (action.startsWith('repair-')) simulateRepair(action.slice('repair-'.length));
     else if (action === 'backup-connect') simulated = [simDisk('ABCD-1234', 'COPIA')];
     else if (action === 'backup-other') simulated = [simDisk('FFFF-0000', 'OTRO')];
     else if (action === 'backup-fat') simulated = [simDisk('1111-2222', 'PENDRIVE', 'vfat')];

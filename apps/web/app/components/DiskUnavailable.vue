@@ -18,6 +18,7 @@ const view = computed<VolumeExplanation>(() =>
       }
     : explainVolume(status.value),
 );
+const repairing = computed(() => !unreachable.value && volumeRepairing(status.value));
 const issue = computed(() => (unreachable.value ? null : (status.value?.issues[0] ?? null)));
 const code = computed(() => (issue.value === null ? null : `${status.value?.state} · ${issue.value.code}`));
 
@@ -42,7 +43,9 @@ async function recheck(): Promise<void> {
         </div>
       </div>
 
-      <dl v-if="issue" class="kv cause">
+      <RepairProgress v-if="repairing && status?.repair" :repair="status.repair" />
+
+      <dl v-if="issue && !repairing" class="kv cause">
         <dt>{{ t('volume.cause') }}</dt>
         <dd>{{ serverText(issue.message) }}</dd>
         <dt>{{ t('volume.code') }}</dt>
@@ -58,7 +61,7 @@ async function recheck(): Promise<void> {
         </ol>
       </div>
 
-      <div class="actions">
+      <div v-if="!repairing" class="actions">
         <button type="button" class="btn btn-primary" :disabled="checking" @click="recheck">
           <AppIcon name="refresh" />{{ checking ? t('volume.checking') : t('volume.recheck') }}
         </button>

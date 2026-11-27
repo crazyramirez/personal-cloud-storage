@@ -156,7 +156,9 @@ journalctl -u pcloud-volume-repair -u pcloud-volume-agent -b
 sudo bash /opt/pcloud/current/deploy/linux/volume/pcloud-volume-repair.sh --dry-run   # qué haría ahora
 ```
 
+- La web muestra los pasos (liberar el disco → revisar y reparar → comprobar → volver a ponerlo en marcha), el tiempo que lleva y una barra estimada con lo que tardó la última pasada (`/var/lib/pcloud-volume-repair/pass-seconds`). Al terminar, un aviso «El disco se ha reparado solo a las …» durante 24 h.
 - `/LOST+FOUND` (en la raíz del disco, fuera de la nube): datos que `fsck` encontró sin fichero. Revisarlos y borrarlos a mano si no sirven.
+- Medido (2026-11-27, WD 5 TB, ~534.000 ficheros): una pasada tarda 4 min 47 s; reparar y verificar, ~10 min. Se recortó un directorio a su tamaño anotado y se eliminaron 2 entradas dañadas; 29 fragmentos (75 MB) quedaron en `/LOST+FOUND`.
 - `"phase":"failed"`: el disco sigue en solo lectura. `errors_left`/`io_error` apuntan a disco dañado o alimentación (`vcgencmd get_throttled`); `limit`, a más de 3 reparaciones en 24 h. Copiar lo importante y reiniciar (se vuelve a intentar al arrancar).
 
 Si systemd no vuelve a montar el disco solo al reconectarlo (comportamiento medido en F0, ver §8):

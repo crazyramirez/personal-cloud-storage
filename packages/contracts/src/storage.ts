@@ -110,7 +110,18 @@ export interface VolumeRepairStatus {
   /** ISO 8601. */
   readonly startedAt: string;
   readonly finishedAt: string | null;
+  /** Paso en curso: desmontar, revisar y reparar, o comprobar la reparación. */
+  readonly step: VolumeRepairStep | null;
+  /** ISO 8601: cuándo empezó el paso en curso. */
+  readonly stepStartedAt: string | null;
+  /** Lo que tardó la última pasada completa (segundos), para estimar cuánto falta. */
+  readonly estimateSeconds: number | null;
+  /** Errores corregidos, según la herramienta de reparación. */
+  readonly fixed: number | null;
 }
+
+export const VOLUME_REPAIR_STEPS = ['unmount', 'scan', 'verify'] as const;
+export type VolumeRepairStep = (typeof VOLUME_REPAIR_STEPS)[number];
 
 /** Respuesta de `GET /system/storage`: estado del volumen y, si es legible, su espacio. */
 export interface StorageResponse extends VolumeStatus {

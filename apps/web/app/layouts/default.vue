@@ -158,6 +158,7 @@ const appVersion = useAppVersion();
         </div>
       </header>
       <main class="content">
+        <RepairNotice />
         <slot />
       </main>
     </div>

@@ -12,7 +12,7 @@ import { randomBytes } from 'node:crypto';
 import { constants } from 'node:fs';
 import { access, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { VOLUME_REPAIR_PHASES, VOLUME_REPAIR_RESULTS, type VolumeRepairStatus } from '@pcloud/contracts';
+import { VOLUME_REPAIR_PHASES, VOLUME_REPAIR_RESULTS, VOLUME_REPAIR_STEPS, type VolumeRepairStatus } from '@pcloud/contracts';
 
 export interface VolumeRepairAgent {
   /** Avisa al agente. `false` si no está instalado. */
@@ -41,11 +41,16 @@ export function parseRepairStatus(raw: string, now: Date): VolumeRepairStatus | 
   const startedAt = typeof v.startedAt === 'string' && ISO.test(v.startedAt) ? v.startedAt : undefined;
   const finishedAt = v.finishedAt === null ? null : typeof v.finishedAt === 'string' && ISO.test(v.finishedAt) ? v.finishedAt : undefined;
   if (phase === undefined || trigger === undefined || result === undefined || startedAt === undefined || finishedAt === undefined) return null;
+  // Detalle del progreso: opcional (versiones anteriores del agente no lo escriben).
+  const step = VOLUME_REPAIR_STEPS.find((s) => s === v.step) ?? null;
+  const stepStartedAt = typeof v.stepStartedAt === 'string' && ISO.test(v.stepStartedAt) ? v.stepStartedAt : null;
+  const count = (x: unknown): number | null => (typeof x === 'number' && Number.isInteger(x) && x >= 0 && x < 1e9 ? x : null);
+  const detail = { step, stepStartedAt, estimateSeconds: count(v.estimateSeconds), fixed: count(v.fixed) };
   // Si el proceso murió a mitad (p. ej. lo mató systemd), no se queda «reparando» para siempre.
   if ((phase === 'pending' || phase === 'running') && now.getTime() - Date.parse(startedAt) > STALE_MS) {
-    return { phase: 'failed', trigger, result: 'io_error', startedAt, finishedAt: null };
+    return { phase: 'failed', trigger, result: 'io_error', startedAt, finishedAt: null, ...detail, step: null };
   }
-  return { phase, trigger, result, startedAt, finishedAt };
+  return { phase, trigger, result, startedAt, finishedAt, ...detail };
 }
 
 export class FileVolumeRepairAgent implements VolumeRepairAgent {

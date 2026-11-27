@@ -45,33 +45,49 @@ now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
 STARTED=""
 TRIGGER=""
+STEP=""          # scan (revisar y reparar) | verify (comprobar la reparación)
+STEP_STARTED=""
+ESTIMATE=""      # segundos que tardó la última pasada completa (para la barra de la web)
+FIXED=""         # errores corregidos según fsck
+PASS_FILE=/var/lib/pcloud-volume-repair/pass-seconds
+json_or_null() { if [ -n "$1" ]; then printf '%s' "$1"; else printf null; fi; }
+json_str_or_null() { if [ -n "$1" ]; then printf '"%s"' "$1"; else printf null; fi; }
 status() {  # status FASE RESULTADO   (RESULTADO vacío → null)
   [ "$DRY" -eq 1 ] && return 0
-  local phase="$1" result="$2" finished=null tmp gid
+  local phase="$1" result="$2" finished="" tmp gid
   gid="$(getent group "$SVC_GROUP" | cut -d: -f3)"
   install -d -o root -g "${gid:-0}" -m 0750 "$STATE_DIR"
-  case "$phase" in done | failed) finished="\"$(now)\"" ;; esac
-  [ -n "$result" ] && result="\"$result\"" || result=null
+  case "$phase" in done | failed) finished="$(now)" ;; esac
   tmp="$(mktemp "$STATE_DIR/.status.XXXXXX")"
-  printf '{"phase":"%s","trigger":"%s","result":%s,"startedAt":"%s","finishedAt":%s}\n' \
-    "$phase" "$TRIGGER" "$result" "$STARTED" "$finished" >"$tmp"
+  printf '{"phase":"%s","trigger":"%s","result":%s,"startedAt":"%s","finishedAt":%s,"step":%s,"stepStartedAt":%s,"estimateSeconds":%s,"fixed":%s}
+'     "$phase" "$TRIGGER" "$(json_str_or_null "$result")" "$STARTED" "$(json_str_or_null "$finished")"     "$(json_str_or_null "$STEP")" "$(json_str_or_null "$STEP_STARTED")" "$(json_or_null "$ESTIMATE")" "$(json_or_null "$FIXED")" >"$tmp"
   chown root:"${gid:-0}" "$tmp"
   chmod 0640 "$tmp"
   mv -f "$tmp" "$STATUS"
 }
+step() {  # step NOMBRE: pasa al paso siguiente y lo publica
+  STEP="$1"
+  STEP_STARTED="$(now)"
+  status running ""
+}
 
-# Ejecuta una herramienta de comprobación con su salida en el registro. La herramienta ignora SIGTERM
-# (una señal ignorada se hereda al hacer exec): si se apaga el equipo a mitad, systemd espera a que
-# termine (TimeoutStopSec) en vez de cortar una reparación por la mitad. El trap va DENTRO de
-# timeout, porque timeout instala sus propios manejadores y reenviaría SIGTERM a su hijo.
+# Ejecuta una herramienta de comprobación con su salida en el registro (y en LAST_OUT). La
+# herramienta ignora SIGTERM (una señal ignorada se hereda al hacer exec): si se apaga el equipo a
+# mitad, systemd espera a que termine (TimeoutStopSec) en vez de cortar una reparación por la mitad.
+# El trap va DENTRO de timeout, porque timeout instala sus propios manejadores y reenviaría SIGTERM.
+LAST_OUT=""
 run_tool() {  # run_tool CMD ARGS… → código de salida
-  {
-    echo "── $(now) · $*"
-    timeout -s KILL "$FSCK_TIMEOUT" bash -c 'trap "" TERM INT HUP; exec "$@"' run_tool "$@" 2>&1
-    local rc=$?
-    echo "── código $rc"
-    return "$rc"
-  } >>"$LOG"
+  local out rc
+  install -d -m 0750 "$STATE_DIR"
+  out="$(mktemp "$STATE_DIR/.salida.XXXXXX")"
+  echo "── $(now) · $*" >>"$LOG"
+  timeout -s KILL "$FSCK_TIMEOUT" bash -c 'trap "" TERM INT HUP; exec "$@"' run_tool "$@" >"$out" 2>&1
+  rc=$?
+  cat "$out" >>"$LOG"
+  echo "── código $rc" >>"$LOG"
+  LAST_OUT="$(tail -c 65536 "$out")"
+  rm -f -- "$out"
+  return "$rc"
 }
 
 # Configuración (el mismo formato que lee pcloud-recover-volume.sh).
@@ -102,13 +118,24 @@ case "$FSTYPE" in
     if [ "$FORCED" -eq 1 ]; then TRIGGER=readonly; else TRIGGER=dirty; fi
     if [ "$DRY" -eq 1 ]; then log "DRY-RUN: se comprobaría y repararía $DEV ($TRIGGER)"; exit 0; fi
     STARTED="$(now)"
-    status running ""
+    ESTIMATE="$(cat "$PASS_FILE" 2>/dev/null)"
+    [[ "$ESTIMATE" =~ ^[0-9]+$ ]] || ESTIMATE=""
+    step scan
     log "comprobando y reparando $DEV ($TRIGGER): unos minutos"
+    T0="$(date +%s)"
     run_tool fsck.exfat -y -s "$DEV"; RC=$?  # pcloud-lint: allow-fsck-repair (ADR-0032)
+    FIXED="$(sed -n 's/.*files fixed \([0-9][0-9]*\).*/\1/p' <<<"$LAST_OUT" | tail -n1)"
+    if [ "$RC" -eq 0 ] || [ "$RC" -eq 1 ]; then
+      # Lo que tarda una pasada completa: la próxima vez la web puede estimar cuánto falta.
+      ESTIMATE=$(( $(date +%s) - T0 ))
+      install -d -o root -g root -m 0700 "$(dirname "$PASS_FILE")"
+      echo "$ESTIMATE" >"$PASS_FILE"
+    fi
     if [ "$RC" -eq 0 ]; then
       RESULT=clean
     elif [ "$RC" -eq 1 ]; then
       log "reparado; verificando"
+      step verify
       if run_tool fsck.exfat -n "$DEV"; then RESULT=repaired; else RESULT=errors_left; fi
     elif [ "$RC" -eq 4 ]; then
       RESULT=errors_left
@@ -124,7 +151,7 @@ case "$FSTYPE" in
     # ntfsfix -n solo lee unos pocos metadatos: tarda segundos, así que se hace en cada montaje.
     if run_tool ntfsfix -n "$DEV" && [ "$FORCED" -eq 0 ]; then log "disco limpio"; exit 0; fi
     STARTED="$(now)"
-    status running ""
+    step scan
     log "marcando $DEV como revisado"
     run_tool ntfsfix -d "$DEV"; RC=$?  # pcloud-lint: allow-fsck-repair (ADR-0032)
     if [ "$RC" -eq 0 ]; then RESULT=repaired; else RESULT=errors_left; fi

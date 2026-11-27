@@ -6,12 +6,17 @@ import type { StorageResponse, VolumeState } from '@pcloud/contracts';
  */
 const status = ref<StorageResponse | null>(null);
 const unreachable = ref(false);
+/** Diferencia entre el reloj del servidor y el de este dispositivo (ms), para medir tiempos del servidor. */
+const clockSkew = ref(0);
 let timer: ReturnType<typeof setInterval> | null = null;
 let consumers = 0;
 
 async function refresh(): Promise<void> {
   try {
-    status.value = await api<StorageResponse>('/system/storage');
+    const next = await api<StorageResponse>('/system/storage');
+    const server = Date.parse(next.checkedAt);
+    if (Number.isFinite(server)) clockSkew.value = server - Date.now();
+    status.value = next;
     unreachable.value = false;
   } catch (error) {
     if (error instanceof ApiError && error.code === 'NETWORK') unreachable.value = true;
@@ -41,5 +46,8 @@ export function useStorage() {
     }
   }
 
-  return { status, state, readable, writable, known, unreachable, refresh, start, stop };
+  /** Hora actual según el reloj del servidor (ms). */
+  const serverNow = (): number => Date.now() + clockSkew.value;
+
+  return { status, state, readable, writable, known, unreachable, refresh, start, stop, serverNow };
 }
