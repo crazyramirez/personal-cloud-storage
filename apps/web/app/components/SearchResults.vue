@@ -205,7 +205,7 @@ function menu(item: FsSearchResult): MenuItem[] {
   const fav = favorites.isFavorite(item.path);
   return [
     { label: item.type === 'dir' ? t('explorer.open') : VIEWER_LABEL[viewerKind(item.name)], icon: item.type === 'dir' ? 'folder' : 'eye', run: () => open(item) },
-    { label: t('search.openLocation'), icon: 'folder', run: () => openLocation(item) },
+    { label: t('search.openLocation', { name: segmentsOf(item.dir).at(-1) ?? t('common.files') }), icon: 'folder', run: () => openLocation(item) },
     {
       label: item.type === 'dir' ? t('explorer.downloadAsZip') : t('explorer.download'),
       icon: item.type === 'dir' ? 'archive' : 'download',

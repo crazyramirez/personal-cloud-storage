@@ -8,7 +8,7 @@ export default {
   empty: 'Qui comparirà l’ultima cosa che carichi o crei.',
   goToFiles: 'Vai a File',
   openFolder: 'Apri cartella',
-  openNamed: 'Apri «{name}»',
+  openNamed: 'Mostra nella cartella («{name}»)',
   downloadZip: 'Scarica come ZIP',
   download: 'Scarica',
 } satisfies Translation<typeof source>;

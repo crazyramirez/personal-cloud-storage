@@ -14,7 +14,7 @@ export default {
   truncatedTime: '文件非常多，搜索在检查完所有内容之前就停止了：可能缺少一些结果。请从更具体的文件夹开始搜索。',
   inThisFolder: '在此文件夹中',
   location: '位于 {path}',
-  openLocation: '打开所在位置',
+  openLocation: '在文件夹中显示（“{name}”）',
   failed: '无法完成搜索。',
   indexBuilding: '正在准备搜索索引（首次需要几分钟）：在此期间直接在磁盘上搜索，可能缺少部分结果。',
   indexAge: '索引更新于{when}',

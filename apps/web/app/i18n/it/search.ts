@@ -14,7 +14,7 @@ export default {
   truncatedTime: 'Ci sono moltissimi file e la ricerca si è fermata prima di controllare tutto: potrebbero mancare risultati. Cerca da una cartella più precisa.',
   inThisFolder: 'In questa cartella',
   location: 'In {path}',
-  openLocation: 'Apri percorso',
+  openLocation: 'Mostra nella cartella («{name}»)',
   failed: 'Impossibile completare la ricerca.',
   indexBuilding: 'Preparazione dell’indice di ricerca (la prima volta richiede qualche minuto): nel frattempo si cerca direttamente sul disco e potrebbero mancare risultati.',
   indexAge: 'indice {when}',

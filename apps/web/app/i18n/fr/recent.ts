@@ -8,7 +8,7 @@ export default {
   empty: 'Vos derniers fichiers importés ou créés apparaîtront ici.',
   goToFiles: 'Aller aux fichiers',
   openFolder: 'Ouvrir le dossier',
-  openNamed: 'Ouvrir « {name} »',
+  openNamed: 'Afficher dans le dossier (« {name} »)',
   downloadZip: 'Télécharger en ZIP',
   download: 'Télécharger',
 } satisfies Translation<typeof source>;

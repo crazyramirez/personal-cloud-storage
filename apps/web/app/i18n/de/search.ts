@@ -14,7 +14,7 @@ export default {
   truncatedTime: 'Es gibt sehr viele Dateien und die Suche wurde beendet, bevor alles durchsucht war: Es können Ergebnisse fehlen. Suchen Sie in einem genaueren Ordner.',
   inThisFolder: 'In diesem Ordner',
   location: 'In {path}',
-  openLocation: 'Dateispeicherort öffnen',
+  openLocation: 'Im Ordner anzeigen („{name}“)',
   failed: 'Die Suche konnte nicht abgeschlossen werden.',
   indexBuilding: 'Der Suchindex wird vorbereitet (beim ersten Mal dauert es einige Minuten): Bis dahin wird direkt auf der Festplatte gesucht und es können Ergebnisse fehlen.',
   indexAge: 'Index {when}',

@@ -8,7 +8,7 @@ export default {
   empty: '最近アップロードまたは作成したものがここに表示されます。',
   goToFiles: 'ファイルへ移動',
   openFolder: 'フォルダを開く',
-  openNamed: '「{name}」を開く',
+  openNamed: 'フォルダーで表示（「{name}」）',
   downloadZip: 'ZIP でダウンロード',
   download: 'ダウンロード',
 } satisfies Translation<typeof source>;

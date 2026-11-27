@@ -8,7 +8,7 @@ export default {
   empty: '你最近上传或创建的内容会显示在这里。',
   goToFiles: '前往“文件”',
   openFolder: '打开文件夹',
-  openNamed: '打开“{name}”',
+  openNamed: '在文件夹中显示（“{name}”）',
   downloadZip: '下载为 ZIP',
   download: '下载',
 } satisfies Translation<typeof source>;

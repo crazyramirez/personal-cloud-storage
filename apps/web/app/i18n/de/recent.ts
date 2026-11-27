@@ -8,7 +8,7 @@ export default {
   empty: 'Hier erscheint, was Sie zuletzt hochladen oder erstellen.',
   goToFiles: 'Zu Dateien',
   openFolder: 'Ordner öffnen',
-  openNamed: '„{name}“ öffnen',
+  openNamed: 'Im Ordner anzeigen („{name}“)',
   downloadZip: 'Als ZIP herunterladen',
   download: 'Herunterladen',
 } satisfies Translation<typeof source>;

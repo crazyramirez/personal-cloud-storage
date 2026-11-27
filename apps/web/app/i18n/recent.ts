@@ -7,7 +7,7 @@ const es = {
   empty: 'Aquí aparecerá lo último que subas o crees.',
   goToFiles: 'Ir a Archivos',
   openFolder: 'Abrir carpeta',
-  openNamed: 'Abrir «{name}»',
+  openNamed: 'Ver en carpeta («{name}»)',
   downloadZip: 'Descargar como ZIP',
   download: 'Descargar',
 } satisfies MessageTable;
@@ -21,7 +21,7 @@ export default {
     empty: 'Your latest uploads and new items will appear here.',
     goToFiles: 'Go to Files',
     openFolder: 'Open folder',
-    openNamed: 'Open “{name}”',
+    openNamed: 'Show in folder (“{name}”)',
     downloadZip: 'Download as ZIP',
     download: 'Download',
   } satisfies Record<keyof typeof es, Message>,

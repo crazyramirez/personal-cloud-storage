@@ -14,7 +14,7 @@ export default {
   truncatedTime: 'Il y a énormément de fichiers et la recherche s’est arrêtée avant de tout parcourir : des résultats peuvent manquer. Lancez-la depuis un dossier plus précis.',
   inThisFolder: 'Dans ce dossier',
   location: 'Dans {path}',
-  openLocation: 'Ouvrir l’emplacement',
+  openLocation: 'Afficher dans le dossier (« {name} »)',
   failed: 'La recherche n’a pas pu aboutir.',
   indexBuilding: 'Préparation de l’index de recherche (la première fois prend quelques minutes) : en attendant, la recherche se fait directement sur le disque et des résultats peuvent manquer.',
   indexAge: 'index {when}',
